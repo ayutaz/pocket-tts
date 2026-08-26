@@ -78,11 +78,18 @@ def test_segmenter_registry_holds_the_documented_names():
 # -- Japanese: needs the optional analyser (uv sync --group japanese) ----------
 
 # vumichien/wav2vec2-large-xlsr-japanese-hiragana's alphabet: 82 hiragana plus
-# the long-vowel mark. A reading outside this set cannot be aligned at all.
+# the long-vowel mark. align_data keeps only characters in the checkpoint's
+# vocabulary, so the segmenter emits a reading *candidate* and this filter is
+# what decides whether a word can be aligned at all.
 _HIRAGANA_VOCAB = set(
     "ぁあぃいぅうぇえぉおかがきぎくぐけげこごさざしじすずせぜそぞただちぢっつづてでとどなにぬねのは"
     "ばぱひびぴふぶぷへべぺほぼぽまみむめもゃやゅゆょよらりるれろゎわゐゑをんゔー"
 )
+
+
+def _alignable(reading: str) -> str:
+    """What align_data.py:_tokens_for actually receives for this word."""
+    return "".join(c for c in reading if c in _HIRAGANA_VOCAB)
 
 
 @pytest.fixture(scope="module")
@@ -95,41 +102,73 @@ def segment():
 def test_japanese_segmenter_finds_word_boundaries(segment):
     """Whitespace splitting would return one word here, which leaves the loader
     with no cut point and silently disables the voice-prompt curriculum."""
-    segments = segment("昨夜からずっと気配を探られていたか。")
-    assert len(segments) > 1
+    assert len(segment("昨夜からずっと気配を探られていたか。")) > 1
 
 
 def test_japanese_surface_forms_reconstruct_the_transcript(segment):
     """dataloader.py joins these back with word_separator="", so the text the
     model trains on is a true suffix of the transcript -- or it is a bug."""
-    text = "昨夜からずっと気配を探られていたか。"
-    assert "".join(s for s, _, _ in segment(text)) == text
-
-
-def test_japanese_readings_are_hiragana_the_checkpoint_knows(segment):
-    """Kanji readings go to the trellis; anything outside the checkpoint's
-    alphabet is dropped by the vocab filter and shifts every timestamp."""
-    for text in ["昨夜からずっと気配を探られていたか。", "ヴァイオリンを弾く私"]:
-        for surface, reading, _ in segment(text):
-            assert not set(reading) - _HIRAGANA_VOCAB, (surface, reading)
+    for text in [
+        "昨夜からずっと気配を探られていたか。",
+        "Hello world と言った",
+        "あ Hello world い",
+        "ATMで3000円おろした。",
+        "むぅ……龍子",
+    ]:
+        assert "".join(s for s, _, _ in segment(text)) == text
 
 
 def test_japanese_surface_keeps_kanji_while_the_reading_does_not(segment):
-    """The two must diverge: "word" is what the model learns to speak."""
-    segments = segment("気配")
-    assert segments[0][0] == "気配"
-    assert segments[0][1] == "けはい"
+    """The two must diverge: "word" is what the model learns to speak, the
+    reading is what goes into the trellis."""
+    ((surface, reading, _),) = segment("気配")
+    assert surface == "気配" and reading == "けはい"
 
 
-def test_japanese_readingless_tokens_stay_in_the_text(segment):
-    """Digits, latin and punctuation have no UniDic reading. They must still
-    reach the training text, glued onto the morpheme before them."""
-    text = "ATMで3000円おろした。"
-    segments = segment(text)
-    assert "".join(s for s, _, _ in segments) == text
-    # 3000 and the full stop are absorbed rather than left as bare segments.
-    assert [s for s, _, _ in segments] != ["ATM", "で", "3000", "円", "おろし", "た", "。"]
-    # Only a readingless *leading* token has nothing to glue onto; it keeps its
-    # text and simply gets no timestamps.
-    unalignable = [i for i, (_, r, _) in enumerate(segments) if not r]
-    assert unalignable in ([], [0]), segments
+def test_japanese_recovers_readings_unidic_leaves_empty(segment):
+    """UniDic returns no reading for small kana or the prolongation mark, but
+    both are audio spelled as themselves and both are in the checkpoint's
+    alphabet. Dropped, that speech falls into no span, and the loader's cut --
+    the midpoint between one span's end and the next one's start -- lands in
+    the middle of it."""
+    for text in ["むぅ", "かぷー", "あぁー"]:
+        aligned = "".join(_alignable(r) for _, r, _ in segment(text))
+        assert aligned == text, (text, aligned)
+
+
+def test_japanese_unreadable_tokens_align_to_nothing_but_keep_their_text(segment):
+    """Digits, latin and punctuation have no derivable reading. They must stay
+    in the training text, and must NOT be folded into a neighbour that has
+    timestamps: a word with no span is exactly what stops dataloader.py:129
+    placing a cut beside speech the trellis never labelled."""
+    segments = segment("ATMで3000円おろした。")
+    unreadable = {s for s, r, _ in segments if not _alignable(r)}
+    assert unreadable == {"ATM", "3000", "。"}
+    assert "".join(s for s, _, _ in segments) == "ATMで3000円おろした。"
+
+
+def test_japanese_katakana_words_are_alignable(segment):
+    """The checkpoint's vocabulary has no katakana except the prolongation
+    mark, so the reading has to be translated or every katakana word is lost."""
+    for _, reading, _ in segment("ヴァイオリンを弾く"):
+        assert _alignable(reading) == reading, reading
+
+
+def test_normalized_transcript_survives_the_round_trip(segment):
+    """The invariant align_data enforces end to end: the transcript it writes
+    back to the manifest is normalize()'d, and the words it writes rebuild that
+    exact string when the loader joins them with word_separator "". If this
+    breaks, the model trains on text no user will ever type and nothing errors.
+    """
+    from training.scripts.ja_text import normalize
+
+    for raw in [
+        "ＡＢＣと１２３をみた。",
+        "ああ……そうか！",
+        "え゛っ、まじで？",
+        "Hello world と言った",
+        "ＡＴＭで３０００円おろした。",
+        "  よし　　いくぞ  ",
+    ]:
+        text = normalize(raw)
+        assert "".join(s for s, _, _ in segment(text)) == text, raw

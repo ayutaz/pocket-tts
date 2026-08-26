@@ -41,6 +41,7 @@ from tqdm import tqdm
 from typing_extensions import Annotated
 
 from pocket_tts.data.audio_utils import convert_audio
+from training.scripts import ja_text
 
 logger = logging.getLogger("align")
 
@@ -173,18 +174,31 @@ def _japanese_segmenter() -> Callable[[str], list[Segment]]:
     def segment(text: str) -> list[Segment]:
         out: list[Segment] = []
         for m in tagger(text):
+            # MeCab treats whitespace as a delimiter and leaves it out of the
+            # surface, reporting it separately. Re-attaching it keeps
+            # "".join(surfaces) == text, which matters because dataloader.py
+            # rebuilds the training text from exactly these strings.
+            surface = (m.white_space or "") + m.surface
             # `kana` is the orthographic reading, `pron` the phonetic one
             # (particle wo: kana ヲ, pron オ). The hiragana checkpoints were
             # fine-tuned on orthographic kana, so `kana` is the matching target.
-            kana = (getattr(m.feature, "kana", None) or "").translate(_KATAKANA_TO_HIRAGANA)
-            if not kana and out:
-                # Punctuation, digits and latin carry no reading. Glue them onto
-                # the morpheme before so they survive into the training text;
-                # they claim no frames of their own.
-                surface, reading, head = out[-1]
-                out[-1] = (surface + m.surface, reading, head)
-                continue
-            out.append((m.surface, kana, m.feature.pos1 in _JA_PHRASE_HEADS))
+            #
+            # UniDic leaves it empty for small kana, the prolongation mark,
+            # punctuation, digits and latin. The first two of those are audio
+            # the CTC can align perfectly well, spelled as themselves, so fall
+            # back to the surface and let the vocabulary filter downstream
+            # decide. Anything genuinely unreadable -- 8,200, ATM, a full stop
+            # -- filters down to "" and its word is written with no timestamps,
+            # which is what stops the loader placing a cut beside speech that
+            # was never labelled.
+            reading = getattr(m.feature, "kana", None) or m.surface
+            out.append(
+                (
+                    surface,
+                    reading.translate(_KATAKANA_TO_HIRAGANA),
+                    m.feature.pos1 in _JA_PHRASE_HEADS,
+                )
+            )
         return out
 
     return segment
@@ -193,6 +207,15 @@ def _japanese_segmenter() -> Callable[[str], list[Segment]]:
 SEGMENTERS: dict[str, Callable[[], Callable[[str], list[Segment]]]] = {
     "whitespace": lambda: _whitespace_segments,
     "japanese": _japanese_segmenter,
+}
+
+# The transcript a segmenter is handed, and the one written back to the
+# manifest. It has to be the same string the tokenizer was fitted on -- a
+# fullwidth "!" the tokenizer never saw encodes to <unk>, and nothing anywhere
+# reports it -- so the language that normalizes its corpus normalizes here too.
+NORMALIZERS: dict[str, Callable[[str], str]] = {
+    "whitespace": lambda text: text,
+    "japanese": ja_text.normalize,
 }
 
 
@@ -330,6 +353,7 @@ def main(
         raise typer.BadParameter(f"--segmenter must be one of {sorted(SEGMENTERS)}")
     ctc_model, vocab, blank, delim, fold, sr, use_bf16 = _load_ctc_model(model, device_t)
     segment = SEGMENTERS[segmenter]()
+    normalize_transcript = NORMALIZERS[segmenter]
     # Only a segmenter that produces a reading distinct from the surface form
     # needs the reading recorded; for whitespace the two are the same string.
     keep_reading = segmenter != "whitespace"
@@ -421,6 +445,11 @@ def main(
                 if isinstance(wav, Exception):
                     skip(entry, wav)
                     continue
+                # Rewriting the transcript, not just reading it: the manifest on
+                # disk has to be in the same distribution as the tokenizer's
+                # corpus, and dataloader.py falls back to this field whenever an
+                # utterance yields no cut point.
+                entry["transcript"] = normalize_transcript(entry["transcript"])
                 segments = segment(entry["transcript"])
                 words = [s for s, _, _ in segments]
                 heads = [h for _, _, h in segments]

@@ -35,6 +35,23 @@ def test_japanese_punctuation_is_left_alone():
     assert normalize("こんにちは、世界。") == "こんにちは、世界。"
 
 
+def test_standalone_dakuten_does_not_inject_a_space():
+    """NFKC turns U+309B into SPACE + an orphan combining mark. The emphatic
+    spelling is common in this kind of corpus, and a space injected into text
+    that has none is worse than leaving the mark as written."""
+    assert normalize("え゛っ") == "え゛っ"
+    assert normalize("あ゜") == "あ゜"
+    assert " " not in normalize("え゛っ")
+
+
+def test_private_use_characters_are_not_mistaken_for_sentinels():
+    """The held-out characters are swapped for noncharacters, not private-use
+    code points: legacy carrier emoji live in the PUA and this corpus already
+    carries some, so a PUA sentinel would rewrite them into ellipses."""
+    for pua in ["", "", ""]:
+        assert normalize("あ" + pua + "い") == "あ" + pua + "い"
+
+
 def test_whitespace_runs_collapse_and_control_chars_go():
     assert normalize("  a   b  ") == "a b"
     assert normalize("a\x00b\x07c") == "abc"

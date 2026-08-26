@@ -35,10 +35,17 @@ def iter_texts(paths: list[Path]):
                 line = line.strip()
                 if not line:
                     continue
+                # A manifest line is a JSON object; a plain-text line is the
+                # utterance itself. Sniffing on "{" alone would crash the fit
+                # partway through on a transcript that happens to open with one,
+                # and would silently drop any line that parses as JSON without a
+                # transcript key -- so fall back to plain text on both.
+                text = line
                 if line.startswith("{"):
-                    text = json.loads(line).get("transcript", "")
-                else:
-                    text = line
+                    try:
+                        text = json.loads(line).get("transcript", "") or line
+                    except json.JSONDecodeError:
+                        pass
                 if text:
                     yield text
 

@@ -6,15 +6,22 @@ DataLoader feeds at train time, and the text a user types at inference.
 Sentencepiece encodes all three happily whatever they look like, so the only
 symptom of a mismatch is a model that never quite becomes intelligible.
 
-Everything here therefore lives in one function, and both prepare_ja_text.py
-(tokenizer corpus) and the manifest builder call it.
+Everything here therefore lives in one function, called by prepare_ja_text.py
+for the tokenizer corpus and by align_data.py --segmenter japanese, which
+rewrites each manifest transcript through it before segmenting. (The inference
+side is not wired up yet -- see docs/Japanese Model/training-strategy.md.)
 
-The one subtlety is the ellipsis. Bare NFKC rewrites U+2026 as three ASCII
-periods, which is the same damage the GOL dataset's own "normalized" column
-does -- a run of full stops the model would learn to read aloud, and three
-sentence boundaries where there was one. So U+2026 and U+2025 are held out
-while NFKC folds everything else (halfwidth katakana, fullwidth latin and
-digits, and the rest of the width variants, all of which we do want folded).
+NFKC does most of the work -- halfwidth katakana, fullwidth latin and digits and
+the rest of the width variants all want folding -- but two of its rewrites are
+wrong for Japanese speech and are held out of it:
+
+* U+2026 and U+2025 become runs of ASCII periods. That is the same damage GOL's
+  own "normalized" column does: a run of full stops the model would learn to
+  read aloud, and three sentence boundaries where there was one.
+* U+309B and U+309C, the standalone voiced sound marks, become a SPACE plus an
+  orphan combining mark. The emphatic spelling they appear in is common in this
+  kind of corpus, and injecting a space into text that has none is worse than
+  leaving the mark as it was written.
 
 That also means the tokenizer has to be fitted with
 `--normalization-rule identity`: sentencepiece's default applies nmt_nfkc
@@ -24,8 +31,15 @@ That also means the tokenizer has to be fitted with
 import re
 import unicodedata
 
-# Held out of NFKC. Private-use code points, so they cannot collide with text.
-_PROTECTED = {"…": "", "‥": ""}
+# Held out of NFKC. Noncharacters: permanently unassigned and forbidden in
+# interchange, so unlike the private-use area -- where legacy carrier emoji
+# live, and this corpus already carries some -- they cannot occur in real text.
+_PROTECTED = {
+    "…": "﷐",  # horizontal ellipsis
+    "‥": "﷑",  # two dot leader
+    "゛": "﷒",  # standalone dakuten
+    "゜": "﷓",  # standalone handakuten
+}
 _RESTORE = {v: k for k, v in _PROTECTED.items()}
 
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
@@ -33,11 +47,12 @@ _SPACE_RUN = re.compile(r"\s+")
 
 
 def normalize(text: str) -> str:
-    """NFKC, minus the ellipsis damage, with whitespace runs collapsed.
+    """NFKC, minus the rewrites that damage Japanese, whitespace collapsed.
 
-    Whitespace is collapsed rather than stripped out: Japanese carries none of
-    its own, but a latin phrase inside a transcript needs its spaces, and the
-    aligner's segmenter passes them through as readingless tokens either way.
+    Whitespace runs collapse to a single space rather than being stripped out:
+    Japanese carries none of its own, but a latin phrase inside a transcript
+    needs its spaces, and align_data.py's Japanese segmenter re-attaches the
+    whitespace MeCab drops so the words still rebuild this exact string.
     """
     for char, sentinel in _PROTECTED.items():
         text = text.replace(char, sentinel)

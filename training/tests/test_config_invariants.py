@@ -106,11 +106,11 @@ def test_japanese_starts_its_text_embedding_from_scratch():
 
 
 def test_japanese_overrides_the_vocabulary_size():
-    """4090 distinct characters were measured on the corpus, and sentencepiece
+    """4092 distinct characters were measured on the corpus, and sentencepiece
     needs a slot per character at coverage 1.0, so the released 4000 cannot fit.
     n_bins is asserted against the tokenizer at build time."""
     n_bins = load_args(JAPANESE).model_overrides["flow_lm.lookup_table.n_bins"]
-    assert n_bins > 4090
+    assert n_bins > 4092
 
 
 def test_japanese_samples_are_not_the_english_defaults():
