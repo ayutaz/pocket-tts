@@ -55,6 +55,15 @@ def main(
         float, typer.Option(help="lower to 0.9995 for large-alphabet languages (e.g. CJK)")
     ] = 1.0,
     model_type: Annotated[Literal["bpe", "unigram", "char"], typer.Option()] = "bpe",
+    normalization_rule: Annotated[
+        Literal["nmt_nfkc", "identity"],
+        typer.Option(
+            help="sentencepiece's built-in normalizer. The default folds width variants, "
+            "which is usually what you want -- but it also rewrites the ellipsis U+2026 as "
+            "three ASCII periods, so a language that uses it wants 'identity' here and its "
+            "own normalization applied to the corpus beforehand"
+        ),
+    ] = "nmt_nfkc",
 ) -> None:
     Path(output_prefix).parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as tmp:
@@ -70,6 +79,7 @@ def main(
         vocab_size=vocab_size,
         character_coverage=character_coverage,
         model_type=model_type,
+        normalization_rule_name=normalization_rule,
     )
     sp = spm.SentencePieceProcessor(model_file=output_prefix + ".model")
     print(f"wrote {output_prefix}.model (vocab {sp.get_piece_size()})")

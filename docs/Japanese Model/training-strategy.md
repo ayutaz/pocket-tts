@@ -167,20 +167,42 @@ MoeSpeech 平均5.7秒、GOL 平均4.4秒なので、ターゲットが2〜4秒�
 
 理由: `reset_text_embedding: true` は「トークナイザが変わったから text embedding を捨てる」処理です。**後から GOL を足してトークナイザを作り直すと embedding をもう一度捨てることになり、検証ランの重みを引き継げません**（実質やり直し）。
 
-幸い **GOL の `metadata.csv` は 227 MB で、320 GB の音声を落とさずに単独ダウンロードできます**。165万行のテキストが手に入るので、これと MoeSpeech の転写を合わせて sentencepiece を1回学習しておけば、検証 → 本番で重みが連続します。
+幸い **音声を落とさずにテキストだけ取得できます** — GOL の `metadata.csv` は 227 MB（165万行）、`ayousanz/moe-speech-20speakers-ljspeech` の `metadata.csv` は 6.3 MB（6万行）で、いずれも音声本体とは別ファイルです。
 
-パラメータ:
+**実施済み**（`training/scripts/prepare_ja_text.py` → `train_tokenizer.py`）:
 
-| 項目 | 値 | 理由 |
+| 項目 | 値 | 根拠（すべて実測） |
 |---|---|---|
-| 入力 | GOL `metadata.csv` の**2列目** + MoeSpeech の転写 | 3列目は `。。。。。。` に壊れている |
-| `--character-coverage` | **0.9995** | `train_tokenizer.py` の docstring が CJK 向けに明示 |
-| `--vocab-size` | **3999** | `n_bins: 4000` を触らずに済む（PR #254 のデフォルト） |
+| コーパス | 139.8万発話・96 MB | GOL 134.0万 + MoeSpeech 5.8万、正規化後に重複除去 |
+| 異なり字 | **4,090字** | GOL 単体 4,238字、MoeSpeech が足すのは**わずか2字**（`U+576A` `U+9DC8`） |
+| `--vocab-size` | **8000** | 下表参照 |
+| `--character-coverage` | **1.0** | 0.9995 は 1,516 字を `<unk>` にする。`<unk>` は `tts_model.py` でチャンク境界トークンにもなるため実害が大きい |
+| `--normalization-rule` | **identity** | 既定の `nmt_nfkc` は tokenizer 内部で `…`→`...` に書き換える（GOL 3列目の破損の再現） |
+| `n_bins` | **8000** | vocab size と厳密一致。`pocket_tts/conditioners/text.py:30` のアサートで検証済み |
+
+!!! danger "4000 では学習が失敗します"
+    異なり字が 4,090 あるため、`character_coverage 1.0` では sentencepiece が `Vocabulary size is smaller than required_chars` で**即座に落ちます**。リリース済み英語モデルの `n_bins: 4000` はそのままでは使えません。
+
+vocab_size の実測（held-out 2万発話）:
+
+| vocab | 圧縮率 | 単字ピース | マージ数 | 埋め込み |
+|---|---|---|---|---|
+| 6000 | 1.658 字/token | 4,061 | 1,939 | 6.1M |
+| **8000** | **1.805** | 4,118 | 3,882 | **8.2M** |
+| 12000 | 1.961 | 4,236 | 7,764 | 12.3M |
+
+最終トークナイザは全コーパス 230万トークンに対し **`<unk>` 0件**。
 
 ```bash
-uv run python -m training.scripts.train_tokenizer data/tokenizer \
-    data/ja_texts.jsonl --character-coverage 0.9995
+uv run python -m training.scripts.prepare_ja_text data/ja/corpus.txt \
+    --gol data/ja/gol_metadata.csv --ljspeech data/ja/moe20_metadata.csv
+uv run python -m training.scripts.train_tokenizer data/ja/tokenizer \
+    data/ja/corpus.txt --vocab-size 8000 --character-coverage 1.0 \
+    --normalization-rule identity
 ```
+
+!!! warning "推論時にも同じ正規化が必要（未対応）"
+    `training/scripts/ja_text.py` の `normalize()` はコーパスとマニフェストの両方に適用されますが、**推論側は未接続です**。実測: 全角の `！` や `ＡＢＣ` をそのまま渡すと `<unk>` になり round-trip に失敗します（正規化後は unk 0 で完全一致）。`pocket_tts/` 側への接続が次の課題です。
 
 ### フェーズ1: 検証（MoeSpeech のみ・$10・半日）
 

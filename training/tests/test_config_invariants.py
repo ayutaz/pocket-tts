@@ -15,6 +15,7 @@ from training.modules.builders import load_model_config
 CONFIGS = Path(__file__).resolve().parents[1] / "configs"
 SCRATCH = CONFIGS / "scratch.yaml"
 DISTILL = CONFIGS / "depth_distill.yaml"
+JAPANESE = CONFIGS / "finetune_language_ja.yaml"
 
 # Below 64 rows per optimizer step the acoustic-quality transition arrives late
 # or not at all, and 400k steps is where expressivity settles (see README).
@@ -89,3 +90,30 @@ class TestArgValidation:
         """A key the parser doesn't recognize is a setting the user thinks is applied."""
         with pytest.raises(ValueError, match="distill_seed_layers"):
             _from_dict(TrainArgs, {"distill_seed_layers": "first"})
+
+
+def test_japanese_joins_words_without_a_separator():
+    """Japanese is written without spaces. Training on space-joined text that no
+    user will ever type is a mismatch nothing errors on."""
+    assert load_args(JAPANESE).data.word_separator == ""
+
+
+def test_japanese_starts_its_text_embedding_from_scratch():
+    """The released rows index English sentencepiece pieces. Same shape, so a
+    strict load would succeed and the run would start on nonsense."""
+    args = load_args(JAPANESE)
+    assert args.start_from_pretrained and args.reset_text_embedding
+
+
+def test_japanese_overrides_the_vocabulary_size():
+    """4090 distinct characters were measured on the corpus, and sentencepiece
+    needs a slot per character at coverage 1.0, so the released 4000 cannot fit.
+    n_bins is asserted against the tokenizer at build time."""
+    n_bins = load_args(JAPANESE).model_overrides["flow_lm.lookup_table.n_bins"]
+    assert n_bins > 4090
+
+
+def test_japanese_samples_are_not_the_english_defaults():
+    """Otherwise every wav written during the run is unreadable as progress."""
+    args, default = load_args(JAPANESE), TrainArgs()
+    assert args.sample_sentences and args.sample_sentences != default.sample_sentences

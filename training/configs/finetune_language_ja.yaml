@@ -1,0 +1,71 @@
+# Finetune the released English 24-layer teacher into Japanese.
+#
+# Same recipe as finetune_language.yaml -- keep lr at 2e-4, the text embedding
+# starts random and the backbone has to move with it -- plus the three things
+# Japanese needs that no other released language does.
+#
+# Prepare the inputs first:
+#   uv sync --group japanese
+#   uv run python -m training.scripts.prepare_ja_text data/ja/corpus.txt \
+#       --gol data/ja/gol_metadata.csv --ljspeech data/ja/moe20_metadata.csv
+#   uv run python -m training.scripts.train_tokenizer data/ja/tokenizer \
+#       data/ja/corpus.txt --vocab-size 8000 --character-coverage 1.0 \
+#       --normalization-rule identity
+#   uv run python -m training.scripts.align_data data/ja/train.jsonl \
+#       data/ja/train_aligned.jsonl --segmenter japanese \
+#       --model vumichien/wav2vec2-large-xlsr-japanese-hiragana
+model_config: pocket_tts/config/english_2026-04_24l.yaml
+model_overrides:
+  flow_lm.lookup_table.tokenizer_path: data/ja/tokenizer.model
+  # Measured on 1.4M deduplicated GOL + MoeSpeech utterances: 4090 distinct
+  # characters after normalization. sentencepiece spends one vocabulary slot per
+  # character at character_coverage 1.0 and fails outright below that count, so
+  # the released 4000 cannot be used; the surplus over 4090 is what becomes
+  # merges. 8000 measured 1.805 chars/token against 1.658 at 6000 and 1.961 at
+  # 12000, and leaves headroom for the characters the remaining MoeSpeech
+  # speakers will add. Must equal the tokenizer's vocab size exactly.
+  flow_lm.lookup_table.n_bins: 8000
+start_from_pretrained: true
+reset_text_embedding: true  # the Japanese tokenizer is not the one these weights were trained with
+
+data:
+  train_jsonl: data/ja/train_aligned.jsonl
+  valid_jsonl: data/ja/valid_aligned.jsonl
+  max_duration_sec: 30.0
+  max_voice_prompt_sec: 5.0
+  # Japanese is written without spaces. align_data.py --segmenter japanese
+  # splits the transcript into words the writing system does not separate, so
+  # the loader has to put them back with nothing between them -- otherwise the
+  # model trains on spaced text that no user will ever type.
+  word_separator: ""
+
+flow:
+  type: lsd
+  kwargs: {}
+
+flow_batch_multiplier: 4
+eos_loss_weight: 0.1
+text_dropout: 0.2
+voice_dropout: 0.2
+
+optim:
+  lr: 2e-4
+  schedule: constant
+  warmup_steps: 1000
+
+run_dir: runs/finetune_language_ja
+batch_size: 64
+grad_accum_steps: 1
+max_steps: 250000  # WER plateaus by ~15k; the rest is acoustic quality
+stats_ema_steps: 1000
+ema_decay: 0.999
+log_freq: 50
+valid_freq: 2500
+ckpt_freq: 2500
+num_ckpt_keep: 3
+sample_cfg_coef: 2.0
+# The English defaults would write meaningless wavs every sample_freq steps.
+sample_sentences:
+  - こんにちは、今日はいい天気ですね。
+  - 昨夜からずっと気配を探られていたか。
+  - すみません、この近くにコンビニはありますか。
