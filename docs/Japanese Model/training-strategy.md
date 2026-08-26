@@ -224,9 +224,9 @@ MoeSpeech 単独を選ぶ理由:
 
 | フェーズ | データ | 内容 |
 |---|---|---|
-| **2. 本番 finetune** | MoeSpeech + GOL（約2,640h） | `lsd_finetune_language.yaml` ベース、24層、250k step |
+| **2. 本番 finetune** | MoeSpeech + GOL（約2,640h） | `finetune_language.yaml` ベース、24層、250k step |
 | **3. 仕上げ** | **MoeSpeech のみ**・低 lr | 44.1 kHz 由来で音響品質の上限を引き上げる |
-| **4. 蒸留** | 同上 | `lsd_depth_distill.yaml` で 24層 → 6層、CFG を焼き込む |
+| **4. 蒸留** | 同上 | `depth_distill.yaml` で 24層 → 6層、CFG を焼き込む |
 | **5. 公開** | — | `model.safetensors` + `tokenizer.model` + `japanese.yaml` + 自前サンプルボイス |
 
 24層モデルのままでも pocket-tts は `--language italian_24l` のように動作するので、**蒸留は最後に一度だけ**でよく、それまでは 24L で評価を回せます。
@@ -238,6 +238,6 @@ MoeSpeech 単独を選ぶ理由:
 ## 参照
 
 - `training/README.md` — steps/s 実測表、データ要件、ハイパーパラメータの注記
-- `training/configs/lsd_scratch.yaml` / `lsd_depth_distill.yaml`
-- [PR #254](https://github.com/kyutai-labs/pocket-tts/pull/254) — `lsd_finetune_language.yaml`（未マージ）
+- `training/configs/scratch.yaml` / `depth_distill.yaml`
+- [PR #254](https://github.com/kyutai-labs/pocket-tts/pull/254) — `finetune_language.yaml`（マージ済み: `8c98c9b`）
 - [H100 Rental Prices Compared (IntuitionLabs)](https://intuitionlabs.ai/articles/h100-rental-prices-cloud-comparison)

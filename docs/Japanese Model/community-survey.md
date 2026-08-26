@@ -26,7 +26,7 @@ Issue #30（Training/fine-tuning code）での公式の立場は、当初は否�
 
 ### PR #254 — 新言語への finetune レシピ（重要）
 
-[PR #254](https://github.com/kyutai-labs/pocket-tts/pull/254)（2026-08-26, **open / 未マージ**）が、日本語モデルを作る上で最も重要な変更です。
+[PR #254](https://github.com/kyutai-labs/pocket-tts/pull/254)（2026-08-26 に `8c98c9b` としてマージ済み）が、日本語モデルを作る上で最も重要な変更です。
 
 公開重みから新言語へ finetune するレシピで、チェコ語 976h（ParCzech）での実測は以下の通り。1127文で Whisper を使い WER を評価しています。
 
@@ -38,11 +38,17 @@ Issue #30（Training/fine-tuning code）での公式の立場は、当初は否�
 | 15k | 17.1% | 11.3% | 14.7% |
 | 25k | 16.2% | 10.7% | 11.8% |
 
-変更内容は3点です。
+マージされた内容は10ファイルに及び、**PR の説明とは異なります**（説明にある「形状不一致テンソルの自動破棄」は採用されず、明示フラグ方式になりました）。
 
-- `training/args.py` — `reset_text_embedding: bool = False` を追加
-- `training/modules/builders.py` — 形状が合わない事前学習テンソル（実際には `conditioner.embed.weight` のみ）を破棄して新規初期化。同形状のロードは従来通り strict
-- `training/configs/lsd_finetune_language.yaml` — 上記レシピの config を新規追加
+- `training/args.py` — `reset_text_embedding: bool = False` を追加（TrainArgs、行68）
+- `training/modules/builders.py` — このフラグが真のとき `conditioner.embed.` で始まる重みだけを破棄して新規初期化。形状ベースの自動判定ではない
+- `training/configs/finetune_language.yaml` — 新言語 finetune のレシピ（新規）
+- `training/configs/finetune.yaml` — 同一言語での finetune レシピ（新規）
+- **設定ファイルのリネーム** — `lsd_scratch.yaml` → `scratch.yaml`、`lsd_depth_distill.yaml` → `depth_distill.yaml`
+- `training/scripts/train_tokenizer.py` — `--vocab-size` の既定を 3999 → **4000** に変更（`n_bins: 4000` を上書きせずに済むように）
+
+!!! warning "リネームに注意"
+    既存の手順書・シェル履歴・CI が `lsd_scratch.yaml` を参照していると、存在しないパスを指して静かに壊れます。
 
 !!! note "lr を下げてはいけない"
     PR の説明によれば、lr 2e-5 は全区間で遅く、プラトーでも改善しません。「text embedding がランダムから始まるので、backbone がそれに合わせて動く必要がある」ためで、**scratch と同じ 2e-4 を維持するのが正解**です。
