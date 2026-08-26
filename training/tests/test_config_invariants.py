@@ -57,7 +57,9 @@ def test_distill_teacher_is_deeper_than_its_student():
 def test_distill_teacher_weights_point_at_the_scratch_run():
     args = load_args(DISTILL)
     assert args.distill_teacher_weights, "the distill config must name a teacher checkpoint"
-    assert str(load_args(SCRATCH).run_dir) in args.distill_teacher_weights, (
+    # as_posix(): the configs spell the path with forward slashes, but str() on a
+    # WindowsPath spells it with backslashes and the substring check never matches.
+    assert load_args(SCRATCH).run_dir.as_posix() in args.distill_teacher_weights, (
         "the documented path is scratch -> distill; the teacher checkpoint should come from "
         f"{load_args(SCRATCH).run_dir}"
     )

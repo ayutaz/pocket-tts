@@ -45,7 +45,7 @@ class Batch:
 
 def load_entries(path: str, rank: int, world_size: int) -> list[str]:
     entries = []
-    with Path(path).open() as f:
+    with Path(path).open(encoding="utf-8") as f:
         for idx, line in enumerate(f):
             if idx % world_size != rank:
                 continue
@@ -79,6 +79,7 @@ class DataLoader:
         world_size: int,
         seed: int = 0,
         shuffle: bool = True,
+        word_separator: str = " ",
         io_workers: int = 16,
     ):
         self.jsonl = jsonl
@@ -90,6 +91,7 @@ class DataLoader:
         self.max_duration_sec = max_duration_sec
         self.max_voice_prompt_sec = max_voice_prompt_sec
         self.shuffle = shuffle
+        self.word_separator = word_separator
         self.io_workers = io_workers
         self._failures = 0
         self.rng = random.Random(seed)
@@ -147,7 +149,7 @@ class DataLoader:
                 cuts = eligible or cuts[:1]  # degenerate windows: earliest valid cut
             if cuts:
                 cut, i = self.rng.choice(cuts)
-                text = " ".join(w["word"] for w in entry.words[i:])
+                text = self.word_separator.join(w["word"] for w in entry.words[i:])
                 tokens = torch.tensor(self.tokenize(text), dtype=torch.long)
                 # Trim to the last word (plus a short tail) rather than the end
                 # of the file: 12% of utterances carry >1s of trailing silence,

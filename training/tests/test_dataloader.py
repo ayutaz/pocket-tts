@@ -116,3 +116,59 @@ def test_entry_start_offsets_into_a_shared_file(tmp_path):
 
     assert abs(dominant_freq(low_wav) - low_hz) < 2
     assert abs(dominant_freq(high_wav) - high_hz) < 2
+
+
+def _ja_manifest(tmp_path, words):
+    """One 6s utterance whose words carry no spaces, as Japanese is written."""
+    wav = tmp_path / "ja.flac"
+    _write_wav(wav, 6.0)
+    path = tmp_path / "ja.jsonl"
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(
+            json.dumps(
+                {
+                    "path": str(wav),
+                    "duration": 6.0,
+                    "transcript": "".join(words),
+                    "words": [
+                        {"word": w, "start": 1.5 * j, "end": 1.5 * j + 1.2}
+                        for j, w in enumerate(words)
+                    ],
+                },
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
+    return str(path)
+
+
+def _text_seen_by_the_tokenizer(manifest, **kw):
+    seen = []
+
+    def record(text):
+        seen.append(text)
+        return [1]
+
+    loader = DataLoader(manifest, record, 1, SR, 12.5, 30.0, 3.0, 0, 1, seed=0, shuffle=False, **kw)
+    loader._sample(loader.get_entry(0))
+    return seen
+
+
+def test_word_separator_defaults_to_a_space(tmp_path):
+    """Every released model was trained on space-joined text; changing the
+    default would silently retire that."""
+    seen = _text_seen_by_the_tokenizer(_manifest(tmp_path, n=1))
+    assert seen and all(" " in t or t in ("four",) for t in seen), seen
+
+
+def test_word_separator_can_join_without_spaces(tmp_path):
+    """Japanese is written without spaces. If the loader joins with one anyway,
+    training text and inference input come from different distributions --
+    nothing errors, the model just never quite becomes intelligible."""
+    words = ["こんにちは", "世界", "です"]
+    seen = _text_seen_by_the_tokenizer(_ja_manifest(tmp_path, words), word_separator="")
+    assert seen, "the loader never reached the aligned cut path"
+    for text in seen:
+        assert " " not in text, text
+        # What the model is asked to speak is a true suffix of the transcript.
+        assert "".join(words).endswith(text), text

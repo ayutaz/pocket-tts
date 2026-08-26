@@ -18,6 +18,14 @@ class DataArgs:
     # so prompts vary in length and the target keeps most of the utterance.
     # <= 0 removes the window (any word boundary; full-prefix prompt).
     max_voice_prompt_sec: float = 5.0
+    # What goes between words when the loader rebuilds the text after a cut.
+    # A space for languages written with spaces, "" for Japanese and Chinese,
+    # where align_data.py's segmenter splits a transcript the writing system
+    # does not separate. It has to match both the text the tokenizer was fitted
+    # on and the text a user types at inference; nothing asserts that, and
+    # sentencepiece encodes either happily, so a mismatch surfaces only as a run
+    # that never quite becomes intelligible.
+    word_separator: str = " "
     shuffle: bool = True
 
 
@@ -177,7 +185,7 @@ def _from_dict(cls, data: dict[str, Any]):
 
 
 def load_args(path: str | Path) -> TrainArgs:
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         raw = yaml.safe_load(f)
     return _from_dict(TrainArgs, raw)
 
@@ -198,5 +206,5 @@ def dump_args(args: TrainArgs) -> str:
 
 
 def save_args(args: TrainArgs, path: str | Path) -> None:
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write(dump_args(args))

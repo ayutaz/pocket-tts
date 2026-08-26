@@ -30,7 +30,7 @@ app = typer.Typer(pretty_exceptions_show_locals=False)
 
 def iter_texts(paths: list[Path]):
     for p in paths:
-        with open(p) as f:
+        with open(p, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -57,7 +57,7 @@ def main(
     model_type: Annotated[Literal["bpe", "unigram", "char"], typer.Option()] = "bpe",
 ) -> None:
     Path(output_prefix).parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as tmp:
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as tmp:
         n = 0
         for text in iter_texts(inputs):
             tmp.write(text.replace("\n", " ") + "\n")

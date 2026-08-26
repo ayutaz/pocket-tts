@@ -93,7 +93,7 @@ def align(manifest: Path, out: Path, shards: int, model: str, what: str = "manif
         part.rename(out)
         return
     # Shard across GPUs: each worker aligns its slice on its own device.
-    lines = manifest.open().readlines()
+    lines = manifest.open(encoding="utf-8").readlines()
     per = (len(lines) + shards - 1) // shards
     parts, procs = [], []
     for i in range(shards):
@@ -121,7 +121,7 @@ def align(manifest: Path, out: Path, shards: int, model: str, what: str = "manif
         )
     for p in procs:
         assert p.wait() == 0, "an alignment shard failed"
-    with out.open("w") as f:
+    with out.open("w", encoding="utf-8") as f:
         for chunk, part in parts:
             f.write(part.read_text())
             chunk.unlink()
@@ -141,7 +141,7 @@ def attach_hf_alignments(manifest: Path, out: Path, repo: str, audio_root: Path)
     file) fall back to the path relative to the audio root."""
     snap = Path(huggingface_hub.snapshot_download(repo.removeprefix("hf://"), repo_type="dataset"))
     wanted: dict[str, dict] = {}
-    with open(manifest) as f:
+    with open(manifest, encoding="utf-8") as f:
         for line in f:
             d = json.loads(line)
             key = d.get("audio_filepath") or str(
@@ -153,7 +153,7 @@ def attach_hf_alignments(manifest: Path, out: Path, repo: str, audio_root: Path)
         str(snap / "eval_aligned.jsonl.gz")
     ]
     for fpath in files:
-        with gzip.open(fpath, "rt") as f:
+        with gzip.open(fpath, "rt", encoding="utf-8") as f:
             for line in f:
                 a = json.loads(line)
                 if a["audio_filepath"] in wanted:
@@ -161,7 +161,7 @@ def attach_hf_alignments(manifest: Path, out: Path, repo: str, audio_root: Path)
         if len(found) == len(wanted):
             break
     missing = len(wanted) - len(found)
-    with open(out, "w") as w:
+    with open(out, "w", encoding="utf-8") as w:
         for rel, d in wanted.items():
             if rel in found:
                 d = {**d, "words": found[rel]}
@@ -192,12 +192,12 @@ def prepare_hifitts2(
         "nvidia/hifitts-2", "44khz/manifest_44khz.json", repo_type="dataset"
     )
     meta: dict[str, Utterance] = {}
-    with open(manifest_json) as f:
+    with open(manifest_json, encoding="utf-8") as f:
         for line in f:
             r = Utterance.model_validate_json(line)
             meta[r.audio_filepath] = r
     chapters = []
-    with open(chapters_json) as f:
+    with open(chapters_json, encoding="utf-8") as f:
         for line in f:
             chapters.append(json.loads(line))
 
@@ -311,7 +311,10 @@ def prepare_hifitts2(
     written, written_h = Counter(), Counter()
     train_manifest = out_dir / "train.jsonl"
     valid_manifest = out_dir / "valid.jsonl"
-    with open(train_manifest, "w") as ftr, open(valid_manifest, "w") as fev:
+    with (
+        open(train_manifest, "w", encoding="utf-8") as ftr,
+        open(valid_manifest, "w", encoding="utf-8") as fev,
+    ):
         for ch in chapters:
             path = chapter_path(ch)
             for u in ch["utterances"]:

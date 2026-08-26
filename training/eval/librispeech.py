@@ -91,7 +91,7 @@ def eval_dir_name(args, step: int) -> str:
 
 def read_lst(path: str, root: str, limit: int | None, prompt_root: str | None = None) -> list[dict]:
     items = []
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:

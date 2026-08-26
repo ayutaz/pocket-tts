@@ -54,7 +54,7 @@ class ProgressLog:
         }
         if metrics is not None:
             record["metrics"] = metrics
-        with open(self.path, "a") as f:
+        with open(self.path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
 
 

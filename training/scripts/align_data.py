@@ -4,6 +4,11 @@ Writes the same jsonl with an extra "words" field:
     {"path": ..., "duration": ..., "transcript": ...,
      "words": [{"word": "hello", "start": 0.31, "end": 0.52}, ...]}
 
+--segmenter japanese splits with MeCab/UniDic instead of on whitespace and adds
+a "kana" field per word holding the hiragana reading that was aligned, since
+"word" has to stay the surface form the loader will train on. Pair it with
+training/args.py's `data.word_separator: ""`.
+
 With timestamps available, the training DataLoader cuts each utterance at a
 random point between two words: audio before the cut becomes the voice
 conditioning, audio after the cut becomes the speech target paired with the
@@ -134,6 +139,88 @@ def case_fold_for(vocab: dict) -> Callable[[str], str]:
     return lambda s: s
 
 
+_KATAKANA_TO_HIRAGANA = str.maketrans({chr(c): chr(c - 0x60) for c in range(0x30A1, 0x30F7)})
+
+# UniDic parts of speech that open a phrase (bunsetsu). Everything else --
+# particles, auxiliaries, suffixes, punctuation -- attaches to the word before it.
+_JA_PHRASE_HEADS = frozenset(
+    ["名詞", "代名詞", "動詞", "形容詞", "形状詞", "副詞", "連体詞", "接続詞", "感動詞", "接頭辞"]
+)
+
+# (surface form, what to align it as, does it open a phrase)
+Segment = tuple[str, str, bool]
+
+
+def _whitespace_segments(text: str) -> list[Segment]:
+    return [(w, w, True) for w in re.split(r"\s+", text.strip()) if w]
+
+
+def _japanese_segmenter() -> Callable[[str], list[Segment]]:
+    """MeCab/UniDic morphemes, each paired with its reading in hiragana.
+
+    Japanese is written without spaces, so splitting on whitespace hands the
+    aligner one word per utterance: no cut point is ever produced, and
+    training/dataloader.py quietly falls back to drawing the voice prompt from
+    the target audio itself. And the Japanese CTC checkpoints worth using spell
+    their vocabulary in kana, so what goes into the trellis has to be the
+    reading while the surface form -- which the loader re-reads as the training
+    text -- keeps its kanji.
+    """
+    import fugashi
+
+    tagger = fugashi.Tagger()  # MeCab is not thread-safe; only the main loop calls this
+
+    def segment(text: str) -> list[Segment]:
+        out: list[Segment] = []
+        for m in tagger(text):
+            # `kana` is the orthographic reading, `pron` the phonetic one
+            # (particle wo: kana ヲ, pron オ). The hiragana checkpoints were
+            # fine-tuned on orthographic kana, so `kana` is the matching target.
+            kana = (getattr(m.feature, "kana", None) or "").translate(_KATAKANA_TO_HIRAGANA)
+            if not kana and out:
+                # Punctuation, digits and latin carry no reading. Glue them onto
+                # the morpheme before so they survive into the training text;
+                # they claim no frames of their own.
+                surface, reading, head = out[-1]
+                out[-1] = (surface + m.surface, reading, head)
+                continue
+            out.append((m.surface, kana, m.feature.pos1 in _JA_PHRASE_HEADS))
+        return out
+
+    return segment
+
+
+SEGMENTERS: dict[str, Callable[[], Callable[[str], list[Segment]]]] = {
+    "whitespace": lambda: _whitespace_segments,
+    "japanese": _japanese_segmenter,
+}
+
+
+def _merge_phrases(timed: list[dict], heads: list[bool]) -> list[dict]:
+    """Glue each non-head word onto the phrase (bunsetsu) it belongs to.
+
+    Alignment runs on morphemes because that is the unit the checkpoint's word
+    delimiter was trained on, but the loader cuts *between* entries, and a
+    morpheme boundary inside a word is neither a prosodic boundary nor a
+    plausible place for an utterance to start. Merging back up to the phrase
+    leaves only boundaries a speaker would actually pause at.
+    """
+    out: list[dict] = []
+    for item, head in zip(timed, heads):
+        if head or not out:
+            out.append(dict(item))
+            continue
+        prev = out[-1]
+        prev["word"] += item["word"]
+        if "kana" in prev:
+            prev["kana"] += item.get("kana") or ""
+        if item["start"] is not None:
+            if prev["start"] is None:
+                prev["start"] = item["start"]
+            prev["end"] = item["end"]
+    return out
+
+
 def _tokens_for(words: list[str], vocab: dict, delim: int) -> tuple[list[int], list[int]]:
     tokens, word_of = [], []
     for w_idx, w in enumerate(words):
@@ -181,7 +268,7 @@ def _resume_done(output_jsonl: str) -> set[tuple[str, float]]:
     """
     done: set[tuple[str, float]] = set()
     try:
-        with open(output_jsonl) as f:
+        with open(output_jsonl, encoding="utf-8") as f:
             done = {_entry_key(ManifestKey.model_validate_json(line)) for line in f}
     except FileNotFoundError:
         pass
@@ -195,6 +282,24 @@ def main(
     input_jsonl: Annotated[str, typer.Argument()],
     output_jsonl: Annotated[str, typer.Argument()],
     model: Annotated[str, typer.Option()] = "facebook/wav2vec2-base-960h",
+    segmenter: Annotated[
+        str,
+        typer.Option(
+            help="how a transcript is split into words: 'whitespace' (default), or "
+            "'japanese' for MeCab/UniDic morphemes plus their kana reading "
+            "(needs `uv sync --group japanese`). A language written without "
+            "spaces must not use 'whitespace': it yields one word per utterance, "
+            "which silently disables the loader's cut-and-prompt mechanism."
+        ),
+    ] = "whitespace",
+    merge_phrases: Annotated[
+        bool,
+        typer.Option(
+            help="glue function words onto the content word before them, so cuts land on "
+            "phrase (bunsetsu) boundaries rather than inside a word. Segmenter-specific; "
+            "ignored for 'whitespace'"
+        ),
+    ] = True,
     resume: Annotated[
         bool,
         typer.Option(
@@ -221,11 +326,26 @@ def main(
         datefmt="%d-%m %H:%M:%S",
     )
     device_t = torch.device(device)
+    if segmenter not in SEGMENTERS:
+        raise typer.BadParameter(f"--segmenter must be one of {sorted(SEGMENTERS)}")
     ctc_model, vocab, blank, delim, fold, sr, use_bf16 = _load_ctc_model(model, device_t)
+    segment = SEGMENTERS[segmenter]()
+    # Only a segmenter that produces a reading distinct from the surface form
+    # needs the reading recorded; for whitespace the two are the same string.
+    keep_reading = segmenter != "whitespace"
+    merge_heads = merge_phrases and segmenter != "whitespace"
+    if segmenter == "japanese" and not any("ぁ" <= c <= "ゟ" for c in vocab):
+        # Kana readings cannot align against a kanji- or romaji-only vocabulary:
+        # the filter below would empty every word and the whole corpus would be
+        # reported unalignable, one utterance at a time.
+        raise typer.BadParameter(
+            f"--model {model} has no hiragana in its vocabulary, so kana readings cannot "
+            "align against it -- use e.g. vumichien/wav2vec2-large-xlsr-japanese-hiragana"
+        )
 
     done = _resume_done(output_jsonl) if resume else set()
 
-    with open(input_jsonl) as f:
+    with open(input_jsonl, encoding="utf-8") as f:
         hours = [
             (_entry_key(e), e.duration / 3600) for e in map(ManifestKey.model_validate_json, f)
         ]
@@ -275,7 +395,10 @@ def main(
                 f"its alphabet is: {''.join(sorted(c for c in vocab if len(c) == 1))}"
             )
 
-    with open(input_jsonl) as fin, open(output_jsonl, "a" if resume else "w", buffering=1) as fout:
+    with (
+        open(input_jsonl, encoding="utf-8") as fin,
+        open(output_jsonl, "a" if resume else "w", buffering=1, encoding="utf-8") as fout,
+    ):
         q: queue.Queue = queue.Queue(maxsize=sort_window * 2)
         threading.Thread(target=read_entries, args=(fin, q), daemon=True).start()
 
@@ -298,14 +421,18 @@ def main(
                 if isinstance(wav, Exception):
                     skip(entry, wav)
                     continue
-                words = re.split(r"\s+", entry["transcript"].strip())
-                norm = ["".join(c for c in fold(w) if c in vocab and c != "|") for w in words]
+                segments = segment(entry["transcript"])
+                words = [s for s, _, _ in segments]
+                heads = [h for _, _, h in segments]
+                norm = [
+                    "".join(c for c in fold(r) if c in vocab and c != "|") for _, r, _ in segments
+                ]
                 aligned = [w for w in norm if w]
                 tokens, word_of = _tokens_for(aligned, vocab, delim)
                 if not tokens:
                     skip(entry, ValueError("no alignable words"))
                     continue
-                usable.append((order, entry, wav, words, norm, tokens, word_of))
+                usable.append((order, entry, wav, words, norm, tokens, word_of, heads))
             usable.sort(key=lambda u: len(u[2]))
             out_lines: list[tuple[int, str]] = []
             for s0 in range(0, len(usable), batch_size):
@@ -328,29 +455,41 @@ def main(
                 spans_batch = batched_word_spans(
                     emissions, T, [u[5] for u in chunk], [u[6] for u in chunk], blank
                 )
-                for (order, entry, wav, words, norm, _, _), spans, t_frames, n_samples in zip(
-                    chunk, spans_batch, T.tolist(), lens
-                ):
+                for (
+                    order,
+                    entry,
+                    wav,
+                    words,
+                    norm,
+                    _,
+                    _,
+                    heads,
+                ), spans, t_frames, n_samples in zip(chunk, spans_batch, T.tolist(), lens):
                     if spans is None:
                         skip(entry, ValueError("alignment failed"))
                         continue
                     sec_per_frame = (n_samples / sr) / t_frames
                     timed, k = [], 0
                     for w, nw in zip(words, norm):
+                        # "word" is the surface form: training/dataloader.py
+                        # reads this field back as the text to speak. "kana" is
+                        # what actually went into the trellis, kept so a wrong
+                        # reading can be spotted by eye in the manifest.
+                        item = {"word": w} if not keep_reading else {"word": w, "kana": nw}
                         if not nw or spans[k] is None:
-                            timed.append({"word": w, "start": None, "end": None})
+                            timed.append({**item, "start": None, "end": None})
                             k += bool(nw)
                             continue
                         s, e = spans[k]
                         k += 1
                         timed.append(
                             {
-                                "word": w,
+                                **item,
                                 "start": round(s * sec_per_frame, 3),
                                 "end": round((e + 1) * sec_per_frame, 3),
                             }
                         )
-                    entry["words"] = timed
+                    entry["words"] = _merge_phrases(timed, heads) if merge_heads else timed
                     out_lines.append((order, json.dumps(entry) + "\n"))
                     n_ok += 1
             # Undo the length sort so the output follows input order.

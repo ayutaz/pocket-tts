@@ -70,8 +70,8 @@ def test_utterances_in_one_chapter_share_the_manifest_path(tmp_path, monkeypatch
 
     train_m, valid_m = prepare_data.prepare_hifitts2(audio_out, out_dir, None, 1)
 
-    train_recs = [json.loads(line) for line in train_m.open()]
-    valid_recs = [json.loads(line) for line in valid_m.open()]
+    train_recs = [json.loads(line) for line in train_m.open(encoding="utf-8")]
+    valid_recs = [json.loads(line) for line in valid_m.open(encoding="utf-8")]
     assert len(train_recs) == 1
     assert len(valid_recs) == 1
 

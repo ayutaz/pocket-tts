@@ -52,6 +52,12 @@ dev = [
     "whisper-normalizer>=0.0.10",
 ]
 
+# scripts/align_data.py --segmenter japanese. Japanese is written without
+# spaces, so the aligner needs a morphological analyser to find word boundaries
+# at all; unidic-lite ships the dictionary in the wheel, so there is no separate
+# download step. Only needed to prepare Japanese data.
+japanese = ["fugashi>=1.3", "unidic-lite>=1.0.8"]
+
 
 [tool.ruff]
 line-length = 100

@@ -177,6 +177,7 @@ def main(config_path: str) -> None:
             run.world_size,
             seed=args.seed + rank,
             shuffle=args.data.shuffle,
+            word_separator=args.data.word_separator,
         )
     )
 
@@ -287,6 +288,7 @@ def validate(
             world_size,
             seed=0,
             shuffle=False,
+            word_separator=args.data.word_separator,
         )
     )
     autocast = torch.autocast(

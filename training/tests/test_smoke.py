@@ -275,6 +275,7 @@ def test_prefix_prompt():
     dl.max_duration_sec = 30.0
     dl.max_voice_prompt_sec = 5.0
     dl.tokenize = lambda s: [1, 2]
+    dl.word_separator = " "
     dl.rng = random.Random(0)
     dl._failures = 0
 
