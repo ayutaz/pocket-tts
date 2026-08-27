@@ -244,6 +244,47 @@ def _merge_phrases(timed: list[dict], heads: list[bool]) -> list[dict]:
     return out
 
 
+def _timed_words(
+    words: list[str],
+    readings: list[str],
+    spans: list[tuple[int, int] | None],
+    sec_per_frame: float,
+    keep_reading: bool,
+) -> list[dict]:
+    """Deal the alignment's spans back out across every word of the transcript.
+
+    `spans` covers only the words with a non-empty reading, in that order,
+    because those are the only ones the trellis was given -- the rest are
+    digits, latin and punctuation, whose characters are not in the model's
+    alphabet. They still have to reach the manifest, since the loader reads
+    "word" back as the text to speak, and they have to arrive without
+    timestamps: a word with no span is what stops dataloader.py placing a cut
+    beside audio the alignment never labelled.
+
+    "kana" is the reading that actually went into the trellis, kept when it is
+    a different string from the surface form so a wrong reading can be caught
+    by eye in the manifest.
+    """
+    timed: list[dict] = []
+    k = 0
+    for word, reading in zip(words, readings):
+        item = {"word": word, "kana": reading} if keep_reading else {"word": word}
+        span = spans[k] if reading else None
+        k += bool(reading)
+        if span is None:
+            timed.append({**item, "start": None, "end": None})
+            continue
+        start, end = span
+        timed.append(
+            {
+                **item,
+                "start": round(start * sec_per_frame, 3),
+                "end": round((end + 1) * sec_per_frame, 3),
+            }
+        )
+    return timed
+
+
 def _tokens_for(words: list[str], vocab: dict, delim: int) -> tuple[list[int], list[int]]:
     tokens, word_of = [], []
     for w_idx, w in enumerate(words):
@@ -498,26 +539,7 @@ def main(
                         skip(entry, ValueError("alignment failed"))
                         continue
                     sec_per_frame = (n_samples / sr) / t_frames
-                    timed, k = [], 0
-                    for w, nw in zip(words, norm):
-                        # "word" is the surface form: training/dataloader.py
-                        # reads this field back as the text to speak. "kana" is
-                        # what actually went into the trellis, kept so a wrong
-                        # reading can be spotted by eye in the manifest.
-                        item = {"word": w} if not keep_reading else {"word": w, "kana": nw}
-                        if not nw or spans[k] is None:
-                            timed.append({**item, "start": None, "end": None})
-                            k += bool(nw)
-                            continue
-                        s, e = spans[k]
-                        k += 1
-                        timed.append(
-                            {
-                                **item,
-                                "start": round(s * sec_per_frame, 3),
-                                "end": round((e + 1) * sec_per_frame, 3),
-                            }
-                        )
+                    timed = _timed_words(words, norm, spans, sec_per_frame, keep_reading)
                     entry["words"] = _merge_phrases(timed, heads) if merge_heads else timed
                     out_lines.append((order, json.dumps(entry) + "\n"))
                     n_ok += 1

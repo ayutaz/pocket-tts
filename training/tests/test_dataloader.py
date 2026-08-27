@@ -172,3 +172,55 @@ def test_word_separator_can_join_without_spaces(tmp_path):
         assert " " not in text, text
         # What the model is asked to speak is a true suffix of the transcript.
         assert "".join(words).endswith(text), text
+
+
+def _cut_texts(manifest, tries=40, **kw):
+    """The text of every cut the loader draws over `tries` samples."""
+    seen = []
+
+    def record(text):
+        seen.append(text)
+        return [1]
+
+    loader = DataLoader(manifest, record, 1, SR, 12.5, 30.0, 5.0, 0, 1, seed=0, shuffle=False, **kw)
+    entry = loader.get_entry(0)
+    for _ in range(tries):
+        loader._sample(entry)
+    return set(seen)
+
+
+def test_a_word_without_timestamps_removes_the_cuts_on_both_sides_of_it(tmp_path):
+    """The contract align_data.py's Japanese path depends on.
+
+    Digits, latin and punctuation have no derivable reading, so the aligner
+    labels no frames for them and writes start: null. That null is the only
+    thing keeping the loader from cutting beside audio nobody aligned -- the
+    cut is the midpoint between one word's end and the next one's start, so
+    beside an unlabelled word it would land wherever that word's speech
+    happens to be, and the audio after the cut would begin mid-sound while the
+    text still names the word. An earlier version of the segmenter lost these
+    nulls by gluing unreadable morphemes onto their neighbour, and about 6% of
+    lines trained on mismatched text and audio with nothing reporting it.
+    """
+    wav = tmp_path / "ja.flac"
+    _write_wav(wav, 6.0)
+    manifest = tmp_path / "ja.jsonl"
+    spans = [(0.0, 1.0), (1.2, 2.0), (None, None), (3.0, 3.8), (4.0, 4.6)]
+    words = ["あ", "い", "3000", "え", "お"]
+    manifest.write_text(
+        json.dumps(
+            {
+                "path": str(wav),
+                "duration": 6.0,
+                "transcript": "".join(words),
+                "words": [{"word": w, "start": s, "end": e} for w, (s, e) in zip(words, spans)],
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    texts = _cut_texts(str(manifest), word_separator="")
+    # Cutting before "3000" would give "3000えお"; cutting after it, "えお".
+    assert texts == {"い3000えお", "お"}, texts
