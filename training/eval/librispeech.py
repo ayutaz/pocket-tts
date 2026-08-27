@@ -48,6 +48,24 @@ def resolve_hf_dir(uri: str) -> str:
     return huggingface_hub.snapshot_download(uri.removeprefix("hf://"), repo_type="dataset")
 
 
+def build_normalizer(name: str):
+    """The text normalizer applied to both sides of the metric.
+
+    'english' is whisper's: it lowercases, expands numbers, and strips
+    diacritics -- including the Japanese voiced-sound marks, so が becomes か
+    and every voicing error in the language is forgiven. 'basic' keeps them.
+    """
+    if name == "english":
+        from whisper_normalizer.english import EnglishTextNormalizer
+
+        return EnglishTextNormalizer()
+    if name == "basic":
+        from whisper_normalizer.basic import BasicTextNormalizer
+
+        return BasicTextNormalizer()  # remove_diacritics=False by default
+    raise ValueError(f"unknown text normalizer: {name}")
+
+
 class EvalResults(BaseModel):
     """Corpus-level scores written to results.json."""
 
@@ -55,6 +73,7 @@ class EvalResults(BaseModel):
     step: int
     num_items: int
     wer: float
+    cer: float
     sim: float | None
     utmos: float | None
     silent: int
@@ -77,6 +96,8 @@ def eval_dir_name(args, step: int) -> str:
         name += f"_n{args.num_items}"
     if args.seed:
         name += f"_seed{args.seed}"
+    if args.text_normalizer != "english":
+        name += f"_{args.text_normalizer}"
     if args.asr != DEFAULT_ASR:
         name += "_" + re.sub(r"[^a-z0-9]+", "", args.asr.split("/")[-1].lower())[:12]
     if args.prompt_root:
@@ -225,8 +246,6 @@ def latents_to_wav(mimi, latents: torch.Tensor, device) -> torch.Tensor | None:
 
 def score_items(items: list[dict], device, args) -> tuple[list[dict], int]:
     """Generate and score `items` on one device. Returns per-item records."""
-    from whisper_normalizer.english import EnglishTextNormalizer
-
     model, mimi, step = load_run(
         args.run_dir, device, use_ema=args.use_ema, checkpoint=args.checkpoint
     )
@@ -234,7 +253,7 @@ def score_items(items: list[dict], device, args) -> tuple[list[dict], int]:
     # difference between two evals is a real difference and not noise.
     torch.manual_seed(args.seed)
 
-    normalize = EnglishTextNormalizer()
+    normalize = build_normalizer(args.text_normalizer)
     transcribe = build_transcriber(args.asr, device)
 
     spk = None
@@ -402,6 +421,14 @@ def main() -> None:
         default=DEFAULT_ASR,
         help="ASR used for scoring; pass openai/whisper-large-v3 for the whisper pipeline",
     )
+    parser.add_argument(
+        "--text-normalizer",
+        choices=["english", "basic"],
+        default="english",
+        help="normalizer applied to refs/hyps before scoring; 'basic' keeps diacritics "
+        "and tone marks, so use it for languages like Japanese where 'english' would "
+        "strip them",
+    )
     parser.add_argument("--skip-sim", action="store_true")
     parser.add_argument("--checkpoint", default=None, help="pin a checkpoint instead of the latest")
     parser.add_argument(
@@ -485,6 +512,7 @@ def main() -> None:
         step=step,
         num_items=len(records),
         wer=jiwer.wer(refs, hyps),
+        cer=jiwer.cer(refs, hyps),
         sim=sum(sims) / len(sims) if sims else None,
         utmos=sum(moses) / len(moses) if moses else None,
         silent=sum(r["silent"] for r in records),

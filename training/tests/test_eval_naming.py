@@ -10,7 +10,14 @@ from training.eval.librispeech import DEFAULT_ASR, eval_dir_name
 
 def make_args(**over):
     base = dict(
-        temp=0.3, cfg=2.0, use_ema=True, num_items=None, seed=0, asr=DEFAULT_ASR, prompt_root=None
+        temp=0.3,
+        cfg=2.0,
+        use_ema=True,
+        num_items=None,
+        seed=0,
+        asr=DEFAULT_ASR,
+        prompt_root=None,
+        text_normalizer="english",
     )
     base.update(over)
     return Namespace(**base)
