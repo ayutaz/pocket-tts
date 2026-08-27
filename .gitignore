@@ -81,9 +81,6 @@ profile_output*
 *.wav
 *.model
 *.pt
-# ...except the small tokenizer fixture the Japanese splitting tests need to
-# actually run instead of skipping (data/ja/tokenizer.model is untracked).
-!tests/fixtures/ja_tokenizer.model
 
 # Agents files, use a symlink to AGENTS.md instead. 
 CLAUDE.md
