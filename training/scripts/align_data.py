@@ -41,7 +41,7 @@ from tqdm import tqdm
 from typing_extensions import Annotated
 
 from pocket_tts.data.audio_utils import convert_audio
-from training.scripts import ja_text
+from pocket_tts.utils.text_normalization import normalize_japanese
 
 logger = logging.getLogger("align")
 
@@ -215,7 +215,7 @@ SEGMENTERS: dict[str, Callable[[], Callable[[str], list[Segment]]]] = {
 # reports it -- so the language that normalizes its corpus normalizes here too.
 NORMALIZERS: dict[str, Callable[[str], str]] = {
     "whitespace": lambda text: text,
-    "japanese": ja_text.normalize,
+    "japanese": normalize_japanese,
 }
 
 

@@ -35,7 +35,7 @@ from pathlib import Path
 import typer
 from typing_extensions import Annotated
 
-from training.scripts.ja_text import normalize
+from pocket_tts.utils.text_normalization import normalize_japanese as normalize
 
 logger = logging.getLogger("prepare_ja_text")
 

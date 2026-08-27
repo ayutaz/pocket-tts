@@ -160,7 +160,7 @@ def test_normalized_transcript_survives_the_round_trip(segment):
     exact string when the loader joins them with word_separator "". If this
     breaks, the model trains on text no user will ever type and nothing errors.
     """
-    from training.scripts.ja_text import normalize
+    from pocket_tts.utils.text_normalization import normalize_japanese as normalize
 
     for raw in [
         "ＡＢＣと１２３をみた。",

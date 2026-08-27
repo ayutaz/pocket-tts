@@ -8,7 +8,7 @@ as a model that never quite becomes intelligible.
 
 from typer.testing import CliRunner
 
-from training.scripts.ja_text import normalize
+from pocket_tts.utils.text_normalization import normalize_japanese as normalize
 from training.scripts.prepare_ja_text import app
 
 runner = CliRunner()

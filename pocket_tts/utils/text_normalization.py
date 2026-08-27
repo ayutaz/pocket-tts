@@ -8,8 +8,7 @@ symptom of a mismatch is a model that never quite becomes intelligible.
 
 Everything here therefore lives in one function, called by prepare_ja_text.py
 for the tokenizer corpus and by align_data.py --segmenter japanese, which
-rewrites each manifest transcript through it before segmenting. (The inference
-side is not wired up yet -- see docs/Japanese Model/training-strategy.md.)
+rewrites each manifest transcript through it before segmenting.
 
 NFKC does most of the work -- halfwidth katakana, fullwidth latin and digits and
 the rest of the width variants all want folding -- but two of its rewrites are
@@ -26,10 +25,14 @@ wrong for Japanese speech and are held out of it:
 That also means the tokenizer has to be fitted with
 `--normalization-rule identity`: sentencepiece's default applies nmt_nfkc
 *inside* encode(), where no Python-side normalizer can see or prevent it.
+
+This module lives in pocket_tts/ rather than training/ because inference needs
+it and the inference package cannot import from the training package.
 """
 
 import re
 import unicodedata
+from collections.abc import Callable
 
 # Held out of NFKC. Noncharacters: permanently unassigned and forbidden in
 # interchange, so unlike the private-use area -- where legacy carrier emoji
@@ -46,7 +49,7 @@ _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _SPACE_RUN = re.compile(r"\s+")
 
 
-def normalize(text: str) -> str:
+def normalize_japanese(text: str) -> str:
     """NFKC, minus the rewrites that damage Japanese, whitespace collapsed.
 
     Whitespace runs collapse to a single space rather than being stripped out:
@@ -61,3 +64,20 @@ def normalize(text: str) -> str:
         text = text.replace(sentinel, char)
     text = _CONTROL.sub("", text)
     return _SPACE_RUN.sub(" ", text).strip()
+
+
+def _identity(text: str) -> str:
+    return text
+
+
+NORMALIZERS: dict[str, Callable[[str], str]] = {"japanese": normalize_japanese}
+
+
+def resolve_normalizer(name: str | None) -> Callable[[str], str]:
+    """The normalizer a config names. None means leave the text alone.
+
+    An unknown name raises rather than falling back to the identity: a typo in
+    a config would otherwise disable normalization silently, and the only
+    symptom is a model that never quite becomes intelligible.
+    """
+    return _identity if name is None else NORMALIZERS[name]
