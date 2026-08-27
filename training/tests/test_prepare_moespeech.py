@@ -386,6 +386,39 @@ def test_cer_is_measured_against_the_transcript_the_manifest_will_carry(tmp_path
     assert a["cer"] == pytest.approx(13 / 15), a["cer"]  # reversed, this pair is 6.5
 
 
+def test_two_transcripts_that_differ_only_in_width_agree(tmp_path):
+    """The CER has to be measured over the strings the manifest will carry.
+
+    Two Japanese ASR systems differ by convention far more than they differ by
+    hearing, and normalization is exactly what erases the conventions: NFKC
+    folds full-width latin and digits onto ASCII, half-width katakana onto
+    full-width, and collapses the spacing. Measured raw, each of these pairs
+    scores 0.25 to 0.75 -- inside no cutoff an operator would ever pick off the
+    retention table -- while the two strings the manifest would hold are the
+    same string. Measured after normalization they agree exactly, which is what
+    they do.
+
+    It is not only recall. probe.json's CER distribution and its whole
+    retention table would be computed over strings this corpus never contains,
+    and that table is the single artifact the cutoffs are chosen from.
+    """
+    from training.scripts.prepare_moespeech import read_annotation, select_utterances
+
+    # Both directions: the conventions land on either side, and normalizing
+    # only the reference leaves the number measured against the raw other one.
+    pairs = [("ＡＢＣです", "ABCです"), ("123円", "１２３円"), ("ｱｲｳです", "アイウです")]
+    for i, (whisper, parakeet) in enumerate(pairs):
+        a = read_annotation(_annotation(tmp_path, f"pair{i}", whisper, parakeet))
+        assert a["cer"] == 0.0, (whisper, parakeet, a["cer"])
+
+    # And they survive the strictest row of the grid, which is the row those
+    # clips belong in: two systems agreeing character for character is the
+    # strongest evidence this corpus offers that a transcript is right.
+    kept = list(select_utterances(tmp_path, max_cer=0.0, min_mos=0.0))
+    assert [u["id"] for u in kept] == ["pair0", "pair1", "pair2"], kept
+    assert [u["transcript"] for u in kept] == ["ABCです", "123円", "アイウです"], kept
+
+
 def _partial_annotation(tmp_path, name, **fields):
     """An annotation with only the fields named -- what a truncated file has."""
     p = tmp_path / f"{name}.json"
@@ -447,9 +480,10 @@ def test_an_annotation_without_a_mos_is_dropped(tmp_path):
 
 
 def test_an_empty_transcription_is_dropped(tmp_path):
-    """An empty string is missing too, and worse than missing: jiwer.cer
-    divides by the reference's length and raises on an empty reference, so one
-    such clip ends the whole pass rather than costing one utterance."""
+    """An empty string is missing too, and worse than missing: CER is the edit
+    distance over the reference's length, so a clip whose reference is empty
+    has no disagreement to report and would be filtered on a number that means
+    nothing."""
     from training.scripts.prepare_moespeech import read_annotation
 
     assert read_annotation(_annotation(tmp_path, "a", "", "こんにちは")) is None
@@ -857,7 +891,7 @@ def test_a_kept_utterance_carries_what_the_next_stage_needs(tmp_path):
     }
 
 
-def test_the_selection_yields_its_utterances_in_path_order(tmp_path):
+def test_the_selection_yields_its_utterances_in_path_order(tmp_path, monkeypatch):
     """A re-run has to produce the same manifest as the run it replaces.
 
     This script is built to be killed and restarted, and the stage after it
@@ -868,13 +902,26 @@ def test_the_selection_yields_its_utterances_in_path_order(tmp_path):
     since every offset is still inside a real file.
 
     Every other selection test here keeps exactly one utterance, which no
-    ordering can get wrong. So this one keeps two, and creates them back to
-    front, where only an actual sort turns them around again.
+    ordering can get wrong. So this one keeps two -- and hands them over in the
+    wrong order rather than merely creating them in it. Creation order proves
+    nothing here: NTFS keeps directory entries by name, so `rglob` returns them
+    sorted whatever order they were written in, and an assertion resting on
+    that is an assertion about the filesystem that no change to this code can
+    fail. The patch below is checked first, so a walk that arrived sorted
+    anyway would be caught rather than quietly making the test vacuous again.
     """
+    import pathlib
+
     from training.scripts.prepare_moespeech import select_utterances
 
-    _annotation(tmp_path, "clip_0002", "あ", "あ")
     _annotation(tmp_path, "clip_0001", "あ", "あ")
+    _annotation(tmp_path, "clip_0002", "あ", "あ")
+
+    walk = pathlib.Path.rglob
+    monkeypatch.setattr(
+        pathlib.Path, "rglob", lambda self, pat, **kw: sorted(walk(self, pat, **kw), reverse=True)
+    )
+    assert [p.name for p in tmp_path.rglob("*.json")] == ["clip_0002.json", "clip_0001.json"]
 
     kept = list(select_utterances(tmp_path, max_cer=1.0, min_mos=0.0))
     assert [u["id"] for u in kept] == ["clip_0001", "clip_0002"]
@@ -1135,7 +1182,7 @@ def test_clips_from_two_speakers_are_never_joined(tmp_path):
 
 
 def test_a_clip_at_another_sample_rate_is_never_joined_in(tmp_path):
-    """A rate mismatch has to raise, because joined anyway it reports nothing.
+    """Joined anyway it reports nothing, so it is left out -- and only it.
 
     `np.concatenate` does not care what rate the samples were taken at, and the
     file is written at whichever rate the first clip happened to have. A 22.05
@@ -1144,7 +1191,15 @@ def test_a_clip_at_another_sample_rate_is_never_joined_in(tmp_path):
     transcript says, and every offset after it in the file is out by the
     difference. The manifest still parses, every offset is still inside a real
     file, and the only symptom is a model trained on speech that does not match
-    its text. Nothing downstream can detect it, so it has to stop here.
+    its text. Nothing downstream can detect it, so it cannot be joined in.
+
+    Dropping it is the whole of what is required, though, and raising costs far
+    more than it buys: this runs over 400,000 clips on a preemptible instance,
+    the selection it reads is deterministic, so a raise here ends every re-run
+    at the same clip forever with nothing to do about it but hand-edit
+    `utterances.jsonl`. The clip simply does not reach `entries`, which is
+    already what the manifest should say about it, and the clip after it takes
+    the offset it would have had.
     """
     from training.scripts.prepare_moespeech import concatenate
 
@@ -1163,10 +1218,54 @@ def test_a_clip_at_another_sample_rate_is_never_joined_in(tmp_path):
             "transcript": "い",
             "speaker": "spk",
         },
+        {
+            "id": "u2",
+            "wav": _wav(tmp_path / "u2.wav", 1.0, 880.0, sr=44100),
+            "duration": 1.0,
+            "transcript": "う",
+            "speaker": "spk",
+        },
     ]
-    with pytest.raises(ValueError):
-        concatenate(utts, tmp_path / "joined.wav", target_sec=60.0)
-    assert not (tmp_path / "joined.wav").exists()
+    entries = concatenate(utts, tmp_path / "joined.wav", target_sec=60.0)
+
+    assert [e["id"] for e in entries] == ["u0", "u2"], entries
+    # No hole where it was: the offsets are measured from the samples actually
+    # laid down, so the clip after it starts where it starts.
+    assert [e["start"] for e in entries] == [0.0, 1.0], entries
+    assert _dominant_hz(tmp_path / "joined.wav", 1.0, 1.0) == pytest.approx(880.0, abs=2)
+
+
+def test_a_clip_whose_audio_cannot_be_read_costs_only_that_clip(tmp_path):
+    """The wav is the first thing here that opens the audio at all.
+
+    `wav` is a path read_annotation derived from the json's name -- nothing has
+    checked that it exists, or that what is under it is whole -- and this stage
+    runs 400,000 clips deep into a pass that took tens of minutes to reach.
+    Raising would end the run at the first broken clip, and end it again at the
+    same clip on every re-run: the selection is deterministic and read back off
+    `utterances.jsonl`, so there is no way past it short of editing that file
+    by hand. Broken wavs are on the plan's own list of what the first real run
+    will find.
+
+    Both shapes are here because they arrive differently: a clip whose file was
+    never written at all, and one a kill left half-written. sphn refuses both.
+    """
+    from training.scripts.prepare_moespeech import concatenate
+
+    (tmp_path / "truncated.wav").write_bytes(b"RIFF")  # what a kill leaves behind
+    clips = _clips(tmp_path, 1.0, [220.0, 880.0])
+    broken = [
+        {"id": "gone", "wav": tmp_path / "nothing.wav"},
+        {"id": "half", "wav": tmp_path / "truncated.wav"},
+    ]
+    unreadable = [{"duration": 1.0, "transcript": "あ", "speaker": "spk", **b} for b in broken]
+    utts = [clips[0], *unreadable, clips[1]]
+
+    entries = concatenate(utts, tmp_path / "joined.wav", target_sec=60.0)
+
+    assert [e["id"] for e in entries] == ["u0", "u1"], entries
+    assert [e["start"] for e in entries] == [0.0, 1.0], entries
+    assert _dominant_hz(tmp_path / "joined.wav", 1.0, 1.0) == pytest.approx(880.0, abs=2)
 
 
 def test_a_concatenated_entry_carries_what_the_manifest_needs(tmp_path):
@@ -1241,6 +1340,42 @@ def test_a_kill_during_the_write_leaves_no_file_to_be_trusted(tmp_path, monkeypa
     assert not (tmp_path / "joined.wav").exists()
     # The bytes did land -- beside the name, under one a re-run does not trust.
     assert (tmp_path / "joined.wav.partial").read_bytes() == b"RIFF"
+
+
+def test_the_aligner_reads_the_window_each_entry_names(tmp_path):
+    """The handoff this stage exists for: align_data reads back what it writes.
+
+    Every entry here names a window inside a file that holds many of them, and
+    the first entry of every pseudo-recording starts at 0.0 -- once per file,
+    not once per speaker, so at --target-sec 120 over 5.8-second clips it is
+    about one entry in twenty. A reader that treats `start == 0.0` as "this row
+    is the whole file" hands the aligner two minutes of somebody else's
+    utterances to fit a few seconds of transcript against: the spans come back
+    spread over the whole file, the loader finds no cut inside the utterance
+    and quietly falls back to taking the voice prompt from the audio it is
+    predicting -- the exact failure --segmenter japanese is here to prevent --
+    and a wav2vec2 forward over that many frames is where an out-of-memory kill
+    takes the whole pass down rather than one utterance.
+
+    Each clip is a distinct tone, so what came back is identified rather than
+    merely counted: the window read for the first entry has to be its own two
+    seconds at 220 Hz, not the six seconds of all three.
+    """
+    import numpy as np
+
+    from training.scripts.align_data import read_window
+    from training.scripts.prepare_moespeech import concatenate
+
+    tones = [220.0, 440.0, 880.0]
+    rows = concatenate(_clips(tmp_path, 2.0, tones), tmp_path / "joined.wav", target_sec=120.0)
+    assert [r["start"] for r in rows] == [0.0, 2.0, 4.0], rows
+
+    for row, hz in zip(rows, tones):
+        wav, sr = read_window(row)
+        mono = wav.mean(axis=0)
+        assert len(mono) == pytest.approx(2.0 * sr, abs=2), row
+        freqs = np.fft.rfftfreq(len(mono), d=1 / sr)
+        assert freqs[np.argmax(np.abs(np.fft.rfft(mono)))] == pytest.approx(hz, abs=2), row
 
 
 def test_no_speaker_appears_in_both_splits(tmp_path):
@@ -1614,7 +1749,9 @@ def _pipeline(tmp_path, monkeypatch):
     cache = tmp_path / "hub"
     cache.mkdir()
     out_dir = tmp_path / "ja"
-    speakers = ("aoi", "kaede")
+    # A list, and read at call time: a test that widens the selection appends
+    # to it, which is what the dataset growing a speaker looks like from here.
+    speakers = ["aoi", "kaede"]
 
     def fake_fetch(repo_id, filename, **kw):
         calls["info.csv"].append((repo_id, filename, kw.get("repo_type")))
@@ -1683,7 +1820,7 @@ def _pipeline(tmp_path, monkeypatch):
         options.update(overrides)
         return m.main(**options)
 
-    return SimpleNamespace(module=m, calls=calls, out=out_dir, run=run)
+    return SimpleNamespace(module=m, calls=calls, out=out_dir, run=run, speakers=speakers)
 
 
 def test_the_pipeline_skips_stages_whose_output_exists(tmp_path, monkeypatch):
@@ -1964,24 +2101,166 @@ def test_a_cutoff_that_keeps_nothing_empties_the_manifests_too(tmp_path, monkeyp
     assert len(p.calls["align"]) == 4, "the alignments still describe the old manifests"
 
 
-def test_a_speaker_unpacked_after_the_selection_reaches_the_manifests(tmp_path, monkeypatch):
+def test_a_speaker_a_wider_selection_adds_reaches_the_manifests(tmp_path, monkeypatch):
     """A larger --hours the next day arrives as a new directory to walk.
 
-    The selection walks the extract root, so one made before a speaker was
-    unpacked does not cover them. Skipping on `utterances.jsonl` existing would
-    leave 30 GB of freshly fetched audio out of the training manifest, with
-    nothing on disk saying it had been left out.
+    Deleting `characters.json` is the documented way to select speakers again,
+    and everything after it is measured against what that selection says. A
+    speaker fetched and unpacked by the wider run has to reach the probe -- its
+    hours column is what the target is expressed in -- and the manifests:
+    skipping on `utterances.jsonl` existing would leave 30 GB of freshly
+    fetched audio out of the training manifest, with nothing on disk saying it
+    had been left out.
     """
     p = _pipeline(tmp_path, monkeypatch)
     p.run(**CUTOFFS)
+    assert json.loads((p.out / "probe.json").read_text(encoding="utf-8"))["count"] == 10
     _age(p.out)
 
-    _unpack_speaker(p.out / "extracted", "momo")
+    p.speakers.append("momo")
+    (p.out / "characters.json").unlink()
     p.run(**CUTOFFS)
 
+    assert sorted(p.calls["extract"]) == ["aoi.zip", "kaede.zip", "momo.zip"]
+    assert json.loads((p.out / "probe.json").read_text(encoding="utf-8"))["count"] == 15
     assert {e["speaker"] for e in _jsonl(p.out / "utterances.jsonl")} == {"aoi", "kaede", "momo"}
     assert {e["speaker"] for e in _jsonl(p.out / "train.jsonl")} == {"kaede", "momo"}
     assert {e["speaker"] for e in _jsonl(p.out / "valid.jsonl")} == {"aoi"}
+
+
+def test_a_narrower_selection_leaves_the_speakers_it_dropped_out(tmp_path, monkeypatch):
+    """--hours has to bound what a run uses, not only what it fetches.
+
+    The extract root only grows: a speaker unpacked once is there for every
+    later run, and asking for fewer hours -- the natural reaction to a run too
+    slow for the instance it is on -- adds no file anywhere, so nothing about a
+    narrower selection is visible in a timestamp. Walking the root instead of
+    the selection therefore means there is no way to ask for fewer speakers at
+    all, and the ones dropped are not merely still on disk: they are silently
+    in the training manifest, which is worse than the flag doing nothing.
+
+    What they leave behind goes with them. `audio/` is tens of gigabytes at 124
+    hours of 44.1 kHz, the disk on a preemptible instance is fixed, and filling
+    it mid-run costs the run.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**CUTOFFS)
+    assert {e["speaker"] for e in _jsonl(p.out / "utterances.jsonl")} == {"aoi", "kaede"}
+    _age(p.out)
+
+    (p.out / "characters.json").unlink()
+    p.run(**CUTOFFS, hours=0.001)  # 0.06 minutes: one of the two 0.1-minute speakers
+
+    chosen = json.loads((p.out / "characters.json").read_text(encoding="utf-8"))
+    assert [c["name"] for c in chosen["characters"]] == ["aoi"], chosen
+    assert {e["speaker"] for e in _jsonl(p.out / "utterances.jsonl")} == {"aoi"}
+    manifests = _jsonl(p.out / "train.jsonl") + _jsonl(p.out / "valid.jsonl")
+    assert {e["speaker"] for e in manifests} == {"aoi"}, manifests
+    # The retention table is read in hours, so it may not go on counting a
+    # speaker this run will not train on either.
+    assert json.loads((p.out / "probe.json").read_text(encoding="utf-8"))["count"] == 5
+    assert sorted(f.name for f in (p.out / "entries").glob("*.jsonl")) == ["aoi.jsonl"]
+    assert sorted(w.name for w in (p.out / "audio").glob("*.wav")) == ["aoi.wav", "aoi_001.wav"]
+
+
+def test_new_cutoffs_rebuild_the_selection_they_decided(tmp_path, monkeypatch):
+    """The two cutoffs are recorded, and changing them carries all the way down.
+
+    Nothing else on disk says what a manifest was filtered under. Without that
+    record a re-run with a stricter pair finds `utterances.jsonl` sitting there
+    and reuses it -- and every stage built on it -- so the run reports success
+    over the selection the operator has just replaced, with no INFO line and no
+    warning; the only trace is that the numbers were typed. Worse than needing
+    to remember: afterwards neither the script nor the operator can tell which
+    cutoffs a given `train.jsonl` was built under.
+
+    Taken here to the pair that keeps nothing, so the carry-through is visible
+    in every artifact at once: the selection empties, both manifests empty with
+    it, both alignments are rebuilt, and the audio of the speakers the cutoffs
+    emptied is freed rather than left occupying the instance's disk.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**CUTOFFS)
+    assert json.loads((p.out / "cutoffs.json").read_text(encoding="utf-8")) == CUTOFFS
+    assert [e["id"] for e in _jsonl(p.out / "train.jsonl")] == ["clip0", "clip1", "clip2"]
+    _age(p.out)
+
+    p.run(max_cer=0.0, min_mos=4.5)  # the best clip scores 4.0, so nothing is kept
+
+    assert json.loads((p.out / "cutoffs.json").read_text(encoding="utf-8")) == {
+        "max_cer": 0.0,
+        "min_mos": 4.5,
+    }
+    assert _jsonl(p.out / "utterances.jsonl") == []
+    assert _jsonl(p.out / "train.jsonl") == [], "the split still holds the rejected selection"
+    assert _jsonl(p.out / "valid.jsonl") == [], "the split still holds the rejected selection"
+    assert len(p.calls["align"]) == 4, "the alignments still describe the old manifests"
+    assert list((p.out / "audio").glob("*.wav")) == []
+    assert list((p.out / "entries").glob("*.jsonl")) == []
+
+
+def test_a_speaker_needing_fewer_files_takes_the_surplus_with_it(tmp_path, monkeypatch):
+    """What a run stops naming, it deletes.
+
+    Rebuilding a speaker's offsets under a longer --target-sec fits their clips
+    into fewer pseudo-recordings than the last run wrote, and the files past
+    the ones the new manifest names are never touched again. Nothing reads them
+    -- every manifest names its files explicitly -- but `audio/` is tens of
+    gigabytes at 124 hours of 44.1 kHz, deleting an artifact and re-running is
+    the documented way to change any option, and the disk on a preemptible
+    instance is fixed. Filling it costs the run.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**CUTOFFS)  # 6s of clips at --target-sec 5.0: two files per speaker
+    assert sorted(w.name for w in (p.out / "audio").glob("*.wav")) == [
+        "aoi.wav",
+        "aoi_001.wav",
+        "kaede.wav",
+        "kaede_001.wav",
+    ]
+    _age(p.out)
+
+    (p.out / "utterances.jsonl").unlink()  # how a re-run under new options is asked for
+    p.run(**CUTOFFS, target_sec=10.0)  # now all six seconds fit in one file each
+
+    assert sorted(w.name for w in (p.out / "audio").glob("*.wav")) == ["aoi.wav", "kaede.wav"]
+    entries = _jsonl(p.out / "train.jsonl") + _jsonl(p.out / "valid.jsonl")
+    assert {Path(e["path"]).name for e in entries} == {"aoi.wav", "kaede.wav"}, entries
+    for entry in entries:
+        assert Path(entry["path"]).exists(), entry
+
+
+def test_a_re_run_whose_artifacts_all_share_a_timestamp_redoes_nothing(tmp_path, monkeypatch):
+    """The tie the staleness check turns on, which no other test here reaches.
+
+    File clocks are coarser than these stages are fast -- about 15 ms on
+    Windows -- so the artifacts of one run routinely share a timestamp, and an
+    output is reusable while it is at least as new as its inputs rather than
+    strictly newer. Read the other way round, every stage is stale the moment
+    it finishes and nothing is ever skipped again: on the real corpus that is
+    30 GB of joining and the whole alignment pass, redone on every re-run,
+    which is the opposite of what this script is for. Every other fixture here
+    pushes its artifacts apart in time to say "an earlier run built this", so
+    the tie itself is only reachable by making one.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**CUTOFFS)
+    done = {stage: len(c) for stage, c in p.calls.items()}
+    before = _tree(p.out)
+
+    tied = time.time()
+    for path in sorted(p.out.rglob("*")):
+        os.utime(path, (tied, tied))
+
+    p.run(**CUTOFFS)
+
+    # The two stages that decide for themselves are entered again and find
+    # their work done; nothing else runs at all.
+    assert {stage: len(c) for stage, c in p.calls.items()} == done | {
+        "download_called": 2,
+        "extract_called": 4,
+    }
+    assert _tree(p.out) == before
 
 
 def test_a_kill_between_the_two_manifests_writes_both_again(tmp_path, monkeypatch):

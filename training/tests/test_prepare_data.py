@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import huggingface_hub
+import pytest
 
 from training.scripts import prepare_data
 
@@ -206,3 +207,107 @@ def test_the_sharded_branch_forwards_the_segmenter_too(tmp_path, monkeypatch):
     assert len(cmds) == 2, cmds
     for cmd in cmds:
         assert cmd[cmd.index("--segmenter") + 1] == "japanese", cmd
+
+
+def _chunk_and_part(cmd):
+    """The two paths a shard's command line names: its slice, and its output.
+
+    Found by the module rather than by position -- the command is prefixed with
+    `env CUDA_VISIBLE_DEVICES=<i>`, so the paths do not sit where the
+    single-process branch puts them.
+    """
+    module = cmd.index("training.scripts.align_data")
+    return Path(cmd[module + 1]), Path(cmd[module + 2])
+
+
+def _sharded_manifest(tmp_path, rows):
+    """A manifest whose rows can be told apart once they are merged."""
+    manifest = tmp_path / "train.jsonl"
+    manifest.write_text(
+        "".join(json.dumps({"duration": 1.0, "id": i}) + "\n" for i in range(rows)),
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def test_a_kill_during_the_merge_leaves_no_alignment_to_be_trusted(tmp_path, monkeypatch):
+    """The merge is the last thing this function does, and the only thing in
+    the pipeline that used to write straight into its own output.
+
+    A kill partway through leaves a truncated `train_aligned.jsonl` that is
+    still valid jsonl -- every line parses -- so nothing downstream can tell it
+    from a finished pass, and the check at the top of this function declares
+    the stage done forever after. The shards it was merged from make it
+    recoverable, but only while they are still there: unlinking each part as it
+    is consumed turns a truncated output into an unrecoverable one, so nothing
+    is unlinked until the output is whole and renamed into place.
+    """
+    manifest = _sharded_manifest(tmp_path, rows=2)
+    out = tmp_path / "train_aligned.jsonl"
+
+    class FakeProc:
+        def __init__(self, cmd, **kwargs):
+            chunk, part = _chunk_and_part(cmd)
+            part.write_text(chunk.read_text(encoding="utf-8"), encoding="utf-8")
+
+        def wait(self):
+            return 0
+
+    def killed(src, dst):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(prepare_data.subprocess, "Popen", FakeProc)
+    monkeypatch.setattr(prepare_data.os, "replace", killed)
+    with pytest.raises(KeyboardInterrupt):
+        prepare_data.align(manifest, out, 2, "some/model", "manifest")
+
+    assert not out.exists(), "a fragment of the merge is sitting under the finished name"
+    for i in range(2):
+        assert out.with_suffix(f".shard{i}").exists(), "the shards the merge needs again are gone"
+
+
+def test_a_different_shard_count_does_not_resume_the_other_split(tmp_path, monkeypatch):
+    """--align-shards is a count of GPUs, and a preempted instance comes back
+    with another number of them.
+
+    Each worker resumes its own part, keyed on the utterance rather than on a
+    line count, and the chunks a different count cuts the manifest into do not
+    line up with the parts already on disk. Two shards resuming four shards'
+    parts re-align rows another part already holds, and the merge writes them
+    twice -- a quarter of the corpus duplicated in the training manifest, with
+    nothing raised and nothing reported. So a leftover written under a
+    different count is discarded rather than continued.
+    """
+    manifest = _sharded_manifest(tmp_path, rows=4)
+    out = tmp_path / "train_aligned.jsonl"
+    rows = manifest.read_text(encoding="utf-8").splitlines()
+    # Exactly what a four-way run killed before its merge leaves behind.
+    for i in range(4):
+        out.with_suffix(f".shard{i}").write_text(rows[i] + "\n", encoding="utf-8")
+        manifest.with_suffix(f".shard{i}").write_text(rows[i] + "\n", encoding="utf-8")
+    out.with_name(f"{out.name}.shards").write_text("4", encoding="utf-8")
+
+    class FakeProc:
+        """--resume as align_data implements it: append what the part lacks."""
+
+        def __init__(self, cmd, **kwargs):
+            chunk, part = _chunk_and_part(cmd)
+            done = part.read_text(encoding="utf-8").splitlines() if part.exists() else []
+            with part.open("a", encoding="utf-8") as f:
+                f.writelines(
+                    line + "\n"
+                    for line in chunk.read_text(encoding="utf-8").splitlines()
+                    if line not in done
+                )
+
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(prepare_data.subprocess, "Popen", FakeProc)
+    prepare_data.align(manifest, out, 2, "some/model", "manifest")
+
+    merged = [json.loads(line)["id"] for line in out.read_text(encoding="utf-8").splitlines()]
+    assert merged == [0, 1, 2, 3], merged
+    assert out.with_name(f"{out.name}.shards").read_text(encoding="utf-8") == "2"
+    # The wider run's chunks are not left behind either.
+    assert [p.name for p in tmp_path.glob("train.shard*")] == []

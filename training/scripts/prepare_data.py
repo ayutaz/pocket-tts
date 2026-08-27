@@ -24,6 +24,7 @@ import glob
 import gzip
 import json
 import logging
+import os
 import subprocess
 import sys
 import time
@@ -88,6 +89,24 @@ def align(
         return
     # Aligning streams into a .partial that --resume picks up after an interrupt; `out`
     # itself only appears once a run finishes, so the check above cannot see half a file.
+    # What --resume cannot pick up is a leftover written under a different --align-shards:
+    # each worker resumes its own part, keyed on (path, start), and the chunks a different
+    # count cuts the manifest into do not line up with the parts on disk -- two shards
+    # resuming four shards' parts re-align rows one part already holds and the merge below
+    # emits them twice, silently. So the count is recorded beside the output, and a run
+    # under a different one starts the alignment over rather than continuing it.
+    shard_record = out.with_name(f"{out.name}.shards")
+    if shard_record.exists() and shard_record.read_text(encoding="utf-8").strip() != str(shards):
+        leftovers = [
+            out.with_suffix(".partial"),
+            *sorted(out.parent.glob(f"{out.stem}.shard*")),
+            *sorted(manifest.parent.glob(f"{manifest.stem}.shard*")),
+        ]
+        for stale in leftovers:
+            if stale.exists():
+                logger.info(f"{stale.name} is from a different --align-shards; discarding it")
+                stale.unlink()
+    shard_record.write_text(str(shards), encoding="utf-8")
     if shards <= 1:
         part = out.with_suffix(".partial")
         subprocess.run(
@@ -113,7 +132,10 @@ def align(
     parts, procs = [], []
     for i in range(shards):
         chunk = manifest.with_suffix(f".shard{i}")
-        chunk.write_text("".join(lines[i * per : (i + 1) * per]))
+        # Explicitly UTF-8: the manifest was read as UTF-8 and align_data reads
+        # this back as UTF-8, and this machine's default is cp932 -- a Japanese
+        # manifest round-tripped through the default does not survive.
+        chunk.write_text("".join(lines[i * per : (i + 1) * per]), encoding="utf-8")
         part = out.with_suffix(f".shard{i}")
         parts.append((chunk, part))
         env_prefix = ["env", f"CUDA_VISIBLE_DEVICES={i}"]
@@ -138,11 +160,19 @@ def align(
         )
     for p in procs:
         assert p.wait() == 0, "an alignment shard failed"
-    with out.open("w", encoding="utf-8") as f:
-        for chunk, part in parts:
-            f.write(part.read_text())
-            chunk.unlink()
-            part.unlink()
+    # Into a temporary name and renamed in, like every other artifact here: a
+    # kill mid-merge would otherwise leave a truncated `out` that the check at
+    # the top of this function reads as a finished alignment forever after, and
+    # unlinking each part as it was consumed would take the shards it was
+    # truncated from with it. `os.replace` is atomic on POSIX and Windows both.
+    merged = out.with_name(f"{out.name}.partial")
+    with merged.open("w", encoding="utf-8") as f:
+        for _, part in parts:
+            f.write(part.read_text(encoding="utf-8"))
+    os.replace(merged, out)
+    for chunk, part in parts:
+        chunk.unlink()
+        part.unlink()
     logger.info(f"merged {shards} shards -> {out.name}")
 
 

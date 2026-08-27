@@ -324,6 +324,31 @@ def _entry_key(entry: ManifestKey) -> tuple[str, float]:
     return entry.path, entry.start
 
 
+def read_window(entry: dict):
+    """The audio one manifest row names: the window at `start`, `duration` long.
+
+    Always the window, never the whole file. A row whose `start` is 0.0 is not
+    a row that owns its file -- the manifest this reads may name several
+    utterances in one recording, and the first of every such recording starts
+    at zero. Reading the file whole there would hand the aligner a minutes-long
+    window of somebody else's utterances to fit a few seconds of transcript
+    against: the spans it returned would be spread across the whole file, the
+    loader would find no cut inside the utterance and quietly fall back to
+    taking its voice prompt from the audio it is predicting, and a forward pass
+    over that much audio is where an out-of-memory kill takes the whole pass
+    down rather than one utterance.
+
+    `duration` is required of every row here -- `ManifestKey` validates it -- and
+    for a manifest with one utterance per file the window is the file, so this
+    costs those nothing. Reading past the end of a file is not an error either:
+    sphn returns what is there, so a duration a little longer than the audio
+    behaves exactly as reading the file whole did.
+    """
+    return sphn.read(
+        entry["path"], start_sec=float(entry.get("start", 0.0)), duration_sec=entry["duration"]
+    )
+
+
 def _resume_done(output_jsonl: str) -> set[tuple[str, float]]:
     """Utterances already aligned in `output_jsonl`, keyed like `_entry_key`.
 
@@ -429,12 +454,7 @@ def main(
             if (entry["path"], float(entry.get("start", 0.0))) in done:
                 continue
             try:
-                start = float(entry.get("start", 0.0))
-                wav, in_sr = sphn.read(
-                    entry["path"],
-                    start_sec=start if start > 0 else None,
-                    duration_sec=entry["duration"] if start > 0 else None,
-                )
+                wav, in_sr = read_window(entry)
                 wav = wav.mean(axis=0)
                 if in_sr != sr:
                     resampled = convert_audio(torch.from_numpy(wav)[None], int(in_sr), int(sr), 1)

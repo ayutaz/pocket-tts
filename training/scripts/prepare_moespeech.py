@@ -161,14 +161,26 @@ def read_annotation(path: Path) -> dict | None:
     there is nothing to check either against except the other. Their mutual CER
     is what this returns as `cer`: not a measure of the audio, but of where the
     two systems disagree, which is the best available evidence that the text is
-    wrong. Both transcriptions are kept so a later stage can choose between
-    them; `transcript` names the anime-whisper one because it is the reference
-    side of that CER, so the number reported is the disagreement measured
-    against exactly the string the manifest would carry.
+    wrong. `transcript` is the anime-whisper one, and it is the reference side
+    of that CER, so the number reported is the disagreement measured against
+    exactly the string the manifest would carry.
 
-    A field that is absent -- or an empty transcription, which for jiwer is
-    worse than absent, since CER divides by the reference's length and raises
-    on an empty one -- drops the clip rather than being defaulted. A defaulted
+    Both are normalized before they are compared, and the normalized whisper is
+    what `transcript` carries -- measuring the raw strings would report a
+    disagreement the corpus does not contain. Two Japanese ASRs differ by
+    convention far more than they differ by hearing: half-width katakana against
+    full-width, full-width digits and latin against ASCII, a space where the
+    other put none. NFKC erases exactly those, so on `ＡＢＣです` against
+    `ABCです` the raw CER is 0.600 and the strings the manifest would carry are
+    identical. Measured raw, every cutoff an operator could plausibly read off
+    the retention table would throw those clips away -- and the table itself
+    would be a distribution over strings this corpus never contains, which is
+    the one artifact the whole choice of cutoffs is made from.
+
+    A field that is absent -- or an empty transcription, which is worse than
+    absent, since CER is the edit distance over the reference's length and an
+    empty reference makes that number mean nothing -- drops the clip rather
+    than being defaulted. A defaulted
     duration reaches the manifest as a window the audio does not contain, and
     the loader reads silence and trains on it as speech, which nothing
     downstream can detect.
@@ -193,32 +205,45 @@ def read_annotation(path: Path) -> dict | None:
     mos = data.get("speechMOS")
     if not whisper or not parakeet or duration is None or mos is None:
         return None
+    whisper, parakeet = normalize_japanese(whisper), normalize_japanese(parakeet)
     return {
         "id": path.stem,
         "speaker": path.parent.name,
         "wav": path.with_suffix(".wav"),
         "duration": float(duration),
         "transcript": whisper,
-        "whisper": whisper,
-        "parakeet": parakeet,
-        "cer": jiwer.cer(whisper, parakeet),
+        # Normalization can empty a transcription the check above kept, and the
+        # scan drops such a clip a line later. Its CER is never read, and there
+        # is no meaningful one to compute -- nothing to divide the distance by
+        # -- so it is reported as the total disagreement it is.
+        "cer": jiwer.cer(whisper, parakeet) if whisper else 1.0,
         "mos": float(mos),
     }
 
 
-def _scan_annotations(root: Path, skipped: Counter) -> Iterator[dict]:
+def _scan_annotations(
+    root: Path, skipped: Counter, names: list[str] | None = None
+) -> Iterator[dict]:
     """Every usable annotation under `root`, normalized, in path order.
+
+    `names` bounds the walk to those speakers' directories under `root`, and is
+    how --hours bounds what a run *uses* rather than only what it fetches. The
+    extract root accumulates: it is the directory a larger run's speakers were
+    unpacked into, and asking for fewer hours afterwards has to mean fewer
+    speakers or the flag does nothing at all. Passing None walks everything,
+    which is what a fixture with its clips laid out flat wants.
 
     The probe and the selection walk the same 400,000 files and must agree on
     which of them are annotations at all, or the retention table an operator
     reads their cutoffs off describes a different corpus from the one those
     cutoffs are then applied to. So both walk through here -- and so, for the
-    same reason, does the normalization. Normalizing can empty a transcript
-    that was not empty, and a clip with no text left has to be dropped; done on
-    the selection's side alone, that drop would land after the probe had
-    already counted the clip and promised it in the retention table. The table
-    would then over-promise, which is the one thing it may not do: it is the
-    only artifact an operator reads when choosing cutoffs.
+    same reason, does the drop below. read_annotation normalizes the transcript
+    it returns, and normalizing can empty one that was not empty; a clip with
+    no text left has to be dropped, and done on the selection's side alone that
+    drop would land after the probe had already counted the clip and promised
+    it in the retention table. The table would then over-promise, which is the
+    one thing it may not do: it is the only artifact an operator reads when
+    choosing cutoffs.
 
     Path order is part of the contract, not an accident of `rglob`. The stage
     after this one concatenates a speaker's clips into pseudo-long recordings
@@ -240,7 +265,8 @@ def _scan_annotations(root: Path, skipped: Counter) -> Iterator[dict]:
     because this is a generator: an exhausted one cannot report anything back,
     and the probe has to publish those numbers.
     """
-    for path in sorted(root.rglob("*.json")):
+    roots = [root] if names is None else [root / n for n in sorted(set(names))]
+    for path in (p for scan_root in roots for p in sorted(scan_root.rglob("*.json"))):
         try:
             row = read_annotation(path)
         except (OSError, ValueError, TypeError) as e:
@@ -250,7 +276,6 @@ def _scan_annotations(root: Path, skipped: Counter) -> Iterator[dict]:
         if row is None:
             skipped["incomplete"] += 1
             continue
-        row["transcript"] = normalize_japanese(row["transcript"])
         if not row["transcript"]:
             skipped["blank"] += 1
             logger.debug(f"{path}: nothing left of the transcript after normalization")
@@ -258,7 +283,9 @@ def _scan_annotations(root: Path, skipped: Counter) -> Iterator[dict]:
         yield row
 
 
-def select_utterances(root: Path, max_cer: float, min_mos: float) -> Iterator[dict]:
+def select_utterances(
+    root: Path, max_cer: float, min_mos: float, names: list[str] | None = None
+) -> Iterator[dict]:
     """The utterances worth training on, out of everything under `root`.
 
     This is where the probe's measurements become decisions. Both cutoffs are
@@ -274,16 +301,18 @@ def select_utterances(root: Path, max_cer: float, min_mos: float) -> Iterator[di
     align_data.py applies under --segmenter japanese. That keeps the manifest,
     the tokenizer corpus and a user's inference input in one distribution; a
     mismatch between them raises nothing and shows up only as a model that
-    never quite becomes intelligible. It happens in `_scan_annotations` rather
-    than here so that the clips normalization empties are dropped from the
-    probe's counts too -- see there -- and the two cutoffs are the only thing
-    this function decides.
+    never quite becomes intelligible. It happens in `read_annotation`, before
+    the CER is measured against it, so that `cer` scores the string the
+    manifest will carry rather than one nothing keeps -- and the clips
+    normalization empties are dropped by `_scan_annotations`, which the probe
+    shares, so its counts and this one's agree. The two cutoffs are the only
+    thing this function decides.
     """
     # The counts go nowhere here on purpose: the probe already reported them to
     # the operator over this same tree, and repeating them would read as a
     # second, different set of unusable files.
     skipped: Counter = Counter()
-    for row in _scan_annotations(root, skipped):
+    for row in _scan_annotations(root, skipped, names):
         if row["cer"] > max_cer or row["mos"] < min_mos:
             continue
         yield {
@@ -361,7 +390,7 @@ def _retention(rows: list[tuple[float, float, float]]) -> list[dict]:
     return table
 
 
-def probe_utterances(root: Path) -> dict:
+def probe_utterances(root: Path, names: list[str] | None = None) -> dict:
     """Measure every annotation under `root`. Decide nothing about any of them.
 
     The returned dict is what `probe.json` holds: how many utterances there
@@ -369,6 +398,10 @@ def probe_utterances(root: Path) -> dict:
     of how many clips and hours survive each candidate pair of cutoffs. No
     threshold is applied here and none is recommended -- this exists so the
     next stage's cutoffs come from the corpus rather than from a guess.
+
+    `names` bounds it to those speakers, exactly as the selection is bounded:
+    the two have to describe one corpus, and the extract root can hold speakers
+    this run did not ask for.
 
     Files that cannot be read, and clips normalization leaves no text of, are
     skipped and counted by `_scan_annotations`, which the selection pass shares
@@ -382,7 +415,7 @@ def probe_utterances(root: Path) -> dict:
     this, and at this scale that is gigabytes.
     """
     skipped: Counter = Counter()
-    rows = [(r["duration"], r["cer"], r["mos"]) for r in _scan_annotations(root, skipped)]
+    rows = [(r["duration"], r["cer"], r["mos"]) for r in _scan_annotations(root, skipped, names)]
     unreadable, incomplete, blank = (skipped["unreadable"], skipped["incomplete"], skipped["blank"])
     dropped = unreadable + incomplete + blank
     if dropped:
@@ -461,6 +494,13 @@ def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> lis
     cut anywhere inside one of these files as one voice -- the loader takes one
     side of the cut as the voice prompt for the other, so a file holding two
     speakers would teach the model that the prompt does not decide the voice.
+    That one is a caller's bug and stops the run; a clip whose audio is missing
+    or truncated, or recorded at another rate, is corpus data and costs only
+    that clip. Raising there would end the run at the same clip on every re-run
+    -- the selection is deterministic and read back off `utterances.jsonl` --
+    with no way past it but hand-editing that file, which is the one thing this
+    script is built not to need. A skipped clip simply never reaches `entries`,
+    which is already what the manifest should say about it.
 
     The audio is left at its own 44.1 kHz; the loader resamples as it reads.
     A re-run lays the same clips down in the same order and writes the same
@@ -479,14 +519,31 @@ def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> lis
     written = 0  # files finished, which is the index of the one being built
     sample_rate = None
 
+    skipped = 0
+
+    def skip(wav_path, why) -> None:
+        nonlocal skipped
+        skipped += 1
+        if skipped % 100 == 1:  # one line per hundred: this can be the whole corpus
+            logger.warning(f"not joining ({skipped} so far): {wav_path}: {why}")
+
     for u in utterances:
-        wav, sr = sphn.read(str(u["wav"]))
+        try:
+            wav, sr = sphn.read(str(u["wav"]))
+        except (ValueError, OSError) as e:
+            # The wav is a path read_annotation derived from the json's name and
+            # nothing has opened until now, so this is where a missing or
+            # truncated clip first shows up -- the plan lists broken wavs among
+            # the expected surprises of the first real run.
+            skip(u["wav"], e)
+            continue
         if sample_rate is None:
             sample_rate = sr
         elif sr != sample_rate:
-            # Concatenating these would play one of them at the wrong speed and
-            # put every offset after it out by a factor nothing reports.
-            raise ValueError(f"{u['wav']}: {sr} Hz among {sample_rate} Hz clips")
+            # Joining it anyway would play it at the wrong speed and put every
+            # offset after it in the file out by a factor nothing reports.
+            skip(u["wav"], f"{sr} Hz among {sample_rate} Hz clips")
+            continue
         n_samples = wav.shape[1]
         target_samples = round(target_sec * sample_rate)
         if parts and cursor + n_samples > target_samples:
@@ -513,6 +570,14 @@ def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> lis
 
     if parts:
         _write_joined(parts, sample_rate, _joined_path(out_wav, written))
+    if skipped:
+        # Said once at the end as well as every hundredth time above: this is
+        # how many clips the manifest is short of the selection, and a speaker
+        # whose first clip set the rate can lose every clip after it that way.
+        logger.warning(
+            f"{next(iter(speakers), out_wav.stem)}: {skipped} of {len(utterances)} clips "
+            "could not be joined and are not in the manifest"
+        )
     return entries
 
 
@@ -808,15 +873,25 @@ def main(
 
     # 4. Measure. Decides nothing: probe_utterances returns the numbers and
     #    deliberately does not write them, so measuring stays independent of
-    #    where the file goes. Existence is the whole condition here, unlike the
-    #    stages below: a speaker unpacked later does not make this file wrong,
-    #    only incomplete, and nothing downstream reads it -- it is the table an
-    #    operator picks cutoffs off. Delete it to measure the corpus again.
+    #    where the file goes. Gated like every stage below rather than on the
+    #    file merely being there: a speaker unpacked after it was written makes
+    #    it incomplete, and incomplete is exactly wrong for a retention table.
+    #    Its hours column is the column --hours is expressed in, and it is the
+    #    one artifact an operator reads to choose the two cutoffs -- describing
+    #    a smaller corpus than the one those cutoffs are then applied to is the
+    #    disagreement the whole staleness check exists to prevent.
+    #    A measurement made before a speaker was unpacked does not cover them,
+    #    so the completion markers of stage 3 are what this is measured against
+    #    -- the selected speakers' markers, since those are the speakers walked.
+    #    characters.json is an input for the other direction: the extract root
+    #    only ever grows, so a narrower selection adds no marker at all, and
+    #    without it a run asked for fewer hours would keep a table measured
+    #    over speakers it is no longer training on.
+    unpacked = [extract_root / f"{name}{EXTRACT_MARKER}" for name in names]
     probe_json = out_dir / "probe.json"
-    if probe_json.exists():
-        logger.info(f"{probe_json} exists, not measuring the corpus again")
-    else:
-        _write_json(probe_utterances(extract_root), probe_json)
+    probe_inputs = [*unpacked, characters_json]
+    if not _reusable([probe_json], probe_inputs, "keeping the measurements it holds"):
+        _write_json(probe_utterances(extract_root, names), probe_json)
 
     # 5. Decide, or stop. The cutoffs are a property of this corpus and the
     #    line above is the first thing that has ever measured it, so there is
@@ -829,17 +904,27 @@ def main(
             "from a measured one. Everything up to here is on disk and will not be redone."
         )
         raise typer.Exit(1)
-    #    A selection made before a speaker was unpacked does not cover them, so
-    #    the completion markers of stage 3 are what this is measured against.
+    #    The pair is written down beside the selection they made, and is one of
+    #    its inputs: nothing else on disk records them, so without this a
+    #    re-run under a stricter cutoff would find utterances.jsonl sitting
+    #    there and reuse it -- silently, and with no way afterwards for either
+    #    the script or the operator to tell which cutoffs a given train.jsonl
+    #    was built under. Written only when they differ, so an unchanged pair
+    #    does not touch the file and nothing downstream is rebuilt.
+    cutoffs_json = out_dir / "cutoffs.json"
+    cutoffs = {"max_cer": max_cer, "min_mos": min_mos}
+    if not cutoffs_json.exists() or json.loads(cutoffs_json.read_text(encoding="utf-8")) != cutoffs:
+        _write_json(cutoffs, cutoffs_json)
     utterances_jsonl = out_dir / "utterances.jsonl"
-    unpacked = sorted(extract_root.glob(f"*{EXTRACT_MARKER}"))
-    if _reusable([utterances_jsonl], unpacked, "keeping the utterances it holds"):
+    selection_inputs = [*unpacked, characters_json, cutoffs_json]
+    if _reusable([utterances_jsonl], selection_inputs, "keeping the utterances it holds"):
         utterances = _read_jsonl(utterances_jsonl)
     else:
         # `wav` arrives as a Path, which json.dumps refuses; every reader of
         # this file passes it to sphn.read, which takes the string just as well.
         utterances = [
-            {**u, "wav": str(u["wav"])} for u in select_utterances(extract_root, max_cer, min_mos)
+            {**u, "wav": str(u["wav"])}
+            for u in select_utterances(extract_root, max_cer, min_mos, names)
         ]
         write_manifest(utterances, utterances_jsonl)
 
@@ -849,16 +934,45 @@ def main(
     #    prompt does not decide the voice, and nothing downstream could see it.
     #    Each speaker's offsets are recorded under their own name, so a kill
     #    costs the speaker in flight rather than all of them.
+    #    What a run stops naming, it deletes. `audio/` is tens of gigabytes at
+    #    124 hours of 44.1 kHz, deleting an artifact and re-running is the
+    #    documented way to change any option, and the disk on a preemptible
+    #    instance is fixed -- filling it mid-run costs the run. A tighter cutoff
+    #    leaves a speaker fewer clips and so fewer files than the last run
+    #    wrote, and can drop a speaker out of the selection altogether; nothing
+    #    reads what is left over, since every manifest names its files, but it
+    #    is never freed either.
     by_speaker: dict[str, list[dict]] = defaultdict(list)
     for utterance in utterances:
         by_speaker[utterance["speaker"]].append(utterance)
+    audio_dir = out_dir / "audio"
+    for part in sorted((out_dir / "entries").glob("*.jsonl")):
+        if part.stem in by_speaker:
+            continue
+        # The offsets file is what says which audio was this speaker's, so it
+        # is read before it goes; deriving the names from the speaker instead
+        # would delete by prefix, and one speaker's name can begin another's.
+        for row in _read_jsonl(part):
+            wav = Path(row["path"])
+            if wav.parent == audio_dir:
+                wav.unlink(missing_ok=True)
+        part.unlink()
+        logger.info(f"{part.stem} is no longer selected; their offsets and audio are removed")
     entries: list[dict] = []
     for speaker in sorted(by_speaker):
         part = out_dir / "entries" / f"{speaker}.jsonl"
         if _reusable([part], [utterances_jsonl], f"keeping {speaker}'s offsets"):
             entries += _read_jsonl(part)
             continue
-        rows = concatenate(by_speaker[speaker], out_dir / "audio" / f"{speaker}.wav", target_sec)
+        base = audio_dir / f"{speaker}.wav"
+        rows = concatenate(by_speaker[speaker], base, target_sec)
+        # The files are numbered from the name upwards, so everything from the
+        # count this run wrote onwards is what a wider previous run left.
+        index = len({row["path"] for row in rows})
+        while (surplus := _joined_path(base, index)).exists():
+            surplus.unlink()
+            logger.info(f"{surplus} is past what {speaker} now needs; removed")
+            index += 1
         write_manifest(rows, part)
         entries += rows
 
@@ -886,8 +1000,10 @@ def main(
         write_manifest(valid, valid_manifest)
 
     # 8. Align. prepare_data's align() already streams into a .partial that
-    #    --resume picks up and only produces its output once a pass finishes,
-    #    so it is reused rather than reimplemented. The segmenter is not an
+    #    --resume picks up, renames its output in only once a pass has finished
+    #    -- the sharded merge included -- and starts over rather than resuming
+    #    a leftover written under a different --align-shards, so it is reused
+    #    here rather than reimplemented. The segmenter is not an
     #    option: this manifest is Japanese, and "whitespace" over a language
     #    written without spaces returns one word per utterance -- the aligner
     #    emits a single span, the loader finds no cut point, and the voice
