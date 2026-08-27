@@ -15,15 +15,19 @@ a preemptible cloud instance: being killed and re-run must always be safe.
 
 import csv
 import logging
+import os
 import random
+import shutil
 from pathlib import Path
 
 import typer
+from huggingface_hub import hf_hub_download
 
 logger = logging.getLogger("prepare_moespeech")
 app = typer.Typer(pretty_exceptions_show_locals=False)
 
 SELECTION_SEED = 0  # so --order random is still reproducible across re-runs
+DATASET_REPO = "ayousanz/moe-speech-plus"
 
 
 def select_characters(info_csv: Path, hours: float, order: str = "largest") -> list[dict]:
@@ -63,3 +67,30 @@ def select_characters(info_csv: Path, hours: float, order: str = "largest") -> l
         chosen.append(row)
         minutes += row["total_duration_min"]
     return chosen
+
+
+def download_characters(names: list[str], dest: Path, repo: str = DATASET_REPO) -> list[Path]:
+    """Fetch one zip per character, skipping those already present.
+
+    huggingface_hub downloads to a cache and only writes the final path once
+    the transfer completes, so a kill mid-download leaves an incomplete file
+    in the cache, not here -- but a kill mid-copy into `dest` would leave an
+    incomplete file right here, which is exactly what this function must never
+    mistake for "already have it". So the copy lands at `<name>.zip.partial`
+    first and is renamed into place only once it is whole; `os.replace` is
+    atomic on both POSIX and Windows, so there is no window where a reader
+    could see a half-renamed file either.
+    """
+    dest.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for name in names:
+        local = dest / f"{name}.zip"
+        if local.exists():
+            logger.info(f"{local.name} already present, skipping")
+        else:
+            fetched = hf_hub_download(repo, f"{name}.zip", repo_type="dataset")
+            partial = dest / f"{name}.zip.partial"
+            shutil.copyfile(fetched, partial)
+            os.replace(partial, local)
+        paths.append(local)
+    return paths

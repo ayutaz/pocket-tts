@@ -88,3 +88,59 @@ def test_an_unknown_order_is_refused(tmp_path):
     info = _info_csv(tmp_path, [("a", 10, 6.0, 300.0)])
     with pytest.raises(typer.BadParameter):
         select_characters(info, hours=1.0, order="larget")
+
+
+def test_download_skips_what_is_already_complete(tmp_path, monkeypatch):
+    """Re-running after an interrupt must not re-fetch 5 GB it already has."""
+    from training.scripts import prepare_moespeech as m
+
+    calls = []
+
+    def fake_fetch(repo_id, filename, **kw):
+        calls.append(filename)
+        p = tmp_path / filename
+        p.write_bytes(b"PK\x03\x04fake")
+        return str(p)
+
+    monkeypatch.setattr(m, "hf_hub_download", fake_fetch)
+    (tmp_path / "aaa.zip").write_bytes(b"PK\x03\x04already here")
+
+    m.download_characters(["aaa", "bbb"], tmp_path, repo="fake/repo")
+    assert calls == ["bbb.zip"], calls
+
+
+def test_download_returns_a_path_for_every_requested_character(tmp_path, monkeypatch):
+    """A caller that gets fewer paths than it asked for would silently train on
+    a smaller corpus than intended."""
+    from training.scripts import prepare_moespeech as m
+
+    def fake_fetch(repo_id, filename, **kw):
+        p = tmp_path / filename
+        p.write_bytes(b"PK\x03\x04fake")
+        return str(p)
+
+    monkeypatch.setattr(m, "hf_hub_download", fake_fetch)
+    paths = m.download_characters(["aaa", "bbb", "ccc"], tmp_path, repo="fake/repo")
+    assert [p.name for p in paths] == ["aaa.zip", "bbb.zip", "ccc.zip"]
+
+
+def test_download_does_not_trust_a_leftover_partial(tmp_path, monkeypatch):
+    """A kill mid-copy leaves `<name>.zip.partial`, not `<name>.zip`. If that
+    partial were mistaken for a completed download, the corpus would silently
+    train on a truncated (or missing) zip forever -- re-running never fixes it."""
+    from training.scripts import prepare_moespeech as m
+
+    calls = []
+
+    def fake_fetch(repo_id, filename, **kw):
+        calls.append(filename)
+        p = tmp_path / filename
+        p.write_bytes(b"PK\x03\x04fake")
+        return str(p)
+
+    monkeypatch.setattr(m, "hf_hub_download", fake_fetch)
+    (tmp_path / "aaa.zip.partial").write_bytes(b"PK\x03\x04truncated")
+
+    paths = m.download_characters(["aaa"], tmp_path, repo="fake/repo")
+    assert calls == ["aaa.zip"], calls
+    assert [p.name for p in paths] == ["aaa.zip"]
