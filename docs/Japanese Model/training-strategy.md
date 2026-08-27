@@ -164,57 +164,6 @@ MoeSpeech 平均5.7秒、GOL 平均4.4秒なので、ターゲットが2〜4秒�
 
 ---
 
-## 段階的な進め方
-
-### フェーズ0: トークナイザは最初に確定する
-
-**トークナイザは検証を始める前に、両データセットのテキストで1回だけ学習してください。**
-
-理由: `reset_text_embedding: true` は「トークナイザが変わったから text embedding を捨てる」処理です。**後から GOL を足してトークナイザを作り直すと embedding をもう一度捨てることになり、検証ランの重みを引き継げません**（実質やり直し）。
-
-幸い **音声を落とさずにテキストだけ取得できます** — GOL の `metadata.csv` は 227 MB（165万行）、`ayousanz/moe-speech-20speakers-ljspeech` の `metadata.csv` は 6.3 MB（6万行）で、いずれも音声本体とは別ファイルです。
-
-**実施済み**（`training/scripts/prepare_ja_text.py` → `train_tokenizer.py`）:
-
-| 項目 | 値 | 根拠（すべて実測） |
-|---|---|---|
-| コーパス | 139.8万発話・96 MB | GOL 134.0万 + MoeSpeech 5.8万、正規化後に重複除去 |
-| 異なり字 | **4,092字** | GOL 単体 4,238字、MoeSpeech が足すのは**わずか2字**（`U+576A` `U+9DC8`） |
-| `--vocab-size` | **8000** | 下表参照 |
-| `--character-coverage` | **1.0** | 0.9995 は 1,516 字を `<unk>` にする。`<unk>` は `tts_model.py` でチャンク境界トークンにもなるため実害が大きい |
-| `--normalization-rule` | **identity** | 既定の `nmt_nfkc` は tokenizer 内部で `…`→`...` に書き換える（GOL 3列目の破損の再現） |
-| `n_bins` | **8000** | vocab size と厳密一致。`pocket_tts/conditioners/text.py:30` のアサートで検証済み |
-
-!!! danger "4000 では学習が失敗します"
-    異なり字が 4,092 あるため、`character_coverage 1.0` では sentencepiece が `Vocabulary size is smaller than required_chars` で**即座に落ちます**。リリース済み英語モデルの `n_bins: 4000` はそのままでは使えません。
-
-vocab_size の実測（held-out 2万発話）:
-
-| vocab | 圧縮率 | 単字ピース | マージ数 | 埋め込み |
-|---|---|---|---|---|
-| 6000 | 1.658 字/token | 4,061 | 1,939 | 6.1M |
-| **8000** | **1.805** | 4,118 | 3,882 | **8.2M** |
-| 12000 | 1.961 | 4,236 | 7,764 | 12.3M |
-
-最終トークナイザは全コーパス 230万トークンに対し **`<unk>` 0件**。
-
-```bash
-uv run python -m training.scripts.prepare_ja_text data/ja/corpus.txt \
-    --gol data/ja/gol_metadata.csv --ljspeech data/ja/moe20_metadata.csv
-uv run python -m training.scripts.train_tokenizer data/ja/tokenizer \
-    data/ja/corpus.txt --vocab-size 8000 --character-coverage 1.0 \
-    --normalization-rule identity
-```
-
-`normalize()` はコーパス構築と `align_data.py --segmenter japanese`（マニフェストの `transcript` を書き戻す）の両方から呼ばれます。NFKC から除外しているのは2つ:
-
-- **`…` `‥`** — NFKC は ASCII ピリオドの羅列にする（GOL 3列目の破損の再現）
-- **`゛` `゜`** — NFKC は **空白 + 孤立した結合文字**にする。「え゛っ」のような強調表記はこのドメインで頻出で、空白の無いテキストに空白を注入するのは有害
-
-センチネルには私用領域ではなく**非文字**（`U+FDD0`〜）を使っています。私用領域にはキャリア絵文字が存在し、GOL には実際に `U+E63E` が405件含まれているためです。
-
----
-
 ## 対応済み（推論側・評価側）
 
 いずれも `pocket_tts/` 側の変更で、学習側の作業とは別枠で解消しました。基盤になっているのは、文の切り方と正規化の要不要を言語ごとに宣言する `TextRules`（frozen dataclass）と、`Config` の5フィールド（`text_normalizer` / `sentence_boundaries` / `clause_boundaries` / `terminal_punctuation` / `segment_separator`）です（`b21f5c9 Give a config somewhere to say how its language writes`）。既定値は今日の英語の挙動のままなので、他言語への影響はありません。
@@ -265,6 +214,57 @@ uv run python -m training.scripts.train_tokenizer data/ja/tokenizer \
 - **ASR モデルの選定** — `training/README.md` が言うとおり、日本語に対応する ASR を選ぶ必要があります（上記「リスク2: ASR 転写の精度」参照）。
 
 どちらも音声データの取得を伴うため、データ収集フェーズの範囲です。
+
+---
+
+## 段階的な進め方
+
+### フェーズ0: トークナイザは最初に確定する
+
+**トークナイザは検証を始める前に、両データセットのテキストで1回だけ学習してください。**
+
+理由: `reset_text_embedding: true` は「トークナイザが変わったから text embedding を捨てる」処理です。**後から GOL を足してトークナイザを作り直すと embedding をもう一度捨てることになり、検証ランの重みを引き継げません**（実質やり直し）。
+
+幸い **音声を落とさずにテキストだけ取得できます** — GOL の `metadata.csv` は 227 MB（165万行）、`ayousanz/moe-speech-20speakers-ljspeech` の `metadata.csv` は 6.3 MB（6万行）で、いずれも音声本体とは別ファイルです。
+
+**実施済み**（`training/scripts/prepare_ja_text.py` → `train_tokenizer.py`）:
+
+| 項目 | 値 | 根拠（すべて実測） |
+|---|---|---|
+| コーパス | 139.8万発話・96 MB | GOL 134.0万 + MoeSpeech 5.8万、正規化後に重複除去 |
+| 異なり字 | **4,092字** | GOL 単体 4,238字、MoeSpeech が足すのは**わずか2字**（`U+576A` `U+9DC8`） |
+| `--vocab-size` | **8000** | 下表参照 |
+| `--character-coverage` | **1.0** | 0.9995 は 1,516 字を `<unk>` にする。`<unk>` は `tts_model.py` でチャンク境界トークンにもなるため実害が大きい |
+| `--normalization-rule` | **identity** | 既定の `nmt_nfkc` は tokenizer 内部で `…`→`...` に書き換える（GOL 3列目の破損の再現） |
+| `n_bins` | **8000** | vocab size と厳密一致。`pocket_tts/conditioners/text.py:30` のアサートで検証済み |
+
+!!! danger "4000 では学習が失敗します"
+    異なり字が 4,092 あるため、`character_coverage 1.0` では sentencepiece が `Vocabulary size is smaller than required_chars` で**即座に落ちます**。リリース済み英語モデルの `n_bins: 4000` はそのままでは使えません。
+
+vocab_size の実測（held-out 2万発話）:
+
+| vocab | 圧縮率 | 単字ピース | マージ数 | 埋め込み |
+|---|---|---|---|---|
+| 6000 | 1.658 字/token | 4,061 | 1,939 | 6.1M |
+| **8000** | **1.805** | 4,118 | 3,882 | **8.2M** |
+| 12000 | 1.961 | 4,236 | 7,764 | 12.3M |
+
+最終トークナイザは全コーパス 230万トークンに対し **`<unk>` 0件**。
+
+```bash
+uv run python -m training.scripts.prepare_ja_text data/ja/corpus.txt \
+    --gol data/ja/gol_metadata.csv --ljspeech data/ja/moe20_metadata.csv
+uv run python -m training.scripts.train_tokenizer data/ja/tokenizer \
+    data/ja/corpus.txt --vocab-size 8000 --character-coverage 1.0 \
+    --normalization-rule identity
+```
+
+`normalize()` はコーパス構築と `align_data.py --segmenter japanese`（マニフェストの `transcript` を書き戻す）の両方から呼ばれます。NFKC から除外しているのは2つ:
+
+- **`…` `‥`** — NFKC は ASCII ピリオドの羅列にする（GOL 3列目の破損の再現）
+- **`゛` `゜`** — NFKC は **空白 + 孤立した結合文字**にする。「え゛っ」のような強調表記はこのドメインで頻出で、空白の無いテキストに空白を注入するのは有害
+
+センチネルには私用領域ではなく**非文字**（`U+FDD0`〜）を使っています。私用領域にはキャリア絵文字が存在し、GOL には実際に `U+E63E` が405件含まれているためです。
 
 ### フェーズ1: 検証（MoeSpeech のみ・$10・半日）
 

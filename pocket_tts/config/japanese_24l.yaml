@@ -66,7 +66,7 @@ mimi:
 # Japanese text handling. Every value is measured on the 1.4M-utterance corpus
 # -- see docs/Japanese Model/specs/2026-08-27-japanese-text-frontend-design.md
 text_normalizer: japanese
-sentence_boundaries: ".!...?。…"   # 。 in 22.8% of lines, … ends 15.6% of them
+sentence_boundaries: ".!...?。…"   # 。 in 22.8% of lines, … ends 15.6%; ASCII ? ends 17.6% and ! ends 13.1% (fullwidth ？！ never end a line -- normalization folds them first)
 clause_boundaries: ",;:、"          # 、 in 65.3% of lines
 terminal_punctuation: ""            # 49.4% end unpunctuated; only 1.12% end in 。
 segment_separator: ""               # Japanese is written without spaces

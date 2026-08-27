@@ -59,7 +59,9 @@ def test_empty_text_is_still_an_error():
 
 
 def test_text_that_normalizes_to_empty_is_an_error():
-    """Fullwidth spaces fold to ASCII ones and strip to nothing. If the empty
-    check runs before normalization, text[0] raises IndexError instead."""
+    """A control character survives str.strip() but is stripped out by
+    normalize_japanese; either order clears the text, but only running
+    normalization first reaches this ValueError instead of text[0] raising
+    IndexError on an empty string."""
     with pytest.raises(ValueError):
-        prepare_text_prompt("　　", False, False, rules=JA)
+        prepare_text_prompt("\x01", False, False, rules=JA)

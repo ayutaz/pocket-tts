@@ -2,7 +2,7 @@
 
 Pocket TTS の日本語モデルを作るための調査記録と方針をまとめたセクションです。
 
-調査日: 2026-08-27 / 対象コミット: `65534c9` / 作業ブランチ: `japanese-model-training`
+調査日: 2026-08-27 / 対象コミット: `8c98c9b`（PR #254 マージ後） / 作業ブランチ: `japanese-model-training`
 
 ## 現状サマリ
 
@@ -28,8 +28,8 @@ Pocket TTS の日本語モデルを作るための調査記録と方針をまと
 
 `training/README.md` は非英語言語について「アライナとトークナイザの両方を差し替える必要がある」と明記しています。日本語の場合、それに加えて学習コード自体への小改修が必要です。
 
-1. **トークナイザ** — `training/scripts/train_tokenizer.py` で sentencepiece を学習。CJK 向けに `character_coverage` を下げる。
-2. **強制アライメント** — `training/scripts/align_data.py` のアライナを日本語 wav2vec2 に差し替え。日本語は分かち書きがないため単語分割が別途必要。
-3. **DataLoader の単語連結** — `training/dataloader.py:150` の `" ".join(...)` を日本語向けに修正（[詳細](training-strategy.md)）。
+1. **トークナイザ** — `training/scripts/train_tokenizer.py` で sentencepiece を学習。CJK だからといって `character_coverage` を下げてはいけない — 実測で 0.9995 は 1,516 字を `<unk>` にするため、**1.0 を維持**する（[詳細](training-strategy.md)）。
+2. **強制アライメント** — `training/scripts/align_data.py` のアライナを日本語 wav2vec2 に差し替え。日本語は分かち書きがないため単語分割が別途必要（**対応済み**、MeCab/UniDic 形態素 + 文節マージで分割）。
+3. **DataLoader の単語連結** — `training/dataloader.py:152` の `word_separator.join(...)`（**対応済み**、`data.word_separator: ""` で解決）。
 
-いずれも [学習戦略とコスト](training-strategy.md) のリスク節で詳述しています。
+1 は[学習戦略とコスト](training-strategy.md)のフェーズ0節、2・3 は同ページの「リスク1: 分かち書きとアライメント（対応済み）」に詳しい。
