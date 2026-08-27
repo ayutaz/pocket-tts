@@ -203,6 +203,11 @@ def test_extract_writes_every_member(tmp_path):
 
     z = _make_zip(tmp_path / "spk.zip", ["a.wav", "a.json", "b.wav", "b.json"])
     out = extract_character(z, tmp_path / "extracted")
+    # Where it unpacks to is pinned here because the resumability tests below
+    # hand-build a half-extracted directory at this exact path. Left unpinned, a
+    # change to the naming would send those fixtures somewhere the code never
+    # looks, and they would go on passing while testing nothing.
+    assert out == tmp_path / "extracted" / "spk"
     assert sorted(p.name for p in out.iterdir()) == ["a.json", "a.wav", "b.json", "b.wav"]
 
 
@@ -228,7 +233,9 @@ def test_an_interrupted_extraction_is_redone(tmp_path):
     (half / "a.wav").write_text("partial")  # no completion marker
 
     out = extract_character(z, tmp_path / "extracted")
+    assert out == half, "the half-extracted fixture was never the directory under test"
     assert sorted(p.name for p in out.iterdir() if p.suffix == ".wav") == ["a.wav", "b.wav"]
+    assert (out / "a.wav").read_text() == "x"  # the zip's byte, not the fixture's stub
 
 
 def test_a_stale_member_does_not_survive_the_redo(tmp_path):
@@ -244,4 +251,35 @@ def test_a_stale_member_does_not_survive_the_redo(tmp_path):
     (half / "stale.wav").write_text("truncated")
 
     out = extract_character(z, tmp_path / "extracted")
+    assert out == half, "the half-extracted fixture was never the directory under test"
     assert sorted(p.name for p in out.iterdir()) == ["a.wav"]
+
+
+def test_a_kill_during_unpacking_leaves_no_completion_marker(tmp_path, monkeypatch):
+    """The marker has to mean "the last member is on disk". Written before the
+    unpack instead, a preemption mid-extract leaves a half-extracted speaker
+    that every later run skips, and the corpus shrinks with nothing to show.
+
+    The tests above either run to completion or start from a hand-made
+    directory, so none of them enters the window between the first member
+    landing and the marker being written -- which is the whole window a
+    preemption can arrive in. This one is killed inside it.
+    """
+    import zipfile as zf
+
+    from training.scripts.prepare_moespeech import extract_character
+
+    z = _make_zip(tmp_path / "spk.zip", ["a.wav", "b.wav", "c.wav"])
+    root = tmp_path / "extracted"
+
+    def killed(self, path=None, *a, **kw):
+        self.extract("a.wav", path)  # one member lands, then the instance goes
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(zf.ZipFile, "extractall", killed)
+    with pytest.raises(KeyboardInterrupt):
+        extract_character(z, root)
+    monkeypatch.undo()
+
+    out = extract_character(z, root)  # the re-run
+    assert sorted(p.name for p in out.iterdir()) == ["a.wav", "b.wav", "c.wav"]
