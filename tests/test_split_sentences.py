@@ -1,5 +1,8 @@
 """Tests for the text splitting logic in split_into_best_sentences."""
 
+from pathlib import Path
+from types import SimpleNamespace
+
 import pytest
 
 from pocket_tts.conditioners.text import get_default_tokenizer
@@ -139,3 +142,88 @@ def test_oversized_clause_without_commas_still_returns(tokenizer):
     # prepare_text_prompt capitalizes the first char and adds a trailing period,
     # so compare case-insensitively and strip punctuation
     assert chunks[0].lower().rstrip(".") == text.lower()
+
+
+# -- Japanese: written without spaces, and with its own sentence boundaries ----
+
+_JA_PARAGRAPH = (
+    "昨夜からずっと気配を探られていた。だが相手の姿は見えない。"
+    "こちらから動けば的になる。ならば待つしかないのだろうか。"
+)
+
+
+def _ja_rules():
+    from pocket_tts.utils.text_normalization import TextRules
+
+    return TextRules(
+        normalizer="japanese",
+        sentence_boundaries=".!...?。…",
+        clause_boundaries=",;:、",
+        terminal_punctuation="",
+        segment_separator="",
+    )
+
+
+@pytest.fixture(scope="module")
+def ja_tokenizer():
+    """The Japanese tokenizer, wrapped in the two surfaces
+    split_into_best_sentences uses: a call returning .tokens, and .sp."""
+    import sentencepiece as spm
+    import torch
+
+    path = Path(__file__).resolve().parents[1] / "data" / "ja" / "tokenizer.model"
+    if not path.exists():
+        pytest.skip("data/ja/tokenizer.model not built (see docs/Japanese Model/)")
+    sp = spm.SentencePieceProcessor(model_file=str(path))
+
+    class _Tok:
+        def __init__(self):
+            self.sp = sp
+
+        def __call__(self, text):
+            return SimpleNamespace(tokens=torch.tensor([sp.encode(text)]))
+
+    return _Tok()
+
+
+def test_japanese_paragraph_splits_on_the_full_stop(ja_tokenizer):
+    """Without 。 in the boundary set this is one 51-token chunk, and
+    generation past roughly 90 characters drops words."""
+    chunks = split_into_best_sentences(
+        ja_tokenizer,
+        _JA_PARAGRAPH,
+        16,
+        pad_with_spaces_for_short_inputs=False,
+        remove_semicolons=False,
+        rules=_ja_rules(),
+    )
+    assert len(chunks) > 1, chunks
+
+
+def test_japanese_chunks_carry_no_injected_spaces(ja_tokenizer):
+    """The defect this fix creates if left alone: the packing loop joins
+    segments with " ", and Japanese is written without spaces. Same problem
+    the DataLoader's data.word_separator: "" solves on the training side."""
+    chunks = split_into_best_sentences(
+        ja_tokenizer,
+        _JA_PARAGRAPH,
+        32,
+        pad_with_spaces_for_short_inputs=False,
+        remove_semicolons=False,
+        rules=_ja_rules(),
+    )
+    for chunk in chunks:
+        assert " " not in chunk, chunk
+
+
+def test_japanese_chunks_reconstruct_the_input(ja_tokenizer):
+    """Nothing may be dropped or invented on the way through."""
+    chunks = split_into_best_sentences(
+        ja_tokenizer,
+        _JA_PARAGRAPH,
+        16,
+        pad_with_spaces_for_short_inputs=False,
+        remove_semicolons=False,
+        rules=_ja_rules(),
+    )
+    assert "".join(chunks) == _JA_PARAGRAPH

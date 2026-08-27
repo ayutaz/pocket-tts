@@ -7,13 +7,19 @@ import torch
 import pocket_tts.models.tts_model as tts_model_module
 from pocket_tts.conditioners.base import TokenizedText
 from pocket_tts.models.tts_model import TTSModel, _is_safetensors_source
+from pocket_tts.utils.text_normalization import TextRules
 
 
 def test_generate_audio_stream_uses_prepared_chunk_text(monkeypatch):
     calls = []
 
     def fake_split_into_best_sentences(
-        tokenizer, text_to_generate, max_tokens, pad_with_spaces_for_short_inputs, remove_semicolons
+        tokenizer,
+        text_to_generate,
+        max_tokens,
+        pad_with_spaces_for_short_inputs,
+        remove_semicolons,
+        **_,
     ):
         assert text_to_generate == "hi"
         assert pad_with_spaces_for_short_inputs is True
@@ -31,6 +37,7 @@ def test_generate_audio_stream_uses_prepared_chunk_text(monkeypatch):
         model_recommended_frames_after_eos=None,
         pad_with_spaces_for_short_inputs=True,
         remove_semicolons=False,
+        text_rules=TextRules(),
         _generate_audio_stream_short_text=fake_generate_audio_stream_short_text,
     )
 

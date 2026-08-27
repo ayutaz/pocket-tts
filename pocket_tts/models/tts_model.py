@@ -86,6 +86,7 @@ class TTSModel(nn.Module):
         pad_with_spaces_for_short_inputs: bool = False,
         model_recommended_frames_after_eos: int | None = None,
         remove_semicolons: bool = False,
+        text_rules: TextRules = TextRules(),
     ):
         super().__init__()
         self.flow_lm = flow_lm
@@ -99,6 +100,7 @@ class TTSModel(nn.Module):
         self.pad_with_spaces_for_short_inputs: bool = pad_with_spaces_for_short_inputs
         self.model_recommended_frames_after_eos = model_recommended_frames_after_eos
         self.remove_semicolons = remove_semicolons
+        self.text_rules = text_rules
 
     @property
     def device(self) -> torch.device:
@@ -134,6 +136,7 @@ class TTSModel(nn.Module):
             pad_with_spaces_for_short_inputs=config.pad_with_spaces_for_short_inputs,
             model_recommended_frames_after_eos=config.model_recommended_frames_after_eos,
             remove_semicolons=config.remove_semicolons,
+            text_rules=TextRules.from_config(config),
         )
         return tts_model
 
@@ -655,11 +658,15 @@ class TTSModel(nn.Module):
             max_tokens,
             self.pad_with_spaces_for_short_inputs,
             remove_semicolons=self.remove_semicolons,
+            rules=self.text_rules,
         )
 
         for chunk in chunks:
             text_to_generate, frames_after_eos_guess = prepare_text_prompt(
-                chunk, self.pad_with_spaces_for_short_inputs, self.remove_semicolons
+                chunk,
+                self.pad_with_spaces_for_short_inputs,
+                self.remove_semicolons,
+                rules=self.text_rules,
             )
             frames_after_eos_guess += 2
             effective_frames = (
@@ -1036,22 +1043,24 @@ def split_into_best_sentences(
     max_tokens: int,
     pad_with_spaces_for_short_inputs: bool,
     remove_semicolons: bool,
+    *,
+    rules: TextRules = TextRules(),
 ) -> list[str]:
     text_to_generate, _ = prepare_text_prompt(
-        text_to_generate, pad_with_spaces_for_short_inputs, remove_semicolons
+        text_to_generate, pad_with_spaces_for_short_inputs, remove_semicolons, rules=rules
     )
     text_to_generate = text_to_generate.strip()
     tokens = tokenizer(text_to_generate)
     list_of_tokens = tokens.tokens[0].tolist()
 
-    _, *end_of_sentence_tokens = tokenizer(".!...?").tokens[0].tolist()
+    _, *end_of_sentence_tokens = tokenizer(rules.sentence_boundaries).tokens[0].tolist()
     sentence_boundaries = _find_boundary_indices(list_of_tokens, end_of_sentence_tokens)
     nb_tokens_and_sentences = _segments_from_boundaries(
         list_of_tokens, sentence_boundaries, tokenizer
     )
 
     # Sub-split oversized sentences on commas, semicolons, and colons to prevent skipped words
-    _, *fallback_tokens = tokenizer(",;:").tokens[0].tolist()
+    _, *fallback_tokens = tokenizer(rules.clause_boundaries).tokens[0].tolist()
     refined_segments = []
     for nb_tokens, text in nb_tokens_and_sentences:
         if nb_tokens <= max_tokens:
@@ -1080,7 +1089,7 @@ def split_into_best_sentences(
             current_chunk = sentence
             current_nb_of_tokens_in_chunk = nb_tokens
         else:
-            current_chunk += " " + sentence
+            current_chunk += rules.segment_separator + sentence
             current_nb_of_tokens_in_chunk += nb_tokens
 
     if current_chunk != "":
