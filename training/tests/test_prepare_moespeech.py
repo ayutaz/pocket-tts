@@ -186,3 +186,62 @@ def test_download_creates_the_destination_directory(tmp_path, monkeypatch):
     paths = m.download_characters(["aaa"], dest, repo="fake/repo")
 
     assert paths[0].read_bytes() == FETCHED
+
+
+def _make_zip(path, names):
+    """A zip holding `names`, each a tiny file."""
+    import zipfile
+
+    with zipfile.ZipFile(path, "w") as z:
+        for n in names:
+            z.writestr(n, "x")
+    return path
+
+
+def test_extract_writes_every_member(tmp_path):
+    from training.scripts.prepare_moespeech import extract_character
+
+    z = _make_zip(tmp_path / "spk.zip", ["a.wav", "a.json", "b.wav", "b.json"])
+    out = extract_character(z, tmp_path / "extracted")
+    assert sorted(p.name for p in out.iterdir()) == ["a.json", "a.wav", "b.json", "b.wav"]
+
+
+def test_extract_skips_a_character_already_done(tmp_path):
+    """Unpacking 30 GB is tens of minutes; re-running must not redo it."""
+    from training.scripts.prepare_moespeech import extract_character
+
+    z = _make_zip(tmp_path / "spk.zip", ["a.wav"])
+    out = extract_character(z, tmp_path / "extracted")
+    (out / "a.wav").write_text("edited")  # prove it is not rewritten
+    extract_character(z, tmp_path / "extracted")
+    assert (out / "a.wav").read_text() == "edited"
+
+
+def test_an_interrupted_extraction_is_redone(tmp_path):
+    """The failure this guards: a directory that exists but is incomplete must
+    not be mistaken for a finished one, or the corpus silently shrinks."""
+    from training.scripts.prepare_moespeech import extract_character
+
+    z = _make_zip(tmp_path / "spk.zip", ["a.wav", "b.wav"])
+    half = tmp_path / "extracted" / "spk"
+    half.mkdir(parents=True)
+    (half / "a.wav").write_text("partial")  # no completion marker
+
+    out = extract_character(z, tmp_path / "extracted")
+    assert sorted(p.name for p in out.iterdir() if p.suffix == ".wav") == ["a.wav", "b.wav"]
+
+
+def test_a_stale_member_does_not_survive_the_redo(tmp_path):
+    """Redoing an interrupted character rebuilds it rather than filling in the
+    gaps: whatever the killed attempt left behind is discarded first. Merged
+    in instead, a truncated clip would be indistinguishable from a whole one
+    and would stay in the corpus for every run after."""
+    from training.scripts.prepare_moespeech import extract_character
+
+    z = _make_zip(tmp_path / "spk.zip", ["a.wav"])
+    half = tmp_path / "extracted" / "spk"
+    half.mkdir(parents=True)
+    (half / "stale.wav").write_text("truncated")
+
+    out = extract_character(z, tmp_path / "extracted")
+    assert sorted(p.name for p in out.iterdir()) == ["a.wav"]

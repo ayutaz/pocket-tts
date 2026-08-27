@@ -18,6 +18,7 @@ import logging
 import os
 import random
 import shutil
+import zipfile
 from pathlib import Path
 
 import typer
@@ -28,6 +29,7 @@ app = typer.Typer(pretty_exceptions_show_locals=False)
 
 SELECTION_SEED = 0  # so --order random is still reproducible across re-runs
 DATASET_REPO = "ayousanz/moe-speech-plus"
+EXTRACT_MARKER = ".complete"  # beside the directory, not in it
 
 
 def select_characters(info_csv: Path, hours: float, order: str = "largest") -> list[dict]:
@@ -94,3 +96,36 @@ def download_characters(names: list[str], dest: Path, repo: str = DATASET_REPO) 
             os.replace(partial, local)
         paths.append(local)
     return paths
+
+
+def extract_character(zip_path: Path, dest_root: Path) -> Path:
+    """Unpack one character's zip into `dest_root/<name>/`, once.
+
+    Thirty gigabytes takes tens of minutes to unpack and the instance can be
+    reclaimed in the middle of it, so a re-run has to tell a finished character
+    from an interrupted one. The directory existing does not answer that: a
+    half-extracted character has a directory too, and trusting it would drop
+    every clip the kill arrived before while looking exactly like success.
+
+    Completion is therefore recorded explicitly, as `<name>.complete` written
+    only once the last member is on disk. It sits beside the directory rather
+    than inside it so the directory holds corpus files and nothing else, and
+    callers can iterate it without filtering. A directory without that record
+    is deleted and unpacked again rather than resumed -- the member the kill
+    interrupted is likely truncated, and the members it never reached are
+    missing, neither of which is visible from the outside.
+    """
+    dest_root.mkdir(parents=True, exist_ok=True)
+    out = dest_root / zip_path.stem
+    marker = dest_root / f"{zip_path.stem}{EXTRACT_MARKER}"
+    if marker.exists() and out.is_dir():
+        logger.info(f"{out.name} already extracted, skipping")
+        return out
+    if out.exists():
+        logger.info(f"{out.name} was left half-extracted, unpacking it again")
+        shutil.rmtree(out)
+    marker.unlink(missing_ok=True)  # so a kill mid-unpack cannot leave it lying
+    with zipfile.ZipFile(zip_path) as z:
+        z.extractall(out)
+    marker.write_text("", encoding="utf-8")
+    return out
