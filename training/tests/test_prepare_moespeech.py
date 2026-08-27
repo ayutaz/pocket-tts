@@ -1183,11 +1183,18 @@ def test_a_kill_during_the_write_leaves_no_file_to_be_trusted(tmp_path, monkeypa
     import training.scripts.prepare_moespeech as m
     from training.scripts.prepare_moespeech import concatenate
 
+    # Built before write_wav is replaced: the fixture lays its clips down
+    # through that same function, so building them under the patch would kill
+    # the fixture and never reach concatenate at all.
+    clips = _clips(tmp_path, 1.0, [440.0])
+
     def killed(path, *a, **kw):
         Path(path).write_bytes(b"RIFF")  # what the kill would have left behind
         raise KeyboardInterrupt
 
     monkeypatch.setattr(m.sphn, "write_wav", killed)
     with pytest.raises(KeyboardInterrupt):
-        concatenate(_clips(tmp_path, 1.0, [440.0]), tmp_path / "joined.wav", target_sec=60.0)
+        concatenate(clips, tmp_path / "joined.wav", target_sec=60.0)
     assert not (tmp_path / "joined.wav").exists()
+    # The bytes did land -- beside the name, under one a re-run does not trust.
+    assert (tmp_path / "joined.wav.partial").read_bytes() == b"RIFF"
