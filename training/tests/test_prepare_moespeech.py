@@ -1134,6 +1134,41 @@ def test_clips_from_two_speakers_are_never_joined(tmp_path):
     assert not (tmp_path / "joined.wav").exists()
 
 
+def test_a_clip_at_another_sample_rate_is_never_joined_in(tmp_path):
+    """A rate mismatch has to raise, because joined anyway it reports nothing.
+
+    `np.concatenate` does not care what rate the samples were taken at, and the
+    file is written at whichever rate the first clip happened to have. A 22.05
+    kHz clip laid into a 44.1 kHz file therefore plays at twice its speed and
+    half its length -- so its window holds audio that does not say what its
+    transcript says, and every offset after it in the file is out by the
+    difference. The manifest still parses, every offset is still inside a real
+    file, and the only symptom is a model trained on speech that does not match
+    its text. Nothing downstream can detect it, so it has to stop here.
+    """
+    from training.scripts.prepare_moespeech import concatenate
+
+    utts = [
+        {
+            "id": "u0",
+            "wav": _wav(tmp_path / "u0.wav", 1.0, 220.0, sr=44100),
+            "duration": 1.0,
+            "transcript": "あ",
+            "speaker": "spk",
+        },
+        {
+            "id": "u1",
+            "wav": _wav(tmp_path / "u1.wav", 1.0, 220.0, sr=22050),
+            "duration": 1.0,
+            "transcript": "い",
+            "speaker": "spk",
+        },
+    ]
+    with pytest.raises(ValueError):
+        concatenate(utts, tmp_path / "joined.wav", target_sec=60.0)
+    assert not (tmp_path / "joined.wav").exists()
+
+
 def test_a_concatenated_entry_carries_what_the_manifest_needs(tmp_path):
     """The whole dict, because the manifest is written straight out of it.
 
@@ -1281,14 +1316,25 @@ def test_the_split_survives_the_entries_arriving_in_another_order(tmp_path):
     c, d and e are the same length on purpose and the target falls inside them:
     the tie-break has to land the same way on both orderings too, which sorting
     on length alone -- stable, so ordered by whoever was seen first -- does not.
+
+    What the shuffle has to move, then, is the order the speakers are first met
+    in. That is the order `by_speaker` ends up holding them in, and so the only
+    order a dict-order-dependent implementation could be following. Asserting
+    that the entry list moved is weaker: two entries per speaker means a
+    permutation that merely interleaves the duplicates changes the entry list
+    while leaving every speaker first met exactly where it was, and such a
+    fixture proves nothing at all while the guard still passes it.
     """
     from training.scripts.prepare_moespeech import split_by_speaker
+
+    def firsts(rows):
+        return list(dict.fromkeys(e["speaker"] for e in rows))
 
     lengths = {"a": 1500.0, "b": 900.0, "c": 600.0, "d": 600.0, "e": 600.0, "f": 2100.0}
     entries = [{"speaker": s, "duration": d} for s, d in lengths.items() for _ in range(2)]
     shuffled = list(entries)
     random.Random(1).shuffle(shuffled)
-    assert [e["speaker"] for e in shuffled] != [e["speaker"] for e in entries]
+    assert firsts(shuffled) != firsts(entries), firsts(shuffled)
 
     held_out = {e["speaker"] for e in split_by_speaker(entries, valid_hours=0.5)[1]}
     assert held_out == {"c", "d"}, held_out
@@ -1318,27 +1364,38 @@ def test_the_shortest_speakers_are_the_ones_held_out(tmp_path):
 
 
 def test_a_corpus_that_cannot_fill_the_valid_set_says_so(tmp_path, caplog):
-    """An empty valid set is a legitimate output -- a corpus of speakers with
-    one utterance each has nothing that can be evaluated on -- and it satisfies
-    every guarantee above vacuously: no speaker is in both splits, and every
-    valid speaker has more than one utterance, because there are none.
+    """A valid set smaller than asked for is a legitimate output -- a corpus
+    whose speakers mostly have one utterance each has little that can be
+    evaluated on -- and it satisfies every guarantee above vacuously: no speaker
+    is in both splits, and every valid speaker has more than one utterance,
+    because there is hardly one.
 
     So this warning is the only thing standing between the operator and a run
-    that trains for days with nothing to validate on. It has to fire, and it has
-    to name how many speakers were unusable, or the empty valid.jsonl is
-    discovered when the training loop divides by zero instead.
+    that trains for days with almost nothing to validate on. It has to fire, and
+    it has to name how many speakers were unusable, or the near-empty
+    valid.jsonl is discovered when the training loop divides by zero instead.
+
+    The corpus is deliberately lopsided -- four speakers with one utterance and
+    one with two -- so that the three counts the message could be naming are all
+    different numbers: four singletons, five speakers, six entries. A fixture of
+    five singleton speakers makes all three of them 5, and then "5 of 5" is
+    satisfied by a message counting entries, or speakers twice, or anything
+    else; the numbers have to disagree for the assertion to mean the message
+    says what it claims to say.
     """
     from training.scripts.prepare_moespeech import split_by_speaker
 
-    entries = [{"speaker": f"s{i}", "duration": 600.0} for i in range(5)]
+    entries = [{"speaker": f"s{i}", "duration": 600.0} for i in range(4)]
+    entries += [{"speaker": "pair", "duration": 600.0} for _ in range(2)]
     with caplog.at_level(logging.WARNING, logger="prepare_moespeech"):
         train, valid = split_by_speaker(entries, valid_hours=1.0)
-    assert valid == []
-    assert len(train) == 5
+    assert {e["speaker"] for e in valid} == {"pair"}
+    assert len(valid) == 2
+    assert len(train) == 4
     warned = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
     assert len(warned) == 1, warned
-    assert "0.00h of the 1.00h" in warned[0], warned[0]
-    assert "5 of 5" in warned[0], warned[0]
+    assert "0.33h of the 1.00h" in warned[0], warned[0]
+    assert "4 of 5 speakers" in warned[0], warned[0]
 
     # And it stays quiet when the hours asked for were there: a warning on every
     # run is a warning nobody reads by the time it means something.
