@@ -284,6 +284,50 @@ MoeSpeech 単独を選ぶ理由:
 
 さらに zip がキャラ単位なので、**30 GB / 約160キャラ / 約123h だけ落とせば足ります**（README の最低ラインは100h）。検証フェーズのボトルネックは GPU ではなく前処理の待ち時間なので、ここを削るのが最も効きます。
 
+**実行コマンド**
+
+zip の取得からアライメント済みマニフェストまでは1コマンドで通ります。
+
+```bash
+python -m training.scripts.prepare_moespeech --hours 124 --out data/ja
+```
+
+閾値には既定値がありません（この corpus を測ったものが存在しないため）。初回はステージ4の
+probe を書いた直後に停止するので、`data/ja/probe.json` の retention 表を読んで `--max-cer` と
+`--min-mos` を決め、**同じコマンドに2つを足して再実行**します。ステージ5から続きます。
+
+```bash
+python -m training.scripts.prepare_moespeech --hours 124 --out data/ja \
+  --max-cer <probe.json から読む> --min-mos <probe.json から読む>
+```
+
+| # | ステージ | 出力（`--out` 以下） | 再実行でスキップする条件 | 所要時間 |
+|---|---|---|---|---|
+| 1 | キャラ選定 | `characters.json` | ファイルが在る | 未計測 |
+| 2 | ダウンロード | `zips/<name>.zip` | zip が在る（`.partial` は無視する） | 未計測 |
+| 3 | 展開 | `extracted/<name>/` | `extracted/<name>.complete` が在る | 未計測 |
+| 4 | probe | `probe.json` | ファイルが在る | 未計測 |
+| 5 | 発話選定 | `utterances.jsonl` | ファイルが在る | 未計測 |
+| 6 | 連結 | `audio/<speaker>.wav`・`entries/<speaker>.jsonl` | その話者の `entries/<speaker>.jsonl` が在る | 未計測 |
+| 7 | マニフェスト | `train.jsonl`・`valid.jsonl` | 両方が在る | 未計測 |
+| 8 | アライメント | `train_aligned.jsonl`・`valid_aligned.jsonl` | 出力が在る（中断時の `.partial` は `--resume` が拾う） | 未計測 |
+
+スキップの判定は**出力の有無だけ**で、オプションは見ていません。閾値や `--target-sec` を
+変えて実行し直したい場合は、上の表の出力を消してから打ち直してください。
+
+**所要時間は全て未計測です。** vast.ai 上でまだ一度も実行していないので実測値がありません。
+下の見積り表は着手前の試算であり、初回実行後にこの列を実測で置き換えてください。
+
+インスタンスは preemption で消えるので、**落ちたら同じコマンドを打ち直す**のが正しい復帰手順
+です。完了済みのステージは上の条件で飛ばされ、途中で死んだ出力は `.partial` に残るだけなので
+「完成済み」と誤認されることはありません。
+
+アライメントは日本語に固定されています（`--segmenter japanese`、`--align-model` の既定は
+`vumichien/wav2vec2-large-xlsr-japanese-hiragana`）。かなを語彙に持たないモデルを渡すと
+`align_data.py` が起動時に拒否します。分かち書きの無い日本語を whitespace で分割すると
+1発話が1単語になり、カット点が消えて dataloader の voice prompt 機構が黙って無効になります
+（リスク1）。
+
 **見積り**
 
 | 工程 | コスト |

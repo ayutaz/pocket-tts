@@ -7,10 +7,14 @@ never quite becomes intelligible.
 """
 
 import csv
+import inspect
 import json
 import logging
 import random
 import shutil
+from collections import defaultdict
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import typer
@@ -1440,3 +1444,236 @@ def test_a_kill_partway_through_the_manifest_leaves_no_manifest(tmp_path, monkey
     with pytest.raises(KeyboardInterrupt):
         write_manifest(rows, tmp_path / "m.jsonl")
     assert not (tmp_path / "m.jsonl").exists()
+
+
+# The eight stages, wired together by main() and run end to end.
+
+KANA_ALIGNER = "vumichien/wav2vec2-large-xlsr-japanese-hiragana"
+
+
+def _recording(calls, name, func):
+    """`func`, with every call to it written down under `name`."""
+
+    def wrapper(*args, **kwargs):
+        calls[name].append((args, kwargs))
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+def _tree(root):
+    """Every file under `root`, by relative path, with its bytes."""
+    return {
+        str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()
+    }
+
+
+def _pipeline(tmp_path, monkeypatch):
+    """`main` with everything off this machine replaced by a recording fake.
+
+    Only the stages that would reach the network are faked -- the two hub
+    fetches and the aligner. The probe, the selection, the concatenation, the
+    split and the manifests run for real over three tones per speaker, so a
+    recording proves that `main` wired the real functions together in the real
+    order rather than that it called mocks in one.
+
+    The fakes for `download_characters`, `extract_character` and `align` each
+    reproduce the one behaviour of their real counterpart this script leans on:
+    doing nothing when their output is already there. Those three stages decide
+    for themselves what to skip -- their own tests prove they do -- so a fake
+    that recorded the call instead of the work would report a re-run as redoing
+    everything when it redid nothing.
+    """
+    from training.scripts import prepare_data
+    from training.scripts import prepare_moespeech as m
+
+    calls = defaultdict(list)
+    cache = tmp_path / "hub"
+    cache.mkdir()
+    out_dir = tmp_path / "ja"
+    speakers = ("aoi", "kaede")
+
+    def fake_fetch(repo_id, filename, **kw):
+        calls["info.csv"].append((repo_id, filename, kw.get("repo_type")))
+        path = cache / filename
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["name", "num_files", "total_duration_min", "f0_mean"])
+            w.writerows([(name, 3, 0.1, 300.0) for name in speakers])
+        return str(path)
+
+    def fake_download(names, dest, repo=None):
+        dest.mkdir(parents=True, exist_ok=True)
+        paths = []
+        for name in names:
+            path = dest / f"{name}.zip"
+            if not path.exists():
+                calls["download"].append((name, repo))
+                path.write_bytes(b"PK\x03\x04")
+            paths.append(path)
+        return paths
+
+    def fake_extract(zip_path, dest_root):
+        out = dest_root / zip_path.stem
+        marker = dest_root / f"{zip_path.stem}{m.EXTRACT_MARKER}"
+        if marker.exists() and out.is_dir():
+            return out
+        calls["extract"].append(zip_path.name)
+        out.mkdir(parents=True, exist_ok=True)
+        for i, hz in enumerate((220.0, 440.0, 880.0)):
+            _wav(out / f"clip{i}.wav", 2.0, hz)
+            (out / f"clip{i}.json").write_text(
+                json.dumps(
+                    {
+                        "anime_whisper_transcription": "こんにちは",
+                        "parakeet_jp_transcription": "こんにちは",
+                        "duration": 2.0,
+                        "speechMOS": 4.0,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+        marker.write_text("", encoding="utf-8")
+        return out
+
+    # Bound against the real align()'s signature, so a call main() could not
+    # actually make -- a misspelled keyword, an argument too many -- fails here
+    # rather than being recorded as if it had worked.
+    signature = inspect.signature(prepare_data.align)
+
+    def fake_align(*args, **kwargs):
+        bound = signature.bind(*args, **kwargs)
+        bound.apply_defaults()
+        out = Path(bound.arguments["out"])
+        if out.exists():
+            return
+        calls["align"].append(dict(bound.arguments))
+        out.write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(m, "hf_hub_download", fake_fetch)
+    monkeypatch.setattr(m, "download_characters", fake_download)
+    monkeypatch.setattr(m, "extract_character", fake_extract)
+    monkeypatch.setattr(m, "align", fake_align)
+    for name in ("probe_utterances", "select_utterances", "concatenate", "split_by_speaker"):
+        monkeypatch.setattr(m, name, _recording(calls, name, getattr(m, name)))
+
+    def run(**overrides):
+        options = {
+            "out": str(out_dir),
+            "hours": 0.01,  # 0.6 minutes, so both 0.1-minute fixture speakers fit
+            "valid_hours": 0.001,  # 3.6 seconds, so one of the two 6s speakers is held out
+            "target_sec": 5.0,  # three 2s clips per speaker, so each needs two files
+            "repo": "fake/repo",
+        }
+        options.update(overrides)
+        return m.main(**options)
+
+    return SimpleNamespace(module=m, calls=calls, out=out_dir, run=run)
+
+
+def test_the_pipeline_skips_stages_whose_output_exists(tmp_path, monkeypatch):
+    """The property the whole script is designed around: re-running after a
+    preemption must not redo finished work.
+
+    The instance this runs on is reclaimed without warning, so the command is
+    typed again -- often. Every stage is asserted to have run once and then
+    not again, and the tree it left is asserted byte-identical afterwards: a
+    stage that redid its work would show up as a second recording, and one
+    that re-wrote its output from different inputs as different bytes.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+
+    p.run(max_cer=0.0, min_mos=0.0)
+
+    # Every stage really ran the first time -- otherwise "it did not run again"
+    # would be satisfied by a main() that does nothing at all.
+    done = {stage: len(c) for stage, c in p.calls.items()}
+    assert done == {
+        "info.csv": 1,
+        "download": 2,
+        "extract": 2,
+        "probe_utterances": 1,
+        "select_utterances": 1,
+        "concatenate": 2,
+        "split_by_speaker": 1,
+        "align": 2,
+    }, done
+    before = _tree(p.out)
+    assert (p.out / "train_aligned.jsonl").exists()
+
+    p.run(max_cer=0.0, min_mos=0.0)
+
+    assert {stage: len(c) for stage, c in p.calls.items()} == done
+    assert _tree(p.out) == before
+
+
+def test_alignment_uses_the_japanese_segmenter_and_a_kana_model(tmp_path, monkeypatch):
+    """align_data refuses a model without hiragana in its vocabulary, but only
+    at run time on the instance -- catching it here costs nothing.
+
+    The segmenter matters as much and refuses nothing: `whitespace` over a
+    language written without spaces returns one word per utterance, so the
+    aligner emits a single span, the loader finds no cut point, and the voice
+    prompt silently comes from the utterance being predicted. Nothing raises;
+    the model simply learns that the prompt does not decide the voice.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+
+    p.run(max_cer=0.0, min_mos=0.0)
+
+    assert len(p.calls["align"]) == 2, p.calls["align"]
+    for call in p.calls["align"]:
+        assert call["segmenter"] == "japanese", call
+        assert call["model"] == KANA_ALIGNER, call
+    # Both manifests are aligned, not just the training one: the loader reads
+    # `words` on either side and an unaligned valid set is scored differently
+    # from the set it is compared against.
+    assert {Path(call["out"]).name for call in p.calls["align"]} == {
+        "train_aligned.jsonl",
+        "valid_aligned.jsonl",
+    }
+
+
+def test_the_run_stops_until_the_thresholds_have_been_chosen(tmp_path, monkeypatch, caplog):
+    """Nothing has measured this corpus, so the two cutoffs have no default.
+
+    The probe is what produces the numbers they are read off, so the run does
+    everything up to and including it and then stops, naming the file to read
+    and the two flags to pass. Filtering on a guessed threshold instead would
+    produce a manifest that afterwards is indistinguishable from a measured
+    one -- and the guess would be attached to 124 hours of training.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    caplog.set_level(logging.INFO)
+
+    with pytest.raises(typer.Exit):
+        p.run()
+
+    assert (p.out / "probe.json").exists()
+    assert not p.calls["select_utterances"], "nothing may be filtered on a threshold nobody chose"
+    assert not p.calls["align"]
+    said = "\n".join(record.message for record in caplog.records)
+    assert "probe.json" in said, said
+    assert "--max-cer" in said and "--min-mos" in said, said
+
+
+def test_supplying_the_thresholds_resumes_from_the_probe(tmp_path, monkeypatch):
+    """The stop above is a stage boundary, not a failed run.
+
+    The operator reads probe.json and types the command again with the two
+    flags. Everything before the cutoffs -- 30 GB fetched, unpacked and walked
+    -- is on disk and must not be paid for a second time.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    with pytest.raises(typer.Exit):
+        p.run()
+    probe = (p.out / "probe.json").read_bytes()
+
+    p.run(max_cer=0.0, min_mos=0.0)
+
+    assert len(p.calls["probe_utterances"]) == 1, "the corpus was measured twice"
+    assert len(p.calls["extract"]) == 2, "the zips were unpacked twice"
+    assert not p.calls["info.csv"][1:], "info.csv was fetched twice"
+    assert (p.out / "probe.json").read_bytes() == probe
+    assert (p.out / "train_aligned.jsonl").exists()

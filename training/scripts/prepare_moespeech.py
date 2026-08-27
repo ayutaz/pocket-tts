@@ -23,6 +23,7 @@ import zipfile
 from collections import Counter, defaultdict
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Annotated
 
 import jiwer
 import numpy as np
@@ -31,12 +32,17 @@ import typer
 from huggingface_hub import hf_hub_download
 
 from pocket_tts.utils.text_normalization import normalize_japanese
+from training.scripts.prepare_data import align
 
 logger = logging.getLogger("prepare_moespeech")
 app = typer.Typer(pretty_exceptions_show_locals=False)
 
 SELECTION_SEED = 0  # so --order random is still reproducible across re-runs
 DATASET_REPO = "ayousanz/moe-speech-plus"
+# The aligner reads kana readings, so its vocabulary has to be kana: align_data
+# refuses a model without hiragana in it rather than reporting every utterance
+# of the corpus unalignable, one at a time.
+KANA_ALIGN_MODEL = "vumichien/wav2vec2-large-xlsr-japanese-hiragana"
 EXTRACT_MARKER = ".complete"  # beside the directory, not in it
 # The grids probe.json reports retention over. They are candidates to read a
 # cutoff off, not cutoffs: nothing here filters anything.
@@ -608,3 +614,229 @@ def write_manifest(entries: list[dict], path: Path) -> int:
     os.replace(partial, path)
     logger.info(f"{path}: {written} utterances")
     return written
+
+
+def _write_json(obj: dict, path: Path) -> None:
+    """Write one JSON document, and let nothing see it half-written.
+
+    The same reason as everywhere else here: a truncated `characters.json` or
+    `probe.json` still sits under the name the next run tests for, and being
+    taken for finished is exactly what must not happen to either. Both are read
+    by a person -- one is the table the cutoffs are chosen off, the other is how
+    one checks which speakers a run actually took -- so they are indented, and
+    written with the escapes off so the names stay Japanese.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_name(f"{path.name}.partial")
+    with open(partial, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
+    os.replace(partial, path)
+
+
+def _read_jsonl(path: Path) -> list[dict]:
+    """The rows of something this script wrote earlier, so a re-run continues
+    from them instead of walking 400,000 files again."""
+    with open(path, encoding="utf-8") as f:
+        return [json.loads(line) for line in f]
+
+
+@app.command()
+def main(
+    out: Annotated[
+        str, typer.Option(help="where every artifact of this run is written")
+    ] = "data/ja",
+    hours: Annotated[float, typer.Option(help="hours of speech to pick speakers for")] = 124,
+    order: Annotated[
+        str, typer.Option(help="'largest' for the fewest zips, 'random' for the most voices")
+    ] = "largest",
+    max_cer: Annotated[
+        float | None,
+        typer.Option(
+            help="keep utterances whose two ASR transcripts disagree by at most this. "
+            "Read it off probe.json's retention table; there is no default"
+        ),
+    ] = DEFAULT_MAX_CER,
+    min_mos: Annotated[
+        float | None,
+        typer.Option(
+            help="keep utterances scoring at least this speechMOS. Read it off "
+            "probe.json's retention table; there is no default"
+        ),
+    ] = DEFAULT_MIN_MOS,
+    valid_hours: Annotated[
+        float, typer.Option(help="hours held out for validation, whole speakers at a time")
+    ] = 1.0,
+    target_sec: Annotated[
+        float,
+        typer.Option(
+            help="longest pseudo-recording to build out of one speaker's clips. Well past "
+            "the loader's max_duration_sec, and short enough that the aligner holds one"
+        ),
+    ] = 120.0,
+    zips: Annotated[
+        str | None,
+        typer.Option(
+            help="where the downloaded zips are kept (default: <out>/zips). Naming one "
+            "directory across runs keeps a larger --hours from re-fetching what a "
+            "smaller one already has"
+        ),
+    ] = None,
+    align_shards: Annotated[
+        int, typer.Option(help="parallel alignment processes (one GPU each)")
+    ] = 1,
+    align_model: Annotated[
+        str, typer.Option(help="CTC model the aligner reads; it must have kana in its vocabulary")
+    ] = KANA_ALIGN_MODEL,
+    repo: Annotated[str, typer.Option(help="the dataset's HuggingFace repo")] = DATASET_REPO,
+    verbose: Annotated[
+        bool, typer.Option("--verbose", "-v", help="log every clip a stage passes over")
+    ] = False,
+) -> None:
+    """Eight stages from a dataset name to an aligned training manifest.
+
+    Every stage skips work whose output is already on disk, so this command is
+    re-run rather than resumed. That is the whole design: the instance it runs
+    on is preemptible, and being killed must cost only the stage in flight.
+
+    It stops once on purpose, after the probe. The two transcript cutoffs have
+    no default because nothing has ever measured this corpus; the probe is what
+    measures it. Read them off `probe.json` and run the same command again with
+    --max-cer and --min-mos, and it carries on from there.
+
+    What a stage skips on is its output, not the options it was given: changing
+    --target-sec or a cutoff after the stage that reads it has run does not
+    re-run it. Delete the artifact the log names to redo a stage under new
+    options -- deleting is the only way to say so, and it is deliberate, since
+    the alternative is a stage that quietly redoes 30 GB of work.
+    """
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s %(levelname)s %(name)s] %(message)s",
+        datefmt="%d-%m %H:%M:%S",
+    )
+    if verbose:
+        logger.setLevel(logging.DEBUG)
+
+    out_dir = Path(out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    zip_dir = Path(zips) if zips else out_dir / "zips"
+    extract_root = out_dir / "extracted"
+
+    # 1. Which speakers. 12.5 KB of info.csv decides what the other seven
+    #    stages will ever touch, and answers it without fetching any audio.
+    characters_json = out_dir / "characters.json"
+    if characters_json.exists():
+        chosen = json.loads(characters_json.read_text(encoding="utf-8"))
+        if chosen["hours_requested"] != hours:
+            # Silently re-selecting would orphan whatever is already unpacked
+            # under a different set of speakers; silently ignoring --hours
+            # would be worse still, so say which of the two won.
+            logger.warning(
+                f"{characters_json} holds the selection for --hours "
+                f"{chosen['hours_requested']:g} and is being reused for --hours {hours:g}; "
+                "delete it to select speakers again"
+            )
+    else:
+        info_csv = Path(hf_hub_download(repo, "info.csv", repo_type="dataset"))
+        characters = select_characters(info_csv, hours, order)
+        chosen = {
+            "hours_requested": hours,
+            "hours_selected": sum(c["total_duration_min"] for c in characters) / 60,
+            "order": order,
+            "characters": characters,
+        }
+        _write_json(chosen, characters_json)
+    names = [c["name"] for c in chosen["characters"]]
+    logger.info(f"{len(names)} speakers, {chosen['hours_selected']:.1f}h of audio to fetch")
+
+    # 2 + 3. Fetch and unpack, speaker by speaker. Both stages decide per
+    #        speaker what they already have -- this is where the tens of
+    #        minutes are, and where a preemption would otherwise cost most.
+    for zip_path in download_characters(names, zip_dir, repo=repo):
+        extract_character(zip_path, extract_root)
+
+    # 4. Measure. Decides nothing: probe_utterances returns the numbers and
+    #    deliberately does not write them, so measuring stays independent of
+    #    where the file goes.
+    probe_json = out_dir / "probe.json"
+    if probe_json.exists():
+        logger.info(f"{probe_json} exists, not measuring the corpus again")
+    else:
+        _write_json(probe_utterances(extract_root), probe_json)
+
+    # 5. Decide, or stop. The cutoffs are a property of this corpus and the
+    #    line above is the first thing that has ever measured it, so there is
+    #    nothing to default them to -- see DEFAULT_MAX_CER.
+    if max_cer is None or min_mos is None:
+        logger.error(
+            f"read the retention table in {probe_json} and run this again with --max-cer "
+            "and --min-mos. Neither has a default: nothing had measured this corpus until "
+            "the line above, and a number guessed now would afterwards be indistinguishable "
+            "from a measured one. Everything up to here is on disk and will not be redone."
+        )
+        raise typer.Exit(1)
+    utterances_jsonl = out_dir / "utterances.jsonl"
+    if utterances_jsonl.exists():
+        logger.info(f"{utterances_jsonl} exists, keeping the utterances it holds")
+        utterances = _read_jsonl(utterances_jsonl)
+    else:
+        # `wav` arrives as a Path, which json.dumps refuses; every reader of
+        # this file passes it to sphn.read, which takes the string just as well.
+        utterances = [
+            {**u, "wav": str(u["wav"])} for u in select_utterances(extract_root, max_cer, min_mos)
+        ]
+        write_manifest(utterances, utterances_jsonl)
+
+    # 6. Join each speaker's clips into pseudo-long recordings. The grouping
+    #    happens here because concatenate() refuses a mixed list rather than
+    #    grouping one: a file holding two voices would teach the model that the
+    #    prompt does not decide the voice, and nothing downstream could see it.
+    #    Each speaker's offsets are recorded under their own name, so a kill
+    #    costs the speaker in flight rather than all of them.
+    by_speaker: dict[str, list[dict]] = defaultdict(list)
+    for utterance in utterances:
+        by_speaker[utterance["speaker"]].append(utterance)
+    entries: list[dict] = []
+    for speaker in sorted(by_speaker):
+        part = out_dir / "entries" / f"{speaker}.jsonl"
+        if part.exists():
+            entries += _read_jsonl(part)
+            continue
+        rows = concatenate(by_speaker[speaker], out_dir / "audio" / f"{speaker}.wav", target_sec)
+        write_manifest(rows, part)
+        entries += rows
+
+    # 7. Split off the valid speakers and write the two manifests. Both or
+    #    neither: a kill between them leaves train.jsonl describing a corpus
+    #    valid.jsonl was never held out of.
+    train_manifest, valid_manifest = out_dir / "train.jsonl", out_dir / "valid.jsonl"
+    if train_manifest.exists() and valid_manifest.exists():
+        logger.info(f"{train_manifest} and {valid_manifest} exist, keeping the split they hold")
+    else:
+        train, valid = split_by_speaker(entries, valid_hours)
+        write_manifest(train, train_manifest)
+        write_manifest(valid, valid_manifest)
+
+    # 8. Align. prepare_data's align() already streams into a .partial that
+    #    --resume picks up and only produces its output once a pass finishes,
+    #    so it is reused rather than reimplemented. The segmenter is not an
+    #    option: this manifest is Japanese, and "whitespace" over a language
+    #    written without spaces returns one word per utterance -- the aligner
+    #    emits a single span, the loader finds no cut point, and the voice
+    #    prompt quietly comes from the utterance being predicted.
+    train_aligned = out_dir / "train_aligned.jsonl"
+    valid_aligned = out_dir / "valid_aligned.jsonl"
+    align(
+        train_manifest,
+        train_aligned,
+        align_shards,
+        align_model,
+        "training manifest",
+        segmenter="japanese",
+    )
+    align(valid_manifest, valid_aligned, 1, align_model, "valid manifest", segmenter="japanese")
+    logger.info(f"Done. Training on {train_aligned.resolve()} and {valid_aligned.resolve()}")
+
+
+if __name__ == "__main__":
+    app()

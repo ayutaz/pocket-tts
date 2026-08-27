@@ -69,7 +69,20 @@ def download(url: str, dest: Path, retries: int = 5, timeout: float = 30) -> Non
             time.sleep(min(2**attempt, 10))
 
 
-def align(manifest: Path, out: Path, shards: int, model: str, what: str = "manifest") -> None:
+def align(
+    manifest: Path,
+    out: Path,
+    shards: int,
+    model: str,
+    what: str = "manifest",
+    segmenter: str = "whitespace",
+) -> None:
+    # `segmenter` is a pass-through to align_data, whose own default is this same
+    # string: the English corpus below aligns exactly as it did before, with the
+    # flag now spelled out rather than left implicit. It is there for callers
+    # preparing another language -- one written without spaces, aligned under
+    # "whitespace", yields a single word per utterance, which raises nothing and
+    # silently disables the loader's cut-and-prompt mechanism.
     if out.exists():
         logger.info(f"{what} {out.resolve()} exists, skipping")
         return
@@ -86,6 +99,8 @@ def align(manifest: Path, out: Path, shards: int, model: str, what: str = "manif
                 str(part),
                 "--model",
                 model,
+                "--segmenter",
+                segmenter,
                 "--resume",
             ],
             check=True,
@@ -113,6 +128,8 @@ def align(manifest: Path, out: Path, shards: int, model: str, what: str = "manif
                     str(part),
                     "--model",
                     model,
+                    "--segmenter",
+                    segmenter,
                     "--shard",
                     str(i),
                     "--resume",

@@ -136,3 +136,73 @@ def test_hf_alignments_join_on_utterance_id_not_path(tmp_path, monkeypatch):
     got = [json.loads(line) for line in out.read_text().splitlines()]
     assert got[0]["words"][0]["word"] == "hi"  # matched by id
     assert "words" not in got[1]  # unmatched row kept, no words
+
+
+def _one_line_manifest(tmp_path, lines=1):
+    manifest = tmp_path / "train.jsonl"
+    manifest.write_text("".join(json.dumps({"duration": 1.0}) + "\n" for _ in range(lines)))
+    return manifest
+
+
+def test_align_forwards_the_segmenter_to_the_aligner(tmp_path, monkeypatch):
+    """A language written without spaces must not reach the aligner under the
+    whitespace segmenter: it returns one word per utterance, so the aligner
+    emits a single span, the loader finds no cut point, and the voice prompt
+    silently comes from the utterance being predicted. Nothing raises. The
+    caller is the only one that knows which language its manifest is in, so it
+    has to be able to say."""
+    manifest = _one_line_manifest(tmp_path)
+    out = tmp_path / "train_aligned.jsonl"
+    cmds = []
+
+    def fake_run(cmd, **kwargs):
+        cmds.append(cmd)
+        Path(cmd[4]).write_text("")  # the .partial the aligner streams into
+
+    monkeypatch.setattr(prepare_data.subprocess, "run", fake_run)
+    prepare_data.align(manifest, out, 1, "some/model", "manifest", segmenter="japanese")
+
+    assert cmds[-1][cmds[-1].index("--segmenter") + 1] == "japanese", cmds[-1]
+
+
+def test_align_defaults_to_the_whitespace_segmenter(tmp_path, monkeypatch):
+    """The corpus this script prepares is English, and the two existing call
+    sites pass their arguments positionally. The default is align_data's own
+    default too, so what those two send is what they sent before."""
+    manifest = _one_line_manifest(tmp_path)
+    out = tmp_path / "train_aligned.jsonl"
+    cmds = []
+
+    def fake_run(cmd, **kwargs):
+        cmds.append(cmd)
+        Path(cmd[4]).write_text("")
+
+    monkeypatch.setattr(prepare_data.subprocess, "run", fake_run)
+    prepare_data.align(manifest, out, 1, "some/model", "manifest")
+
+    assert cmds[-1][cmds[-1].index("--segmenter") + 1] == "whitespace", cmds[-1]
+
+
+def test_the_sharded_branch_forwards_the_segmenter_too(tmp_path, monkeypatch):
+    """Each branch builds its own command line, so an option that arrives on
+    one GPU can still be missing on eight -- and eight GPUs is what a corpus
+    large enough to matter is aligned on."""
+    manifest = _one_line_manifest(tmp_path, lines=2)
+    out = tmp_path / "train_aligned.jsonl"
+    cmds = []
+
+    class FakeProc:
+        def __init__(self, cmd, **kwargs):
+            cmds.append(cmd)
+            # what the shard leaves behind, which align() merges and unlinks
+            out.with_suffix(f".shard{cmd[cmd.index('--shard') + 1]}").write_text("")
+
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(prepare_data.subprocess, "Popen", FakeProc)
+    prepare_data.align(manifest, out, 2, "some/model", "manifest", segmenter="japanese")
+
+    assert len(cmds) == 2, cmds
+    for cmd in cmds:
+        assert cmd[cmd.index("--segmenter") + 1] == "japanese", cmd
