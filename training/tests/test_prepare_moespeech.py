@@ -674,3 +674,82 @@ def test_a_transcript_that_normalization_empties_is_dropped(tmp_path):
 
     _annotation(tmp_path, "blank", "\u3000", "\u3000")  # U+3000, ideographic space
     assert list(select_utterances(tmp_path, max_cer=1.0, min_mos=0.0)) == []
+
+
+def test_a_clip_sitting_exactly_on_both_cutoffs_is_kept(tmp_path):
+    """The cutoffs are ceilings and floors, not strict bounds.
+
+    An operator reads a pair off probe.json's retention table and passes it
+    straight in, so the comparison here has to be the comparison _retention
+    used. The row that makes this matter is max_cer=0.0: clips where both ASRs
+    agree character for character are the most trustworthy in the corpus and a
+    large share of it, and a strict `>` there would drop every one of them
+    while the table promised they were the ones being kept -- an empty manifest
+    from the cutoffs the measurement recommended, with nothing raised.
+    """
+    from training.scripts.prepare_moespeech import select_utterances
+
+    _annotation(tmp_path, "exact", "あ", "あ", mos=3.0)  # cer 0.0, mos on the floor
+
+    kept = list(select_utterances(tmp_path, max_cer=0.0, min_mos=3.0))
+    assert [u["id"] for u in kept] == ["exact"]
+
+
+def test_selection_keeps_exactly_as_many_clips_as_the_table_promised(tmp_path):
+    """The retention table is the whole interface between the probe and the
+    choice of cutoffs: the operator reads a count of clips off one of its rows
+    and then runs the selection with that row's pair. If the two disagree by so
+    much as one comparison, the number they chose from described a different
+    corpus from the one they get, and nothing tells them so.
+
+    So assert it over the entire grid rather than at one point. The fixtures
+    land on grid values on purpose -- cer exactly 0.0 and 0.2, mos exactly 2.5,
+    3.0 and 4.0 -- because a clip strictly inside every row's bounds is kept by
+    a strict and an inclusive comparison alike and would prove nothing.
+    """
+    from training.scripts.prepare_moespeech import probe_utterances, select_utterances
+
+    _annotation(tmp_path, "perfect", "こんにちは", "こんにちは", mos=3.0)
+    _annotation(tmp_path, "quiet", "こんにちは", "こんにちは", mos=2.5)
+    _annotation(tmp_path, "near", "こんにちは", "こんにちわ", mos=4.0)
+    _annotation(tmp_path, "wrong", "こんにちは", "全然違う文章です", mos=4.0)
+
+    table = probe_utterances(tmp_path)["retention"]
+    assert table, "no retention table to check against"
+    for row in table:
+        kept = list(select_utterances(tmp_path, max_cer=row["max_cer"], min_mos=row["min_mos"]))
+        assert len(kept) == row["kept"], row
+
+
+def test_a_kept_utterance_carries_what_the_next_stage_needs(tmp_path):
+    """Every field, not just the two the filters are about.
+
+    Nothing downstream validates this dict. The concatenation stage groups by
+    `speaker` and refuses a mixed group, so a per-clip value in that field
+    turns every speaker into a group of one and defeats the pseudo-long
+    recordings entirely; it reads `wav` to find the audio and carries
+    `duration` through to the manifest as the window the loader will read. A
+    wrong `duration` is the worst of them: it raises nothing, and trains the
+    model on speech that does not match its text.
+
+    The clip is built with a non-default duration under a real speaker
+    directory so that every field has a value it could only have come by
+    honestly, and compared as a whole dict so an extra key -- the raw
+    per-ASR transcriptions read_annotation also returns -- is caught too.
+    """
+    from training.scripts.prepare_moespeech import select_utterances
+
+    speaker = tmp_path / "ずんだもん"
+    speaker.mkdir()
+    _annotation(speaker, "clip_0001", "あ", "あ", duration=4.25, mos=3.5)
+
+    (u,) = list(select_utterances(tmp_path, max_cer=1.0, min_mos=0.0))
+    assert u == {
+        "id": "clip_0001",
+        "speaker": "ずんだもん",
+        "wav": speaker / "clip_0001.wav",
+        "duration": 4.25,
+        "transcript": "あ",
+        "cer": 0.0,
+        "mos": 3.5,
+    }
