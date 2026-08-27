@@ -7,6 +7,7 @@ never quite becomes intelligible.
 """
 
 import csv
+import shutil
 
 import pytest
 import typer
@@ -282,4 +283,40 @@ def test_a_kill_during_unpacking_leaves_no_completion_marker(tmp_path, monkeypat
     monkeypatch.undo()
 
     out = extract_character(z, root)  # the re-run
+    assert sorted(p.name for p in out.iterdir()) == ["a.wav", "b.wav", "c.wav"]
+
+
+def test_a_marker_without_its_directory_is_not_trusted(tmp_path, monkeypatch):
+    """A completed character whose directory is later reclaimed for disk space
+    leaves the marker behind. The marker alone is not evidence -- and the stale
+    one has to go before the re-unpack starts, or a kill during that re-unpack
+    leaves marker-plus-half-a-directory, which every later run then skips.
+
+    Every other test here starts from either an empty root or a marker-less
+    directory, so none of them reaches the state "marker present, directory
+    absent" -- the one state in which these two guards do any work at all.
+    """
+    import zipfile as zf
+
+    from training.scripts.prepare_moespeech import extract_character
+
+    z = _make_zip(tmp_path / "spk.zip", ["a.wav", "b.wav", "c.wav"])
+    root = tmp_path / "extracted"
+    shutil.rmtree(extract_character(z, root))  # the directory goes, the marker stays
+    assert (root / "spk.complete").exists(), "the fixture did not leave a stale marker"
+
+    def killed(self, path=None, *a, **kw):
+        self.extract("a.wav", path)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(zf.ZipFile, "extractall", killed)
+    # Not raising would mean the marker alone was trusted and this call returned
+    # a directory that does not exist -- Path.rglob on which yields nothing, so
+    # the speaker reads as zero utterances downstream instead of failing.
+    with pytest.raises(KeyboardInterrupt):
+        extract_character(z, root)
+    monkeypatch.undo()
+    assert not (root / "spk.complete").exists(), "the stale marker outlived the kill"
+
+    out = extract_character(z, root)
     assert sorted(p.name for p in out.iterdir()) == ["a.wav", "b.wav", "c.wav"]
