@@ -14,6 +14,7 @@ a preemptible cloud instance: being killed and re-run must always be safe.
 """
 
 import csv
+import json
 import logging
 import os
 import random
@@ -21,6 +22,7 @@ import shutil
 import zipfile
 from pathlib import Path
 
+import jiwer
 import typer
 from huggingface_hub import hf_hub_download
 
@@ -30,6 +32,10 @@ app = typer.Typer(pretty_exceptions_show_locals=False)
 SELECTION_SEED = 0  # so --order random is still reproducible across re-runs
 DATASET_REPO = "ayousanz/moe-speech-plus"
 EXTRACT_MARKER = ".complete"  # beside the directory, not in it
+# The grids probe.json reports retention over. They are candidates to read a
+# cutoff off, not cutoffs: nothing here filters anything.
+CER_THRESHOLDS = (0.0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 1.0)
+MOS_THRESHOLDS = (0.0, 2.5, 3.0, 3.5, 4.0)
 
 
 def select_characters(info_csv: Path, hours: float, order: str = "largest") -> list[dict]:
@@ -129,3 +135,161 @@ def extract_character(zip_path: Path, dest_root: Path) -> Path:
         z.extractall(out)
     marker.write_text("", encoding="utf-8")
     return out
+
+
+def read_annotation(path: Path) -> dict | None:
+    """One clip's annotation, or None if it cannot stand as a training example.
+
+    Every clip ships two independent ASR transcriptions and no manual one, so
+    there is nothing to check either against except the other. Their mutual CER
+    is what this returns as `cer`: not a measure of the audio, but of where the
+    two systems disagree, which is the best available evidence that the text is
+    wrong. Both transcriptions are kept so a later stage can choose between
+    them; `transcript` names the anime-whisper one because it is the reference
+    side of that CER, so the number reported is the disagreement measured
+    against exactly the string the manifest would carry.
+
+    A field that is absent -- or an empty transcription, which for jiwer is
+    worse than absent, since CER divides by the reference's length and raises
+    on an empty one -- drops the clip rather than being defaulted. A defaulted
+    duration reaches the manifest as a window the audio does not contain, and
+    the loader reads silence and trains on it as speech, which nothing
+    downstream can detect.
+
+    `id`, `speaker` and `wav` come from the path because the JSON carries none
+    of them: the audio is the file's sibling and the speaker is the directory
+    the zip was unpacked into.
+    """
+    data = json.loads(path.read_text(encoding="utf-8"))
+    whisper = data.get("anime_whisper_transcription")
+    parakeet = data.get("parakeet_jp_transcription")
+    duration = data.get("duration")
+    mos = data.get("speechMOS")
+    if not whisper or not parakeet or duration is None or mos is None:
+        return None
+    return {
+        "id": path.stem,
+        "speaker": path.parent.name,
+        "wav": path.with_suffix(".wav"),
+        "duration": float(duration),
+        "transcript": whisper,
+        "whisper": whisper,
+        "parakeet": parakeet,
+        "cer": jiwer.cer(whisper, parakeet),
+        "mos": float(mos),
+    }
+
+
+def _distribution(values: list[float]) -> dict:
+    """min / percentiles / median / max / mean of one measured quantity.
+
+    The percentiles are the point: a mean says a corpus of 5-second clips and a
+    corpus of 1-second clips with a few 60-second ones are the same corpus, and
+    the cutoffs chosen next depend entirely on telling those apart.
+    """
+    keys = ["min", "p1", "p5", "p10", "p25", "median", "p75", "p90", "p95", "p99", "max", "mean"]
+    if not values:
+        return dict.fromkeys(keys)
+    ordered = sorted(values)
+    stats = {"min": ordered[0], "max": ordered[-1], "mean": sum(ordered) / len(ordered)}
+    for key, q in [
+        ("p1", 1),
+        ("p5", 5),
+        ("p10", 10),
+        ("p25", 25),
+        ("median", 50),
+        ("p75", 75),
+        ("p90", 90),
+        ("p95", 95),
+        ("p99", 99),
+    ]:
+        stats[key] = _percentile(ordered, q)
+    return {k: stats[k] for k in keys}
+
+
+def _percentile(ordered: list[float], q: float) -> float:
+    """The q-th percentile of an already sorted list, interpolating between the
+    two neighbouring samples -- so the median of an even-length list is the
+    midpoint of the middle pair rather than an arbitrary one of them."""
+    if len(ordered) == 1:
+        return ordered[0]
+    pos = (len(ordered) - 1) * q / 100
+    low = int(pos)
+    high = min(low + 1, len(ordered) - 1)
+    return ordered[low] + (ordered[high] - ordered[low]) * (pos - low)
+
+
+def _retention(rows: list[tuple[float, float, float]]) -> list[dict]:
+    """How much of the corpus each candidate pair of cutoffs would leave.
+
+    A distribution alone does not answer the question actually being asked,
+    which is not "how bad is the corpus" but "how many hours are left if I
+    demand this much agreement". Hours are reported next to counts because the
+    target this pipeline is given is in hours, and a cutoff that keeps 80% of
+    the clips can still keep far less than 80% of the audio.
+    """
+    table = []
+    for max_cer in CER_THRESHOLDS:
+        for min_mos in MOS_THRESHOLDS:
+            kept = [d for d, cer, mos in rows if cer <= max_cer and mos >= min_mos]
+            table.append(
+                {
+                    "max_cer": max_cer,
+                    "min_mos": min_mos,
+                    "kept": len(kept),
+                    "fraction": len(kept) / len(rows) if rows else 0.0,
+                    "hours": sum(kept) / 3600,
+                }
+            )
+    return table
+
+
+def probe_utterances(root: Path) -> dict:
+    """Measure every annotation under `root`. Decide nothing about any of them.
+
+    The returned dict is what `probe.json` holds: how many utterances there
+    are, the distribution of clip length, mutual CER and speechMOS, and a table
+    of how many clips and hours survive each candidate pair of cutoffs. No
+    threshold is applied here and none is recommended -- this exists so the
+    next stage's cutoffs come from the corpus rather than from a guess.
+
+    The scan is `rglob` because the extract root holds one directory per
+    character; `glob` would report an empty corpus for the real data while
+    passing on any fixture that keeps its JSON flat.
+
+    A file that cannot be read is counted and skipped rather than raising: one
+    bad JSON in 400,000 must not end a pass that takes 40 minutes to reach it.
+    Counted, though, and logged -- a pass that quietly returns 300,000 of
+    400,000 clips looks exactly like a corpus that was only ever 300,000 long.
+    Only the three measured numbers are retained per clip, not the row: the
+    transcriptions of a whole corpus do not need to be in memory at once for
+    this, and at this scale that is gigabytes.
+    """
+    rows: list[tuple[float, float, float]] = []
+    unreadable = incomplete = 0
+    for path in sorted(root.rglob("*.json")):
+        try:
+            row = read_annotation(path)
+        except (OSError, ValueError, TypeError) as e:
+            unreadable += 1
+            logger.debug(f"{path}: unreadable ({e})")
+            continue
+        if row is None:
+            incomplete += 1
+            continue
+        rows.append((row["duration"], row["cer"], row["mos"]))
+    if unreadable or incomplete:
+        logger.warning(
+            f"skipped {unreadable + incomplete} of {len(rows) + unreadable + incomplete} "
+            f"annotations: {unreadable} unreadable, {incomplete} missing a required field"
+        )
+    return {
+        "count": len(rows),
+        "unreadable": unreadable,
+        "incomplete": incomplete,
+        "hours": sum(d for d, _, _ in rows) / 3600,
+        "duration": _distribution([d for d, _, _ in rows]),
+        "cer": _distribution([c for _, c, _ in rows]),
+        "mos": _distribution([m for _, _, m in rows]),
+        "retention": _retention(rows),
+    }

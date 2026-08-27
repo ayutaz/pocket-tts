@@ -7,6 +7,7 @@ never quite becomes intelligible.
 """
 
 import csv
+import json
 import shutil
 
 import pytest
@@ -320,3 +321,137 @@ def test_a_marker_without_its_directory_is_not_trusted(tmp_path, monkeypatch):
 
     out = extract_character(z, root)
     assert sorted(p.name for p in out.iterdir()) == ["a.wav", "b.wav", "c.wav"]
+
+
+def _annotation(tmp_path, name, whisper, parakeet, duration=5.0, mos=3.5):
+    p = tmp_path / f"{name}.json"
+    p.write_text(
+        json.dumps(
+            {
+                "anime_whisper_transcription": whisper,
+                "parakeet_jp_transcription": parakeet,
+                "duration": duration,
+                "speechMOS": mos,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    return p
+
+
+def test_identical_transcripts_score_zero_cer(tmp_path):
+    """Two ASRs agreeing is the strongest signal available that the transcript
+    is right -- there is no manual transcription to compare against."""
+    from training.scripts.prepare_moespeech import read_annotation
+
+    a = read_annotation(_annotation(tmp_path, "a", "こんにちは", "こんにちは"))
+    assert a["cer"] == 0.0
+
+
+def test_disagreeing_transcripts_score_high_cer(tmp_path):
+    from training.scripts.prepare_moespeech import read_annotation
+
+    a = read_annotation(_annotation(tmp_path, "a", "こんにちは", "全然違う文章です"))
+    assert a["cer"] > 0.5
+
+
+def test_an_annotation_missing_a_field_is_dropped(tmp_path):
+    """Rather than defaulting: a missing duration would become a wrong
+    manifest entry, and the loader would read a window that is not there."""
+    from training.scripts.prepare_moespeech import read_annotation
+
+    p = tmp_path / "bad.json"
+    p.write_text(json.dumps({"anime_whisper_transcription": "あ"}), encoding="utf-8")
+    assert read_annotation(p) is None
+
+
+def test_an_empty_transcription_is_dropped(tmp_path):
+    """An empty string is missing too, and worse than missing: jiwer.cer
+    divides by the reference's length and raises on an empty reference, so one
+    such clip ends the whole pass rather than costing one utterance."""
+    from training.scripts.prepare_moespeech import read_annotation
+
+    assert read_annotation(_annotation(tmp_path, "a", "", "こんにちは")) is None
+    assert read_annotation(_annotation(tmp_path, "b", "こんにちは", "")) is None
+
+
+def test_an_annotation_names_its_clip_and_its_speaker(tmp_path):
+    """Neither is in the JSON: the wav is its sibling and the speaker is the
+    directory the zip was unpacked into. Later stages concatenate by wav and
+    group by speaker, so getting these from anywhere else is not possible."""
+    from training.scripts.prepare_moespeech import read_annotation
+
+    spk = tmp_path / "ずんだもん"
+    spk.mkdir()
+    a = read_annotation(_annotation(spk, "clip_0001", "あ", "あ"))
+    assert a["id"] == "clip_0001"
+    assert a["speaker"] == "ずんだもん"
+    assert a["wav"] == spk / "clip_0001.wav"
+
+
+def test_probe_reports_retention_at_several_thresholds(tmp_path):
+    """The output that decides the next task's defaults."""
+    from training.scripts.prepare_moespeech import probe_utterances
+
+    for i in range(10):
+        _annotation(tmp_path, f"u{i}", "こんにちは", "こんにちは" if i < 7 else "違う")
+    stats = probe_utterances(tmp_path)
+    assert stats["count"] == 10
+    assert any(r["kept"] == 7 for r in stats["retention"]), stats["retention"]
+
+
+def test_probe_reports_a_distribution_and_not_just_an_average(tmp_path):
+    """The next stage reads its cutoffs off these numbers. A median that is
+    really a mean reads a skewed corpus as a symmetric one and moves every
+    cutoff with it, without anything failing to say so."""
+    from training.scripts.prepare_moespeech import probe_utterances
+
+    for i, seconds in enumerate([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 100.0]):
+        _annotation(tmp_path, f"u{i}", "あ", "あ", duration=seconds)
+
+    dist = probe_utterances(tmp_path)["duration"]
+    assert dist["min"] == 0.0
+    assert dist["max"] == 100.0
+    assert dist["median"] == 4.5, dist  # the mean of these is 13.6
+    ordered = [dist[k] for k in ("min", "p10", "p25", "median", "p75", "p90", "max")]
+    assert ordered == sorted(ordered), dist
+
+
+def test_probe_walks_the_per_character_directories(tmp_path):
+    """The corpus is one directory per character under the extract root. A scan
+    of the root's own files finds nothing there and reports an empty dataset
+    without failing, which looks exactly like a corpus that was never fetched."""
+    from training.scripts.prepare_moespeech import probe_utterances
+
+    for speaker in ("aaa", "bbb"):
+        d = tmp_path / speaker
+        d.mkdir()
+        _annotation(d, "u0", "あ", "あ")
+
+    assert probe_utterances(tmp_path)["count"] == 2
+
+
+def test_probe_survives_a_corrupt_json(tmp_path):
+    """One bad file in 400,000 must not end a 40-minute pass."""
+    from training.scripts.prepare_moespeech import probe_utterances
+
+    _annotation(tmp_path, "good", "あ", "あ")
+    (tmp_path / "bad.json").write_text("{not json", encoding="utf-8")
+    assert probe_utterances(tmp_path)["count"] == 1
+
+
+def test_probe_counts_what_it_skipped(tmp_path):
+    """Surviving a bad file silently is its own defect: a pass over 400,000
+    clips that reports 300,000 and no error is indistinguishable from a corpus
+    that was only ever 300,000 clips long."""
+    from training.scripts.prepare_moespeech import probe_utterances
+
+    _annotation(tmp_path, "good", "あ", "あ")
+    (tmp_path / "bad.json").write_text("{not json", encoding="utf-8")
+    (tmp_path / "short.json").write_text(json.dumps({"duration": 1.0}), encoding="utf-8")
+
+    stats = probe_utterances(tmp_path)
+    assert stats["count"] == 1
+    assert stats["unreadable"] == 1
+    assert stats["incomplete"] == 1
