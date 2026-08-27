@@ -865,10 +865,21 @@ def main(
     # 7. Split off the valid speakers and write the two manifests. Both or
     #    neither: a kill between them leaves train.jsonl describing a corpus
     #    valid.jsonl was never held out of.
+    #    The selection is an input here alongside the offsets built out of it,
+    #    because the loop above only rewrites an entries file for a speaker the
+    #    selection still holds. Tighten a cutoff until a speaker keeps nothing
+    #    and their file is left where it lay; tighten it until nothing at all
+    #    survives and not one entries file moves. Measured against those alone
+    #    the split would find every input unmoved and go on naming utterances
+    #    that had just been excluded -- with utterances.jsonl beside it saying
+    #    otherwise, the alignment below kept for the same reason, and the run
+    #    reporting success over the manifest the operator had rejected.
     train_manifest, valid_manifest = out_dir / "train.jsonl", out_dir / "valid.jsonl"
     written_entries = sorted((out_dir / "entries").glob("*.jsonl"))
     if not _reusable(
-        [train_manifest, valid_manifest], written_entries, "keeping the split they hold"
+        [train_manifest, valid_manifest],
+        [utterances_jsonl, *written_entries],
+        "keeping the split they hold",
     ):
         train, valid = split_by_speaker(entries, valid_hours)
         write_manifest(train, train_manifest)

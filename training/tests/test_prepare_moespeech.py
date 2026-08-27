@@ -1882,6 +1882,31 @@ def test_a_cutoff_changed_after_the_fact_rebuilds_what_it_decided(tmp_path, monk
     assert len(p.calls["align"]) == 4, "the alignments still describe the old manifests"
 
 
+def test_a_cutoff_that_keeps_nothing_empties_the_manifests_too(tmp_path, monkeypatch):
+    """The same carry-through, in the direction where nothing survives.
+
+    Tighten a cutoff until no utterance passes and stage 6 has no speaker to
+    rebuild offsets for, so nothing under `entries/` is touched. A split that
+    watched only those files would see none of its inputs move, keep naming
+    clips the operator has just excluded, keep the alignment beside them, and
+    report success -- while `utterances.jsonl` next to it says the selection is
+    empty. Whether a speaker survives cannot be what decides that the split is
+    out of date, so the selection itself is one of its inputs.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**CUTOFFS)
+    assert [e["id"] for e in _jsonl(p.out / "train.jsonl")] == ["clip0", "clip1", "clip2"]
+    _age(p.out)
+
+    (p.out / "utterances.jsonl").unlink()
+    p.run(max_cer=0.3, min_mos=5.0)  # the best clip scores 4.0, so nothing is kept
+
+    assert _jsonl(p.out / "utterances.jsonl") == []
+    assert _jsonl(p.out / "train.jsonl") == [], "the split still holds the rejected selection"
+    assert _jsonl(p.out / "valid.jsonl") == [], "the split still holds the rejected selection"
+    assert len(p.calls["align"]) == 4, "the alignments still describe the old manifests"
+
+
 def test_a_speaker_unpacked_after_the_selection_reaches_the_manifests(tmp_path, monkeypatch):
     """A larger --hours the next day arrives as a new directory to walk.
 
