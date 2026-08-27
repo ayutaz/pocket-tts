@@ -378,13 +378,63 @@ def test_cer_is_measured_against_the_transcript_the_manifest_will_carry(tmp_path
     assert a["cer"] == pytest.approx(13 / 15), a["cer"]  # reversed, this pair is 6.5
 
 
+def _partial_annotation(tmp_path, name, **fields):
+    """An annotation with only the fields named -- what a truncated file has."""
+    p = tmp_path / f"{name}.json"
+    p.write_text(json.dumps(fields, ensure_ascii=False), encoding="utf-8")
+    return p
+
+
 def test_an_annotation_missing_a_field_is_dropped(tmp_path):
-    """Rather than defaulting: a missing duration would become a wrong
-    manifest entry, and the loader would read a window that is not there."""
+    """The shape a file cut off mid-write actually has: everything after the
+    first key gone at once. It says nothing about the individual guards -- the
+    first one to fire ends the check and the rest are never reached -- so the
+    two tests below take the fields one at a time."""
     from training.scripts.prepare_moespeech import read_annotation
 
-    p = tmp_path / "bad.json"
-    p.write_text(json.dumps({"anime_whisper_transcription": "あ"}), encoding="utf-8")
+    p = _partial_annotation(tmp_path, "bad", anime_whisper_transcription="あ")
+    assert read_annotation(p) is None
+
+
+def test_an_annotation_without_a_duration_is_dropped(tmp_path):
+    """Rather than defaulting: a defaulted duration reaches the manifest as a
+    window the audio need not contain, and the loader reads whatever is at
+    those offsets -- silence, or the next utterance -- and trains on it as the
+    speech the transcript describes. Nothing downstream can detect that.
+
+    Everything else here is present, so this clip is one field away from being
+    manifest-ready and only the duration guard can drop it. `probe_utterances`
+    would otherwise fold the invented seconds into the hours column an operator
+    reads the corpus size off.
+    """
+    from training.scripts.prepare_moespeech import read_annotation
+
+    p = _partial_annotation(
+        tmp_path,
+        "no_duration",
+        anime_whisper_transcription="あ",
+        parakeet_jp_transcription="あ",
+        speechMOS=3.5,
+    )
+    assert read_annotation(p) is None
+
+
+def test_an_annotation_without_a_mos_is_dropped(tmp_path):
+    """The same, for the field the audio-quality cutoff is read off. A
+    defaulted speechMOS is worse than a missing one: `--min-mos` exists to keep
+    noisy recordings out, and a stand-in score sails through whatever floor the
+    operator chose, so the clips that reach the manifest under a strict floor
+    are exactly the ones nothing ever measured.
+    """
+    from training.scripts.prepare_moespeech import read_annotation
+
+    p = _partial_annotation(
+        tmp_path,
+        "no_mos",
+        anime_whisper_transcription="あ",
+        parakeet_jp_transcription="あ",
+        duration=5.0,
+    )
     assert read_annotation(p) is None
 
 
@@ -637,14 +687,6 @@ def test_the_kept_transcript_is_normalized(tmp_path):
     assert u["transcript"] == "ABCです"
 
 
-def test_an_empty_transcript_is_dropped(tmp_path):
-    """A zero-length transcript aligns to nothing and trains on nothing."""
-    from training.scripts.prepare_moespeech import select_utterances
-
-    _annotation(tmp_path, "empty", "", "")
-    assert list(select_utterances(tmp_path, max_cer=1.0, min_mos=0.0)) == []
-
-
 def test_selection_survives_the_files_the_probe_already_survived(tmp_path):
     """The selection pass walks the same 400,000 json files the probe walked,
     and runs after it. A bad file the probe counted and logged must not end
@@ -674,6 +716,54 @@ def test_a_transcript_that_normalization_empties_is_dropped(tmp_path):
 
     _annotation(tmp_path, "blank", "\u3000", "\u3000")  # U+3000, ideographic space
     assert list(select_utterances(tmp_path, max_cer=1.0, min_mos=0.0)) == []
+
+
+def test_the_table_never_promises_a_clip_normalization_will_empty(tmp_path):
+    """probe.json is the only artifact an operator reads when choosing cutoffs,
+    so every count in it has to be a count of clips they will actually get.
+
+    A transcription of nothing but a full-width space is the case where the two
+    can come apart. It is a complete annotation, and the two ASRs agree on it
+    character for character, so it clears both cutoffs and lands in the
+    retention table; normalization then leaves nothing of it and the selection
+    drops it. Counted on one side of that check and dropped on the other, the
+    table promises two clips and the manifest holds one -- and a manifest short
+    of what the table said is indistinguishable from a corpus that was smaller
+    all along.
+
+    Asserted over the whole grid, because a table that over-promises in one row
+    over-promises in every row that clip falls into.
+    """
+    from training.scripts.prepare_moespeech import probe_utterances, select_utterances
+
+    _annotation(tmp_path, "good", "\u3042", "\u3042", mos=4.0)
+    _annotation(tmp_path, "blank", "\u3000", "\u3000", mos=4.0)
+
+    table = probe_utterances(tmp_path)["retention"]
+    assert table, "no retention table to check against"
+    for row in table:
+        kept = list(select_utterances(tmp_path, max_cer=row["max_cer"], min_mos=row["min_mos"]))
+        assert len(kept) == row["kept"], row
+    assert max(row["kept"] for row in table) == 1, table
+
+
+def test_the_probe_counts_the_clips_normalization_emptied(tmp_path):
+    """Dropping them is only half of it. `unreadable` and `incomplete` are
+    reported for a reason -- a pass that returns fewer clips than the corpus
+    holds and says nothing looks exactly like a smaller corpus -- and a clip
+    whose transcript normalization empties is dropped for a third reason that
+    deserves its own number rather than being folded into either of theirs.
+    """
+    from training.scripts.prepare_moespeech import probe_utterances
+
+    _annotation(tmp_path, "good", "\u3042", "\u3042")
+    _annotation(tmp_path, "blank", "\u3000", "\u3000")
+
+    stats = probe_utterances(tmp_path)
+    assert stats["count"] == 1, stats
+    assert stats["blank"] == 1, stats
+    assert stats["unreadable"] == 0, stats
+    assert stats["incomplete"] == 0, stats
 
 
 def test_a_clip_sitting_exactly_on_both_cutoffs_is_kept(tmp_path):
@@ -732,16 +822,20 @@ def test_a_kept_utterance_carries_what_the_next_stage_needs(tmp_path):
     wrong `duration` is the worst of them: it raises nothing, and trains the
     model on speech that does not match its text.
 
-    The clip is built with a non-default duration under a real speaker
-    directory so that every field has a value it could only have come by
-    honestly, and compared as a whole dict so an extra key -- the raw
-    per-ASR transcriptions read_annotation also returns -- is caught too.
+    Every value here is one no constant could have produced. The duration is
+    not the fixture's default; the MOS is 2.75, which is neither the default
+    nor a grid threshold; and the two transcriptions differ in their last
+    character out of five, so `cer` is exactly 0.2 -- where identical
+    transcriptions would give 0.0, which a hardcoded zero and a CER call that
+    never ran produce just as well. The clip sits under a real speaker
+    directory, and the whole dict is compared at once so an extra key -- the
+    raw per-ASR transcriptions read_annotation also returns -- is caught too.
     """
     from training.scripts.prepare_moespeech import select_utterances
 
     speaker = tmp_path / "ずんだもん"
     speaker.mkdir()
-    _annotation(speaker, "clip_0001", "あ", "あ", duration=4.25, mos=3.5)
+    _annotation(speaker, "clip_0001", "こんにちは", "こんにちわ", duration=4.25, mos=2.75)
 
     (u,) = list(select_utterances(tmp_path, max_cer=1.0, min_mos=0.0))
     assert u == {
@@ -749,7 +843,30 @@ def test_a_kept_utterance_carries_what_the_next_stage_needs(tmp_path):
         "speaker": "ずんだもん",
         "wav": speaker / "clip_0001.wav",
         "duration": 4.25,
-        "transcript": "あ",
-        "cer": 0.0,
-        "mos": 3.5,
+        "transcript": "こんにちは",
+        "cer": pytest.approx(0.2),
+        "mos": 2.75,
     }
+
+
+def test_the_selection_yields_its_utterances_in_path_order(tmp_path):
+    """A re-run has to produce the same manifest as the run it replaces.
+
+    This script is built to be killed and restarted, and the stage after it
+    concatenates each speaker's clips into pseudo-long recordings and writes
+    offsets into them. Taken in whatever order the filesystem hands them over,
+    a second run lays the same clips down in a different arrangement, and the
+    manifest the first run left on disk stops describing the audio -- silently,
+    since every offset is still inside a real file.
+
+    Every other selection test here keeps exactly one utterance, which no
+    ordering can get wrong. So this one keeps two, and creates them back to
+    front, where only an actual sort turns them around again.
+    """
+    from training.scripts.prepare_moespeech import select_utterances
+
+    _annotation(tmp_path, "clip_0002", "あ", "あ")
+    _annotation(tmp_path, "clip_0001", "あ", "あ")
+
+    kept = list(select_utterances(tmp_path, max_cer=1.0, min_mos=0.0))
+    assert [u["id"] for u in kept] == ["clip_0001", "clip_0002"]

@@ -199,12 +199,24 @@ def read_annotation(path: Path) -> dict | None:
 
 
 def _scan_annotations(root: Path, skipped: Counter) -> Iterator[dict]:
-    """Every usable annotation under `root`, in path order.
+    """Every usable annotation under `root`, normalized, in path order.
 
     The probe and the selection walk the same 400,000 files and must agree on
     which of them are annotations at all, or the retention table an operator
     reads their cutoffs off describes a different corpus from the one those
-    cutoffs are then applied to. So both walk through here.
+    cutoffs are then applied to. So both walk through here -- and so, for the
+    same reason, does the normalization. Normalizing can empty a transcript
+    that was not empty, and a clip with no text left has to be dropped; done on
+    the selection's side alone, that drop would land after the probe had
+    already counted the clip and promised it in the retention table. The table
+    would then over-promise, which is the one thing it may not do: it is the
+    only artifact an operator reads when choosing cutoffs.
+
+    Path order is part of the contract, not an accident of `rglob`. The stage
+    after this one concatenates a speaker's clips into pseudo-long recordings
+    and writes a manifest of offsets into them; taken in filesystem order, a
+    re-run after a kill builds a different recording and the offsets no longer
+    describe the audio.
 
     The scan is `rglob` because the extract root holds one directory per
     character; `glob` would report an empty corpus for the real data while
@@ -214,9 +226,11 @@ def _scan_annotations(root: Path, skipped: Counter) -> Iterator[dict]:
     than raising: one bad JSON in 400,000 must not end a pass that takes 40
     minutes to reach it. Counted, though -- a pass that quietly returns 300,000
     of 400,000 clips looks exactly like a corpus that was only ever 300,000
-    long. `skipped` belongs to the caller because this is a generator: an
-    exhausted one cannot report anything back, and the probe has to publish
-    those two numbers.
+    long. The clips normalization empties are counted for that same reason:
+    otherwise a manifest short of what probe.json promised is indistinguishable
+    from a corpus that was smaller all along. `skipped` belongs to the caller
+    because this is a generator: an exhausted one cannot report anything back,
+    and the probe has to publish those numbers.
     """
     for path in sorted(root.rglob("*.json")):
         try:
@@ -227,6 +241,11 @@ def _scan_annotations(root: Path, skipped: Counter) -> Iterator[dict]:
             continue
         if row is None:
             skipped["incomplete"] += 1
+            continue
+        row["transcript"] = normalize_japanese(row["transcript"])
+        if not row["transcript"]:
+            skipped["blank"] += 1
+            logger.debug(f"{path}: nothing left of the transcript after normalization")
             continue
         yield row
 
@@ -243,17 +262,14 @@ def select_utterances(root: Path, max_cer: float, min_mos: float) -> Iterator[di
     Both comparisons are inclusive, matching the retention table exactly, so
     the count an operator read there is the count they get.
 
-    The transcript is normalized on the way out, with the same function
-    align_data.py applies under --segmenter japanese. Doing it here rather than
-    leaving it to the aligner keeps the manifest, the tokenizer corpus and a
-    user's inference input in one distribution; a mismatch between them raises
-    nothing and shows up only as a model that never quite becomes intelligible.
-
-    Normalization can empty a transcript that was not empty -- a transcription
-    of nothing but spaces or control characters is one such -- so the emptiness
-    check comes after it, not before. A zero-length transcript aligns to
-    nothing and trains on nothing, and the aligner would carry it all the way
-    to the manifest before anyone noticed.
+    The transcript arrives already normalized, with the same function
+    align_data.py applies under --segmenter japanese. That keeps the manifest,
+    the tokenizer corpus and a user's inference input in one distribution; a
+    mismatch between them raises nothing and shows up only as a model that
+    never quite becomes intelligible. It happens in `_scan_annotations` rather
+    than here so that the clips normalization empties are dropped from the
+    probe's counts too -- see there -- and the two cutoffs are the only thing
+    this function decides.
     """
     # The counts go nowhere here on purpose: the probe already reported them to
     # the operator over this same tree, and repeating them would read as a
@@ -262,15 +278,12 @@ def select_utterances(root: Path, max_cer: float, min_mos: float) -> Iterator[di
     for row in _scan_annotations(root, skipped):
         if row["cer"] > max_cer or row["mos"] < min_mos:
             continue
-        transcript = normalize_japanese(row["transcript"])
-        if not transcript:
-            continue
         yield {
             "id": row["id"],
             "speaker": row["speaker"],
             "wav": row["wav"],
             "duration": row["duration"],
-            "transcript": transcript,
+            "transcript": row["transcript"],
             "cer": row["cer"],
             "mos": row["mos"],
         }
@@ -349,24 +362,32 @@ def probe_utterances(root: Path) -> dict:
     threshold is applied here and none is recommended -- this exists so the
     next stage's cutoffs come from the corpus rather than from a guess.
 
-    Files that cannot be read are skipped and counted by `_scan_annotations`,
-    which the selection pass shares so that both see the same corpus. Only the
-    three measured numbers are retained per clip, not the row: the
+    Files that cannot be read, and clips normalization leaves no text of, are
+    skipped and counted by `_scan_annotations`, which the selection pass shares
+    so that both see the same corpus -- the retention table below therefore
+    promises a count the selection actually delivers. Each kind is reported
+    under its own name, because "the manifest is smaller than the table said"
+    has three different causes and only the counts tell them apart.
+
+    Only the three measured numbers are retained per clip, not the row: the
     transcriptions of a whole corpus do not need to be in memory at once for
     this, and at this scale that is gigabytes.
     """
     skipped: Counter = Counter()
     rows = [(r["duration"], r["cer"], r["mos"]) for r in _scan_annotations(root, skipped)]
-    unreadable, incomplete = skipped["unreadable"], skipped["incomplete"]
-    if unreadable or incomplete:
+    unreadable, incomplete, blank = (skipped["unreadable"], skipped["incomplete"], skipped["blank"])
+    dropped = unreadable + incomplete + blank
+    if dropped:
         logger.warning(
-            f"skipped {unreadable + incomplete} of {len(rows) + unreadable + incomplete} "
-            f"json files: {unreadable} unreadable, {incomplete} not usable as an annotation"
+            f"skipped {dropped} of {len(rows) + dropped} json files: {unreadable} unreadable, "
+            f"{incomplete} not usable as an annotation, {blank} with nothing left of the "
+            f"transcript after normalization"
         )
     return {
         "count": len(rows),
         "unreadable": unreadable,
         "incomplete": incomplete,
+        "blank": blank,
         "hours": sum(d for d, _, _ in rows) / 3600,
         "duration": _distribution([d for d, _, _ in rows]),
         "cer": _distribution([c for _, c, _ in rows]),
