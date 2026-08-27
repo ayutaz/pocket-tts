@@ -61,3 +61,30 @@ def test_a_config_can_override_each_field():
     assert rules.normalizer == "japanese"
     assert rules.terminal_punctuation == ""
     assert rules.segment_separator == ""
+
+
+def test_the_japanese_config_says_how_japanese_is_written():
+    """Every value here was measured on the 1.4M-utterance corpus; see
+    docs/Japanese Model/specs/2026-08-27-japanese-text-frontend-design.md."""
+    rules = TextRules.from_config(load_config(CONFIGS / "japanese_24l.yaml"))
+    assert rules.normalizer == "japanese"
+    assert "。" in rules.sentence_boundaries and "…" in rules.sentence_boundaries
+    assert "、" in rules.clause_boundaries
+    assert rules.terminal_punctuation == ""
+    assert rules.segment_separator == ""
+
+
+def test_the_japanese_config_keeps_the_ascii_boundaries():
+    """Normalization folds fullwidth ？！ to ASCII, so the ASCII forms are what
+    actually arrive: 17.6% of corpus utterances end in ? and 13.1% in !."""
+    rules = TextRules.from_config(load_config(CONFIGS / "japanese_24l.yaml"))
+    for char in ".!?":
+        assert char in rules.sentence_boundaries
+
+
+def test_the_japanese_config_matches_its_tokenizer():
+    """pocket_tts/conditioners/text.py asserts n_bins == vocab size exactly.
+    The Japanese corpus has 4,092 distinct characters, so the released
+    n_bins: 4000 cannot be used -- sentencepiece cannot even fit it."""
+    config = load_config(CONFIGS / "japanese_24l.yaml")
+    assert config.flow_lm.lookup_table.n_bins == 8000
