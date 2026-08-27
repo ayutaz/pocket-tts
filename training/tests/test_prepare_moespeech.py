@@ -10,8 +10,10 @@ import csv
 import inspect
 import json
 import logging
+import os
 import random
 import shutil
+import time
 from collections import defaultdict
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,7 +21,7 @@ from types import SimpleNamespace
 import pytest
 import typer
 
-from training.scripts.prepare_moespeech import select_characters
+from training.scripts.prepare_moespeech import EXTRACT_MARKER, select_characters
 
 
 def _info_csv(tmp_path, rows):
@@ -1450,6 +1452,69 @@ def test_a_kill_partway_through_the_manifest_leaves_no_manifest(tmp_path, monkey
 
 KANA_ALIGNER = "vumichien/wav2vec2-large-xlsr-japanese-hiragana"
 
+# One speaker's clips, and the two cutoffs every run below is given. Each
+# cutoff excludes a different clip, and neither excludes the other's: clip3's
+# two ASR transcripts disagree by 0.4 CER, clip4 scores 2.0. So the selection
+# --max-cer 0.3 --min-mos 3.0 produces is clip0-2, and it is a set no other
+# pair of numbers reaching that filter produces -- 0.0/0.0 keeps clip4, the two
+# swapped keeps everything, and either shows up in the manifests below.
+#
+# The three that survive are two seconds each, so with --target-sec 5.0 a
+# speaker's audio does not fit in one file and the manifest has to name two.
+CUTOFFS = {"max_cer": 0.3, "min_mos": 3.0}
+CLIPS = (
+    {"hz": 220.0, "parakeet": "こんにちは", "mos": 4.0},
+    {"hz": 440.0, "parakeet": "こんにちは", "mos": 4.0},
+    {"hz": 880.0, "parakeet": "こんにちは", "mos": 4.0},
+    {"hz": 330.0, "parakeet": "こんばんは", "mos": 4.0},  # 0.4 CER against the reference
+    {"hz": 550.0, "parakeet": "こんにちは", "mos": 2.0},
+)
+
+
+def _unpack_speaker(dest_root, name):
+    """One speaker's clips under `dest_root`, as stage 3 would leave them."""
+    out = dest_root / name
+    out.mkdir(parents=True, exist_ok=True)
+    for i, clip in enumerate(CLIPS):
+        _wav(out / f"clip{i}.wav", 2.0, clip["hz"])
+        (out / f"clip{i}.json").write_text(
+            json.dumps(
+                {
+                    "anime_whisper_transcription": "こんにちは",
+                    "parakeet_jp_transcription": clip["parakeet"],
+                    "duration": 2.0,
+                    "speechMOS": clip["mos"],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+    # Completion is recorded beside the directory, and it is what a later run
+    # reads to tell a finished character from an interrupted one.
+    (dest_root / f"{name}{EXTRACT_MARKER}").write_text("", encoding="utf-8")
+    return out
+
+
+def _jsonl(path):
+    """The rows of a manifest this script wrote."""
+    with open(path, encoding="utf-8") as f:
+        return [json.loads(line) for line in f]
+
+
+def _age(root, seconds=60.0):
+    """Push everything under `root` back in time by `seconds`.
+
+    Whether an artifact was built before or after its inputs is the question
+    the guards in main() ask, and two runs of this fixture are milliseconds
+    apart while the clock a file's timestamp comes from is coarser than that
+    (about 15 ms on Windows). A tie reads as up to date -- deliberately, or
+    nothing would ever be skipped -- so a test that means "this was built by an
+    earlier run" has to say so rather than race the clock.
+    """
+    past = time.time() - seconds
+    for path in sorted(root.rglob("*")):
+        os.utime(path, (past, past))
+
 
 def _recording(calls, name, func):
     """`func`, with every call to it written down under `name`."""
@@ -1473,9 +1538,10 @@ def _pipeline(tmp_path, monkeypatch):
 
     Only the stages that would reach the network are faked -- the two hub
     fetches and the aligner. The probe, the selection, the concatenation, the
-    split and the manifests run for real over three tones per speaker, so a
-    recording proves that `main` wired the real functions together in the real
-    order rather than that it called mocks in one.
+    split and the manifests run for real over the five clips of CLIPS per
+    speaker, so a recording proves that `main` wired the real functions
+    together in the real order rather than that it called mocks in one, and the
+    manifests it leaves behind can be read for what the wiring decided.
 
     The fakes for `download_characters`, `extract_character` and `align` each
     reproduce the one behaviour of their real counterpart this script leans on:
@@ -1499,10 +1565,16 @@ def _pipeline(tmp_path, monkeypatch):
         with open(path, "w", encoding="utf-8", newline="") as f:
             w = csv.writer(f)
             w.writerow(["name", "num_files", "total_duration_min", "f0_mean"])
-            w.writerows([(name, 3, 0.1, 300.0) for name in speakers])
+            w.writerows([(name, len(CLIPS), 0.1, 300.0) for name in speakers])
         return str(path)
 
+    # Two recordings apiece, and they say different things. `*_called` is that
+    # main reached the stage at all, `download`/`extract` that the stage found
+    # work to do. Only the pair pins the contract: main calls both of these on
+    # every run and they decide for themselves what to skip, so a count of the
+    # work alone would be satisfied by a main() that stopped calling them.
     def fake_download(names, dest, repo=None):
+        calls["download_called"].append((tuple(names), repo))
         dest.mkdir(parents=True, exist_ok=True)
         paths = []
         for name in names:
@@ -1514,28 +1586,13 @@ def _pipeline(tmp_path, monkeypatch):
         return paths
 
     def fake_extract(zip_path, dest_root):
+        calls["extract_called"].append(zip_path.name)
         out = dest_root / zip_path.stem
         marker = dest_root / f"{zip_path.stem}{m.EXTRACT_MARKER}"
         if marker.exists() and out.is_dir():
             return out
         calls["extract"].append(zip_path.name)
-        out.mkdir(parents=True, exist_ok=True)
-        for i, hz in enumerate((220.0, 440.0, 880.0)):
-            _wav(out / f"clip{i}.wav", 2.0, hz)
-            (out / f"clip{i}.json").write_text(
-                json.dumps(
-                    {
-                        "anime_whisper_transcription": "こんにちは",
-                        "parakeet_jp_transcription": "こんにちは",
-                        "duration": 2.0,
-                        "speechMOS": 4.0,
-                    },
-                    ensure_ascii=False,
-                ),
-                encoding="utf-8",
-            )
-        marker.write_text("", encoding="utf-8")
-        return out
+        return _unpack_speaker(dest_root, zip_path.stem)
 
     # Bound against the real align()'s signature, so a call main() could not
     # actually make -- a misspelled keyword, an argument too many -- fails here
@@ -1563,7 +1620,7 @@ def _pipeline(tmp_path, monkeypatch):
             "out": str(out_dir),
             "hours": 0.01,  # 0.6 minutes, so both 0.1-minute fixture speakers fit
             "valid_hours": 0.001,  # 3.6 seconds, so one of the two 6s speakers is held out
-            "target_sec": 5.0,  # three 2s clips per speaker, so each needs two files
+            "target_sec": 5.0,  # the three kept clips are 6s, so each speaker needs two files
             "repo": "fake/repo",
         }
         options.update(overrides)
@@ -1584,14 +1641,16 @@ def test_the_pipeline_skips_stages_whose_output_exists(tmp_path, monkeypatch):
     """
     p = _pipeline(tmp_path, monkeypatch)
 
-    p.run(max_cer=0.0, min_mos=0.0)
+    p.run(**CUTOFFS)
 
     # Every stage really ran the first time -- otherwise "it did not run again"
     # would be satisfied by a main() that does nothing at all.
     done = {stage: len(c) for stage, c in p.calls.items()}
     assert done == {
         "info.csv": 1,
+        "download_called": 1,
         "download": 2,
+        "extract_called": 2,
         "extract": 2,
         "probe_utterances": 1,
         "select_utterances": 1,
@@ -1599,12 +1658,25 @@ def test_the_pipeline_skips_stages_whose_output_exists(tmp_path, monkeypatch):
         "split_by_speaker": 1,
         "align": 2,
     }, done
+    # And it operated on what it was told to. The repo is an option, the zips
+    # are the selected speakers', and each stage is handed the previous one's
+    # output; a stage that ran the right number of times over the wrong file
+    # is the failure a count cannot see.
+    assert p.calls["info.csv"] == [("fake/repo", "info.csv", "dataset")]
+    assert sorted(p.calls["download"]) == [("aoi", "fake/repo"), ("kaede", "fake/repo")]
+    assert sorted(p.calls["extract"]) == ["aoi.zip", "kaede.zip"]
     before = _tree(p.out)
     assert (p.out / "train_aligned.jsonl").exists()
 
-    p.run(max_cer=0.0, min_mos=0.0)
+    p.run(**CUTOFFS)
 
-    assert {stage: len(c) for stage, c in p.calls.items()} == done
+    # Both stages were entered again and both found their work already done:
+    # skipping is theirs to decide, and main re-offering them the work is what
+    # makes a re-run after a kill pick up the speakers that never arrived.
+    assert {stage: len(c) for stage, c in p.calls.items()} == done | {
+        "download_called": 2,
+        "extract_called": 4,
+    }
     assert _tree(p.out) == before
 
 
@@ -1620,7 +1692,7 @@ def test_alignment_uses_the_japanese_segmenter_and_a_kana_model(tmp_path, monkey
     """
     p = _pipeline(tmp_path, monkeypatch)
 
-    p.run(max_cer=0.0, min_mos=0.0)
+    p.run(**CUTOFFS, align_shards=3)
 
     assert len(p.calls["align"]) == 2, p.calls["align"]
     for call in p.calls["align"]:
@@ -1628,11 +1700,17 @@ def test_alignment_uses_the_japanese_segmenter_and_a_kana_model(tmp_path, monkey
         assert call["model"] == KANA_ALIGNER, call
     # Both manifests are aligned, not just the training one: the loader reads
     # `words` on either side and an unaligned valid set is scored differently
-    # from the set it is compared against.
-    assert {Path(call["out"]).name for call in p.calls["align"]} == {
-        "train_aligned.jsonl",
-        "valid_aligned.jsonl",
-    }
+    # from the set it is compared against. Each is aligned from itself -- an
+    # aligner pointed at utterances.jsonl, which carries `wav` and no `start`,
+    # or at the training manifest twice, produces a file of the right name
+    # holding alignments of the wrong audio.
+    assert [(Path(c["manifest"]).name, Path(c["out"]).name) for c in p.calls["align"]] == [
+        ("train.jsonl", "train_aligned.jsonl"),
+        ("valid.jsonl", "valid_aligned.jsonl"),
+    ], p.calls["align"]
+    # --align-shards is a count of GPUs and belongs to the long pass; the valid
+    # manifest is one speaker's worth and is aligned in one process.
+    assert [c["shards"] for c in p.calls["align"]] == [3, 1], p.calls["align"]
 
 
 def test_the_run_stops_until_the_thresholds_have_been_chosen(tmp_path, monkeypatch, caplog):
@@ -1670,10 +1748,179 @@ def test_supplying_the_thresholds_resumes_from_the_probe(tmp_path, monkeypatch):
         p.run()
     probe = (p.out / "probe.json").read_bytes()
 
-    p.run(max_cer=0.0, min_mos=0.0)
+    p.run(**CUTOFFS)
 
     assert len(p.calls["probe_utterances"]) == 1, "the corpus was measured twice"
     assert len(p.calls["extract"]) == 2, "the zips were unpacked twice"
     assert not p.calls["info.csv"][1:], "info.csv was fetched twice"
     assert (p.out / "probe.json").read_bytes() == probe
     assert (p.out / "train_aligned.jsonl").exists()
+
+
+def test_the_manifests_name_the_audio_the_cutoffs_selected(tmp_path, monkeypatch):
+    """What the run leaves behind is read, not just counted.
+
+    Every other test here asserts that a stage ran, or that a re-run wrote the
+    same bytes twice. Neither notices what those bytes say, and every way this
+    pipeline can be miswired ends in a file of the right name: the split handed
+    the wrong manifest, the cutoffs arriving in the wrong order or not at all,
+    a speaker dropped by a `=` where a `+=` belongs, --target-sec replaced by
+    its default. All of them raise nothing. They show up here, as a manifest
+    describing different audio.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+
+    p.run(**CUTOFFS)
+
+    train = _jsonl(p.out / "train.jsonl")
+    valid = _jsonl(p.out / "valid.jsonl")
+    # Whole speakers are held out, so no voice stands on both sides, and the
+    # training set is what is left rather than empty.
+    assert {e["speaker"] for e in train} == {"kaede"}, train
+    assert {e["speaker"] for e in valid} == {"aoi"}, valid
+    # Both cutoffs reached the filter, and as themselves: clip3's two ASR
+    # transcripts disagree by 0.4 CER and clip4 scores 2.0, so --max-cer 0.3
+    # and --min-mos 3.0 exclude one each and neither excludes the other's.
+    assert [e["id"] for e in train] == ["clip0", "clip1", "clip2"], train
+    assert [e["id"] for e in valid] == ["clip0", "clip1", "clip2"], valid
+    # Six seconds of clips and --target-sec 5.0, so the third one starts a
+    # second file and its offset restarts at zero inside it.
+    assert [(Path(e["path"]).name, e["start"], e["duration"]) for e in train] == [
+        ("kaede.wav", 0.0, 2.0),
+        ("kaede.wav", 2.0, 2.0),
+        ("kaede_001.wav", 0.0, 2.0),
+    ], train
+    assert [Path(e["path"]).name for e in valid] == ["aoi.wav", "aoi.wav", "aoi_001.wav"], valid
+    assert sorted(w.name for w in (p.out / "audio").glob("*.wav")) == [
+        "aoi.wav",
+        "aoi_001.wav",
+        "kaede.wav",
+        "kaede_001.wav",
+    ]
+    for entry in train + valid:
+        assert Path(entry["path"]).exists(), entry
+        assert entry["transcript"] == "こんにちは", entry
+
+
+def test_a_kill_between_the_selection_and_the_joining_resumes_from_the_file(tmp_path, monkeypatch):
+    """The preemption `utterances.jsonl` exists to survive.
+
+    That file is the walk over 400,000 annotations, and a kill just after it
+    was renamed into place -- before a single speaker's clips had been joined
+    -- is the case the whole stop-and-continue design is for. Proving the run
+    carries on from it means leaving it and taking away everything built after
+    it: with every artifact present, a stage reading the file back is
+    indistinguishable from one that never read it.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**CUTOFFS)
+    uninterrupted = _tree(p.out)
+
+    shutil.rmtree(p.out / "entries")
+    shutil.rmtree(p.out / "audio")
+    for name in ("train.jsonl", "valid.jsonl", "train_aligned.jsonl", "valid_aligned.jsonl"):
+        (p.out / name).unlink()
+
+    p.run(**CUTOFFS)
+
+    assert len(p.calls["select_utterances"]) == 1, "the corpus was walked a second time"
+    assert len(p.calls["concatenate"]) == 4, "the clips the kill cost were not joined"
+    # The rows read back off disk are the rows the first run held, so the tree
+    # the second one finishes with is the tree it would have finished with.
+    assert _tree(p.out) == uninterrupted
+
+
+def test_a_kill_between_the_joining_and_the_split_resumes_from_the_entries(tmp_path, monkeypatch):
+    """One stage further down, and the same property one level deeper.
+
+    Joining is the hours of audio work. A kill after the last speaker's offsets
+    were written but before the split must not redo it, and the offsets it
+    reads back have to be the ones on disk -- a split over nothing at all
+    writes two manifests that parse, and describe no training data.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**CUTOFFS)
+    uninterrupted = _tree(p.out)
+
+    for name in ("train.jsonl", "valid.jsonl", "train_aligned.jsonl", "valid_aligned.jsonl"):
+        (p.out / name).unlink()
+
+    p.run(**CUTOFFS)
+
+    assert len(p.calls["concatenate"]) == 2, "the audio was joined a second time"
+    assert len(p.calls["split_by_speaker"]) == 2, "the split the kill cost was not redone"
+    assert _tree(p.out) == uninterrupted
+
+
+def test_a_cutoff_changed_after_the_fact_rebuilds_what_it_decided(tmp_path, monkeypatch):
+    """Deleting one artifact carries through everything built out of it.
+
+    The way to redo a stage under new options is to delete its output, and the
+    output of the selection is `utterances.jsonl`. If only that stage re-ran,
+    `train.jsonl` would go on describing the selection the operator had just
+    rejected -- the two files on disk saying different things about which
+    utterances were kept, the run reporting success, and the training reading
+    the older of the two.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**CUTOFFS)
+    assert [e["id"] for e in _jsonl(p.out / "train.jsonl")] == ["clip0", "clip1", "clip2"]
+    _age(p.out)
+
+    (p.out / "utterances.jsonl").unlink()
+    p.run(max_cer=0.3, min_mos=1.0)  # clip4 scores 2.0 and is now kept
+
+    selected = _jsonl(p.out / "utterances.jsonl")
+    train = _jsonl(p.out / "train.jsonl")
+    valid = _jsonl(p.out / "valid.jsonl")
+    assert [e["id"] for e in train] == ["clip0", "clip1", "clip2", "clip4"], train
+    # The manifests hold the selection, all of it and nothing else.
+    assert {(e["speaker"], e["id"]) for e in train + valid} == {
+        (e["speaker"], e["id"]) for e in selected
+    }
+    assert len(p.calls["concatenate"]) == 4, "the audio still holds the old selection"
+    assert len(p.calls["align"]) == 4, "the alignments still describe the old manifests"
+
+
+def test_a_speaker_unpacked_after_the_selection_reaches_the_manifests(tmp_path, monkeypatch):
+    """A larger --hours the next day arrives as a new directory to walk.
+
+    The selection walks the extract root, so one made before a speaker was
+    unpacked does not cover them. Skipping on `utterances.jsonl` existing would
+    leave 30 GB of freshly fetched audio out of the training manifest, with
+    nothing on disk saying it had been left out.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**CUTOFFS)
+    _age(p.out)
+
+    _unpack_speaker(p.out / "extracted", "momo")
+    p.run(**CUTOFFS)
+
+    assert {e["speaker"] for e in _jsonl(p.out / "utterances.jsonl")} == {"aoi", "kaede", "momo"}
+    assert {e["speaker"] for e in _jsonl(p.out / "train.jsonl")} == {"kaede", "momo"}
+    assert {e["speaker"] for e in _jsonl(p.out / "valid.jsonl")} == {"aoi"}
+
+
+def test_a_kill_between_the_two_manifests_writes_both_again(tmp_path, monkeypatch):
+    """Both manifests, or neither.
+
+    They are written one after the other, so a kill in between leaves
+    `train.jsonl` describing a corpus `valid.jsonl` was never held out of.
+    Taking the half that survived for the whole stage would leave the held-out
+    speaker in the training manifest and then write them into the valid one as
+    well -- the same voice on both sides of the number that decides when to
+    stop, and nothing that raises.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**CUTOFFS)
+    uninterrupted = _tree(p.out)
+
+    # Exactly what a kill between the two write_manifest calls leaves behind.
+    for name in ("valid.jsonl", "train_aligned.jsonl", "valid_aligned.jsonl"):
+        (p.out / name).unlink()
+
+    p.run(**CUTOFFS)
+
+    assert len(p.calls["split_by_speaker"]) == 2, "the surviving half was taken for the whole"
+    assert _tree(p.out) == uninterrupted

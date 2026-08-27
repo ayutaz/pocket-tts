@@ -640,6 +640,50 @@ def _read_jsonl(path: Path) -> list[dict]:
         return [json.loads(line) for line in f]
 
 
+def _stale(output: Path, inputs: list[Path]) -> Path | None:
+    """Whichever of `inputs` was written after `output` was built, if any.
+
+    Every stage below skips work whose output is already on disk; that is how a
+    preempted run costs only the stage in flight. Existence alone is the wrong
+    question the moment an option changes, because the way to redo a stage is
+    to delete its artifact: delete `utterances.jsonl` and re-run under a
+    stricter --min-mos and every later stage still finds its own output sitting
+    there and skips, so `train.jsonl` goes on describing the selection that was
+    just rejected while the run reports success over it. Nothing in the tree
+    says the two disagree, and the model trains on the rejected one.
+
+    So an output is reusable only while it is at least as new as everything it
+    was built from. Equal timestamps count as fresh: file clocks are coarser
+    than these stages are fast -- 15 ms on Windows -- so two artifacts of one
+    run can share a timestamp, and treating that as stale would mean never
+    skipping anything. A clock that jumps backwards costs a rebuild, which is
+    the harmless direction to be wrong in.
+    """
+    if not output.exists():
+        return None
+    built = output.stat().st_mtime
+    moved = [p for p in inputs if p.exists() and p.stat().st_mtime > built]
+    return max(moved, key=lambda p: p.stat().st_mtime, default=None)
+
+
+def _reusable(outputs: list[Path], inputs: list[Path], keeping: str) -> bool:
+    """Whether every one of `outputs` still stands for the work it records.
+
+    All of them or none: stage 7 writes two manifests that only mean anything
+    together, and a rebuild of one from inputs the other no longer matches is
+    the same silent disagreement `_stale` exists to prevent.
+    """
+    if not all(p.exists() for p in outputs):
+        return False
+    for output in outputs:
+        moved = _stale(output, inputs)
+        if moved is not None:
+            logger.info(f"{moved} is newer than {output}, which is rebuilt rather than kept")
+            return False
+    logger.info(f"{', '.join(str(p) for p in outputs)} up to date, {keeping}")
+    return True
+
+
 @app.command()
 def main(
     out: Annotated[
@@ -705,9 +749,16 @@ def main(
 
     What a stage skips on is its output, not the options it was given: changing
     --target-sec or a cutoff after the stage that reads it has run does not
-    re-run it. Delete the artifact the log names to redo a stage under new
-    options -- deleting is the only way to say so, and it is deliberate, since
-    the alternative is a stage that quietly redoes 30 GB of work.
+    re-run it. Delete that stage's artifact to redo it under new options --
+    deleting is the only way to say so, and it is deliberate, since the
+    alternative is a stage that quietly redoes 30 GB of work.
+
+    Deleting one artifact is enough, though. What was built out of it is
+    rebuilt with it: a stage reuses its output only while that output is at
+    least as new as its inputs, so removing `utterances.jsonl` alone carries
+    through `entries/`, `train.jsonl`, `valid.jsonl` and both alignments.
+    Without that, a stricter --min-mos would rewrite `utterances.jsonl` and
+    change nothing else, and the run would train on the selection it replaced.
     """
     logging.basicConfig(
         level=logging.INFO,
@@ -757,7 +808,10 @@ def main(
 
     # 4. Measure. Decides nothing: probe_utterances returns the numbers and
     #    deliberately does not write them, so measuring stays independent of
-    #    where the file goes.
+    #    where the file goes. Existence is the whole condition here, unlike the
+    #    stages below: a speaker unpacked later does not make this file wrong,
+    #    only incomplete, and nothing downstream reads it -- it is the table an
+    #    operator picks cutoffs off. Delete it to measure the corpus again.
     probe_json = out_dir / "probe.json"
     if probe_json.exists():
         logger.info(f"{probe_json} exists, not measuring the corpus again")
@@ -775,9 +829,11 @@ def main(
             "from a measured one. Everything up to here is on disk and will not be redone."
         )
         raise typer.Exit(1)
+    #    A selection made before a speaker was unpacked does not cover them, so
+    #    the completion markers of stage 3 are what this is measured against.
     utterances_jsonl = out_dir / "utterances.jsonl"
-    if utterances_jsonl.exists():
-        logger.info(f"{utterances_jsonl} exists, keeping the utterances it holds")
+    unpacked = sorted(extract_root.glob(f"*{EXTRACT_MARKER}"))
+    if _reusable([utterances_jsonl], unpacked, "keeping the utterances it holds"):
         utterances = _read_jsonl(utterances_jsonl)
     else:
         # `wav` arrives as a Path, which json.dumps refuses; every reader of
@@ -799,7 +855,7 @@ def main(
     entries: list[dict] = []
     for speaker in sorted(by_speaker):
         part = out_dir / "entries" / f"{speaker}.jsonl"
-        if part.exists():
+        if _reusable([part], [utterances_jsonl], f"keeping {speaker}'s offsets"):
             entries += _read_jsonl(part)
             continue
         rows = concatenate(by_speaker[speaker], out_dir / "audio" / f"{speaker}.wav", target_sec)
@@ -810,9 +866,10 @@ def main(
     #    neither: a kill between them leaves train.jsonl describing a corpus
     #    valid.jsonl was never held out of.
     train_manifest, valid_manifest = out_dir / "train.jsonl", out_dir / "valid.jsonl"
-    if train_manifest.exists() and valid_manifest.exists():
-        logger.info(f"{train_manifest} and {valid_manifest} exist, keeping the split they hold")
-    else:
+    written_entries = sorted((out_dir / "entries").glob("*.jsonl"))
+    if not _reusable(
+        [train_manifest, valid_manifest], written_entries, "keeping the split they hold"
+    ):
         train, valid = split_by_speaker(entries, valid_hours)
         write_manifest(train, train_manifest)
         write_manifest(valid, valid_manifest)
@@ -824,8 +881,20 @@ def main(
     #    written without spaces returns one word per utterance -- the aligner
     #    emits a single span, the loader finds no cut point, and the voice
     #    prompt quietly comes from the utterance being predicted.
+    #    That skipping is on the output's name, and --resume continues whatever
+    #    the .partial holds without asking which manifest produced it, so an
+    #    alignment older than the manifest it claims to align has to be thrown
+    #    away here rather than kept or continued -- it describes rows the split
+    #    above has since rewritten, and nothing in the file says so.
     train_aligned = out_dir / "train_aligned.jsonl"
     valid_aligned = out_dir / "valid_aligned.jsonl"
+    for aligned, manifest in ((train_aligned, train_manifest), (valid_aligned, valid_manifest)):
+        produced = [aligned, aligned.with_suffix(".partial")]
+        produced += sorted(aligned.parent.glob(f"{aligned.stem}.shard*"))
+        for leftover in produced:
+            if _stale(leftover, [manifest]):
+                logger.info(f"{leftover} was aligned from an older {manifest.name}; discarding it")
+                leftover.unlink()
     align(
         train_manifest,
         train_aligned,

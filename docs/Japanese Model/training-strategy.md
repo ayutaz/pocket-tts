@@ -307,13 +307,21 @@ python -m training.scripts.prepare_moespeech --hours 124 --out data/ja \
 | 2 | ダウンロード | `zips/<name>.zip` | zip が在る（`.partial` は無視する） | 未計測 |
 | 3 | 展開 | `extracted/<name>/` | `extracted/<name>.complete` が在る | 未計測 |
 | 4 | probe | `probe.json` | ファイルが在る | 未計測 |
-| 5 | 発話選定 | `utterances.jsonl` | ファイルが在る | 未計測 |
-| 6 | 連結 | `audio/<speaker>.wav`・`entries/<speaker>.jsonl` | その話者の `entries/<speaker>.jsonl` が在る | 未計測 |
-| 7 | マニフェスト | `train.jsonl`・`valid.jsonl` | 両方が在る | 未計測 |
-| 8 | アライメント | `train_aligned.jsonl`・`valid_aligned.jsonl` | 出力が在る（中断時の `.partial` は `--resume` が拾う） | 未計測 |
+| 5 | 発話選定 | `utterances.jsonl` | ファイルが在り、`extracted/*.complete` より新しい | 未計測 |
+| 6 | 連結 | `audio/<speaker>.wav`・`entries/<speaker>.jsonl` | その話者の `entries/<speaker>.jsonl` が在り、`utterances.jsonl` より新しい | 未計測 |
+| 7 | マニフェスト | `train.jsonl`・`valid.jsonl` | 両方が在り、`entries/*.jsonl` より新しい | 未計測 |
+| 8 | アライメント | `train_aligned.jsonl`・`valid_aligned.jsonl` | 出力が在り、元のマニフェストより新しい（中断時の `.partial` は `--resume` が拾う） | 未計測 |
 
-スキップの判定は**出力の有無だけ**で、オプションは見ていません。閾値や `--target-sec` を
-変えて実行し直したい場合は、上の表の出力を消してから打ち直してください。
+スキップの判定は**出力の有無と更新時刻**で、オプションは見ていません。閾値や `--target-sec` を
+変えて実行し直したい場合は、その段の出力を消してから打ち直してください。**消すのは1つで足ります。**
+各段は自分の入力より新しい出力しか再利用しないので、`utterances.jsonl` を消せば `entries/`・
+`audio/`・`train.jsonl`・`valid.jsonl`・`*_aligned.jsonl` まで一緒に作り直されます。これが無いと、
+厳しい `--min-mos` で打ち直しても `utterances.jsonl` だけが書き換わり、`train.jsonl` は却下した
+はずの選定を指したまま「完了」と表示されます。`--hours` を増やして新しいキャラを展開した場合も
+同じ理由で発話選定からやり直しになります。
+
+`probe.json` だけは有無のみで判定します。ここは何も決めない計測で、後段はこのファイルを読まない
+（閾値を選ぶ人間が読む）ので、測り直したいときは消してください。
 
 **所要時間は全て未計測です。** vast.ai 上でまだ一度も実行していないので実測値がありません。
 下の見積り表は着手前の試算であり、初回実行後にこの列を実測で置き換えてください。
