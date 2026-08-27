@@ -8,6 +8,8 @@ never quite becomes intelligible.
 
 import csv
 import json
+import logging
+import random
 import shutil
 
 import pytest
@@ -1207,6 +1209,10 @@ def test_no_speaker_appears_in_both_splits(tmp_path):
 
     entries = [{"speaker": f"s{i % 5}", "duration": 600.0} for i in range(50)]
     train, valid = split_by_speaker(entries, valid_hours=1.0)
+    # An empty valid set satisfies the disjointness below without holding out
+    # anything at all, so say first that something was held out.
+    assert valid, "nothing was held out; the disjointness below is vacuous"
+    assert train
     assert {e["speaker"] for e in train} & {e["speaker"] for e in valid} == set()
 
 
@@ -1220,6 +1226,9 @@ def test_valid_speakers_have_more_than_one_utterance(tmp_path):
     from collections import Counter
 
     counts = Counter(e["speaker"] for e in valid)
+    # `all` over an empty Counter is True: a split that held nobody out would
+    # pass this without ever meeting the condition it is about.
+    assert counts, "nothing was held out; the condition below is vacuous"
     assert all(c > 1 for c in counts.values()), counts
 
 
@@ -1251,6 +1260,87 @@ def test_the_split_is_deterministic(tmp_path):
     a, _ = split_by_speaker(entries, valid_hours=1.0)
     b, _ = split_by_speaker(entries, valid_hours=1.0)
     assert [e["speaker"] for e in a] == [e["speaker"] for e in b]
+
+
+def test_the_split_survives_the_entries_arriving_in_another_order(tmp_path):
+    """The same list twice in one process is satisfied by any pure function --
+    including one that holds out whichever speakers it happens to meet first.
+
+    That is the one thing that does move between runs here. A re-run after a
+    kill rebuilds the entries from a fresh `rglob("*.json")` over a re-extracted
+    tree, and nothing pins the order that scan returns. If the split follows it,
+    a speaker the previous run validated on lands in this run's training set,
+    and the valid loss is quietly optimistic for the rest of the run.
+
+    c, d and e are the same length on purpose and the target falls inside them:
+    the tie-break has to land the same way on both orderings too, which sorting
+    on length alone -- stable, so ordered by whoever was seen first -- does not.
+    """
+    from training.scripts.prepare_moespeech import split_by_speaker
+
+    lengths = {"a": 1500.0, "b": 900.0, "c": 600.0, "d": 600.0, "e": 600.0, "f": 2100.0}
+    entries = [{"speaker": s, "duration": d} for s, d in lengths.items() for _ in range(2)]
+    shuffled = list(entries)
+    random.Random(1).shuffle(shuffled)
+    assert [e["speaker"] for e in shuffled] != [e["speaker"] for e in entries]
+
+    held_out = {e["speaker"] for e in split_by_speaker(entries, valid_hours=0.5)[1]}
+    assert held_out == {"c", "d"}, held_out
+    assert {e["speaker"] for e in split_by_speaker(shuffled, valid_hours=0.5)[1]} == held_out
+
+
+def test_the_shortest_speakers_are_the_ones_held_out(tmp_path):
+    """Every held-out hour is an hour not trained on, so it should buy as many
+    distinct voices as it can: smallest first.
+
+    Held out largest-first, the same hour is one voice where it could have been
+    two or three, and the overshoot past the target is the size of the largest
+    speaker rather than a small one. On MoeSpeech, where speaker lengths span
+    orders of magnitude, that is the difference between a valid set of a few
+    hundred utterances and one that eats a tenth of the corpus.
+
+    The names run counter to the lengths so that ordering by name -- which every
+    equal-length fixture elsewhere in this file also satisfies -- picks a
+    different set and is caught here.
+    """
+    from training.scripts.prepare_moespeech import split_by_speaker
+
+    lengths = {"a": 3000.0, "b": 2400.0, "c": 1800.0, "d": 1200.0, "e": 600.0}
+    entries = [{"speaker": s, "duration": d} for s, d in lengths.items() for _ in range(2)]
+    _, valid = split_by_speaker(entries, valid_hours=0.5)
+    assert {e["speaker"] for e in valid} == {"d", "e"}, valid
+
+
+def test_a_corpus_that_cannot_fill_the_valid_set_says_so(tmp_path, caplog):
+    """An empty valid set is a legitimate output -- a corpus of speakers with
+    one utterance each has nothing that can be evaluated on -- and it satisfies
+    every guarantee above vacuously: no speaker is in both splits, and every
+    valid speaker has more than one utterance, because there are none.
+
+    So this warning is the only thing standing between the operator and a run
+    that trains for days with nothing to validate on. It has to fire, and it has
+    to name how many speakers were unusable, or the empty valid.jsonl is
+    discovered when the training loop divides by zero instead.
+    """
+    from training.scripts.prepare_moespeech import split_by_speaker
+
+    entries = [{"speaker": f"s{i}", "duration": 600.0} for i in range(5)]
+    with caplog.at_level(logging.WARNING, logger="prepare_moespeech"):
+        train, valid = split_by_speaker(entries, valid_hours=1.0)
+    assert valid == []
+    assert len(train) == 5
+    warned = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+    assert len(warned) == 1, warned
+    assert "0.00h of the 1.00h" in warned[0], warned[0]
+    assert "5 of 5" in warned[0], warned[0]
+
+    # And it stays quiet when the hours asked for were there: a warning on every
+    # run is a warning nobody reads by the time it means something.
+    caplog.clear()
+    full = [{"speaker": f"p{i}", "duration": 3600.0} for i in range(3) for _ in range(2)]
+    with caplog.at_level(logging.WARNING, logger="prepare_moespeech"):
+        split_by_speaker(full, valid_hours=1.0)
+    assert [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING] == []
 
 
 def test_the_split_keeps_every_entry(tmp_path):
