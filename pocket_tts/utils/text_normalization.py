@@ -33,6 +33,7 @@ it and the inference package cannot import from the training package.
 import re
 import unicodedata
 from collections.abc import Callable
+from dataclasses import dataclass
 
 # Held out of NFKC. Noncharacters: permanently unassigned and forbidden in
 # interchange, so unlike the private-use area -- where legacy carrier emoji
@@ -81,3 +82,29 @@ def resolve_normalizer(name: str | None) -> Callable[[str], str]:
     symptom is a model that never quite becomes intelligible.
     """
     return _identity if name is None else NORMALIZERS[name]
+
+
+@dataclass(frozen=True)
+class TextRules:
+    """How one language's text is normalized, split and punctuated.
+
+    Every default is exactly what tts_model.py did before these settings
+    existed, so a config that sets none of them -- which is every released
+    config -- produces the same audio it always did.
+    """
+
+    normalizer: str | None = None
+    sentence_boundaries: str = ".!...?"
+    clause_boundaries: str = ",;:"
+    terminal_punctuation: str = "."
+    segment_separator: str = " "
+
+    @classmethod
+    def from_config(cls, config) -> "TextRules":
+        return cls(
+            normalizer=config.text_normalizer,
+            sentence_boundaries=config.sentence_boundaries,
+            clause_boundaries=config.clause_boundaries,
+            terminal_punctuation=config.terminal_punctuation,
+            segment_separator=config.segment_separator,
+        )

@@ -120,6 +120,14 @@ class Config(StrictModel):
     weights_path_without_voice_cloning: str | None = None
     pad_with_spaces_for_short_inputs: bool = False
     remove_semicolons: bool = False
+    # Per-language text handling. The defaults are what tts_model.py hardcoded
+    # before these existed, so every released config -- none of which set them
+    # -- keeps its exact behaviour. See pocket_tts/utils/text_normalization.py.
+    text_normalizer: str | None = None
+    sentence_boundaries: str = ".!...?"
+    clause_boundaries: str = ",;:"
+    terminal_punctuation: str = "."
+    segment_separator: str = " "
     model_recommended_frames_after_eos: int | None = None
     default_temperature: float = 0.7
 
