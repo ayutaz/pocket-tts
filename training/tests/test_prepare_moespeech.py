@@ -870,3 +870,324 @@ def test_the_selection_yields_its_utterances_in_path_order(tmp_path):
 
     kept = list(select_utterances(tmp_path, max_cer=1.0, min_mos=0.0))
     assert [u["id"] for u in kept] == ["clip_0001", "clip_0002"]
+
+
+def _wav(path, seconds, hz, sr=44100):
+    """A pure tone, so a window can be identified by its frequency."""
+    import numpy as np
+    import sphn
+
+    t = np.linspace(0, seconds, int(seconds * sr), endpoint=False)
+    sphn.write_wav(str(path), (0.5 * np.sin(2 * np.pi * hz * t)).astype(np.float32), sr)
+    return path
+
+
+def _clips(tmp_path, seconds, tones, speaker="spk"):
+    """One utterance per tone, shaped the way select_utterances hands them over."""
+    return [
+        {
+            "id": f"u{i}",
+            "wav": _wav(tmp_path / f"u{i}.wav", seconds, hz),
+            "duration": seconds,
+            "transcript": "あ",
+            "speaker": speaker,
+        }
+        for i, hz in enumerate(tones)
+    ]
+
+
+def _dominant_hz(path, start, duration):
+    """The frequency of the window a manifest entry claims its clip lives in.
+
+    Reading out of range raises rather than returning silence, so an entry that
+    points past the end of its file fails here too, and loudly."""
+    import numpy as np
+    import sphn
+
+    wav, sr = sphn.read(path, start_sec=start, duration_sec=duration)
+    mono = wav.mean(axis=0)
+    freqs = np.fft.rfftfreq(len(mono), d=1 / sr)
+    return freqs[np.argmax(np.abs(np.fft.rfft(mono)))]
+
+
+def test_each_utterance_points_at_its_own_audio(tmp_path):
+    """The property everything else rests on. Each source clip is a distinct
+    tone, so reading back a window and taking its dominant frequency proves
+    whether start/duration point where the manifest claims."""
+    import numpy as np
+    import sphn
+
+    from training.scripts.prepare_moespeech import concatenate
+
+    tones = [220.0, 440.0, 880.0]
+    utts = [
+        {
+            "id": f"u{i}",
+            "wav": _wav(tmp_path / f"u{i}.wav", 2.0, hz),
+            "duration": 2.0,
+            "transcript": "あ",
+            "speaker": "spk",
+        }
+        for i, hz in enumerate(tones)
+    ]
+    out = concatenate(utts, tmp_path / "joined.wav", target_sec=60.0)
+    assert len(out) == 3
+
+    for entry, hz in zip(out, tones):
+        wav, sr = sphn.read(entry["path"], start_sec=entry["start"], duration_sec=entry["duration"])
+        mono = wav.mean(axis=0)
+        freqs = np.fft.rfftfreq(len(mono), d=1 / sr)
+        dominant = freqs[np.argmax(np.abs(np.fft.rfft(mono)))]
+        assert abs(dominant - hz) < 5, (entry, dominant, hz)
+
+
+def test_durations_sum_to_the_file_length(tmp_path):
+    """A gap nobody accounted for would put every later start off by it."""
+    import sphn
+
+    from training.scripts.prepare_moespeech import concatenate
+
+    utts = [
+        {
+            "id": f"u{i}",
+            "wav": _wav(tmp_path / f"u{i}.wav", 1.5, 440.0),
+            "duration": 1.5,
+            "transcript": "あ",
+            "speaker": "spk",
+        }
+        for i in range(4)
+    ]
+    out = concatenate(utts, tmp_path / "joined.wav", target_sec=60.0)
+    wav, sr = sphn.read(str(tmp_path / "joined.wav"))
+    assert abs(len(wav[0]) / sr - (out[-1]["start"] + out[-1]["duration"])) < 0.05
+
+
+def test_a_long_run_is_split_into_several_files(tmp_path):
+    """target_sec bounds each file, or one speaker becomes one enormous wav."""
+    from training.scripts.prepare_moespeech import concatenate
+
+    utts = [
+        {
+            "id": f"u{i}",
+            "wav": _wav(tmp_path / f"u{i}.wav", 2.0, 440.0),
+            "duration": 2.0,
+            "transcript": "あ",
+            "speaker": "spk",
+        }
+        for i in range(10)
+    ]
+    out = concatenate(utts, tmp_path / "joined.wav", target_sec=5.0)
+    assert len({e["path"] for e in out}) > 1
+
+
+def test_every_utterance_survives_the_concatenation(tmp_path):
+    """Losing one is losing training data with nothing to report it."""
+    from training.scripts.prepare_moespeech import concatenate
+
+    utts = [
+        {
+            "id": f"u{i}",
+            "wav": _wav(tmp_path / f"u{i}.wav", 1.0, 440.0),
+            "duration": 1.0,
+            "transcript": "あ",
+            "speaker": "spk",
+        }
+        for i in range(7)
+    ]
+    out = concatenate(utts, tmp_path / "joined.wav", target_sec=3.0)
+    assert sorted(e["id"] for e in out) == sorted(u["id"] for u in utts)
+
+
+def test_a_second_file_measures_its_offsets_from_its_own_beginning(tmp_path):
+    """The split is where the offsets are most easily wrong.
+
+    An offset is into the file it names, not into the speaker's whole run, so a
+    cursor that keeps counting across the split sends the third clip here to
+    4.0 seconds inside a file that is 4.0 seconds long. Every start is still a
+    plausible number and the manifest still validates; only the audio says
+    otherwise. Four distinct tones, and a target that fits two of them, so each
+    half is checked against the sound actually written there.
+    """
+    from training.scripts.prepare_moespeech import concatenate
+
+    tones = [220.0, 330.0, 550.0, 880.0]
+    out = concatenate(_clips(tmp_path, 2.0, tones), tmp_path / "joined.wav", target_sec=5.0)
+    assert len({e["path"] for e in out}) == 2, out
+    assert [e["start"] for e in out] == [0.0, 2.0, 0.0, 2.0], out
+
+    for entry, hz in zip(out, tones):
+        dominant = _dominant_hz(entry["path"], entry["start"], entry["duration"])
+        assert abs(dominant - hz) < 5, (entry, dominant, hz)
+
+
+def test_the_first_file_is_the_name_it_was_given(tmp_path):
+    """The caller names the output and then has to be able to find it.
+
+    `test_durations_sum_to_the_file_length` above reads `joined.wav` by that
+    name, so the first file may not be renamed to `joined_000.wav` for
+    tidiness; the rest are numbered from 001 beside it. This is the only test
+    that says so, and the numbering is a contract because the stage that
+    follows collects these files by name.
+    """
+    from pathlib import Path
+
+    from training.scripts.prepare_moespeech import concatenate
+
+    out = concatenate(_clips(tmp_path, 2.0, [440.0] * 10), tmp_path / "joined.wav", target_sec=5.0)
+    names = [Path(p).name for p in dict.fromkeys(e["path"] for e in out)]
+    assert names[0] == "joined.wav"
+    assert names[1:] == [f"joined_{i:03d}.wav" for i in range(1, len(names))], names
+    assert all((tmp_path / n).is_file() for n in names), names
+
+
+def test_no_output_file_runs_past_the_target(tmp_path):
+    """target_sec is a bound on each file, not an average over them.
+
+    The test above only asks that a long run be split at all, which a split
+    every hundredth clip satisfies while still writing files far longer than
+    the caller asked for. What the bound is for is the alignment stage, whose
+    memory use goes with the length of a single file.
+    """
+    import sphn
+
+    from training.scripts.prepare_moespeech import concatenate
+
+    out = concatenate(_clips(tmp_path, 2.0, [440.0] * 10), tmp_path / "joined.wav", target_sec=5.0)
+    for path in dict.fromkeys(e["path"] for e in out):
+        wav, sr = sphn.read(path)
+        assert len(wav[0]) / sr <= 5.0 + 1e-6, path
+
+
+def test_the_offsets_describe_the_audio_and_not_the_annotation(tmp_path):
+    """`duration` in the annotation is a number somebody else's tool wrote.
+
+    The offsets have to describe the samples this function actually laid down.
+    Trusting the annotation instead costs nothing while the two agree and, the
+    moment they do not, slides every later clip in the file by the difference
+    -- which is exactly the failure this stage exists to avoid, and it raises
+    nothing whatsoever. Here the annotation claims five seconds for a clip of
+    one, so a manifest built out of it puts the second clip at 5.0 seconds
+    inside a file that is 2.0 seconds long.
+    """
+    from training.scripts.prepare_moespeech import concatenate
+
+    utts = [
+        {
+            "id": "u0",
+            "wav": _wav(tmp_path / "u0.wav", 1.0, 220.0),
+            "duration": 5.0,
+            "transcript": "あ",
+            "speaker": "spk",
+        },
+        {
+            "id": "u1",
+            "wav": _wav(tmp_path / "u1.wav", 1.0, 880.0),
+            "duration": 5.0,
+            "transcript": "あ",
+            "speaker": "spk",
+        },
+    ]
+    out = concatenate(utts, tmp_path / "joined.wav", target_sec=60.0)
+    assert [e["start"] for e in out] == [0.0, 1.0], out
+    assert [e["duration"] for e in out] == [1.0, 1.0], out
+    assert abs(_dominant_hz(out[1]["path"], out[1]["start"], out[1]["duration"]) - 880.0) < 5
+
+
+def test_clips_from_two_speakers_are_never_joined(tmp_path):
+    """Everything downstream assumes one voice per file.
+
+    The loader cuts one of these recordings at an arbitrary point and uses one
+    side as the voice prompt for the other, so a file holding two speakers
+    teaches the model that the prompt does not determine the voice. The caller
+    groups by speaker; this is the guard that turns that intention into
+    something enforced, and it has to fire before anything is written rather
+    than leave a mixed file on disk beside the exception.
+    """
+    from training.scripts.prepare_moespeech import concatenate
+
+    utts = [
+        {
+            "id": "u0",
+            "wav": _wav(tmp_path / "u0.wav", 1.0, 220.0),
+            "duration": 1.0,
+            "transcript": "あ",
+            "speaker": "ずんだもん",
+        },
+        {
+            "id": "u1",
+            "wav": _wav(tmp_path / "u1.wav", 1.0, 880.0),
+            "duration": 1.0,
+            "transcript": "あ",
+            "speaker": "四国めたん",
+        },
+    ]
+    with pytest.raises(ValueError):
+        concatenate(utts, tmp_path / "joined.wav", target_sec=60.0)
+    assert not (tmp_path / "joined.wav").exists()
+
+
+def test_a_concatenated_entry_carries_what_the_manifest_needs(tmp_path):
+    """The whole dict, because the manifest is written straight out of it.
+
+    `speaker` and `transcript` are carried through from the selection -- the
+    alignment stage reads the transcript and the manifest keeps the speaker --
+    while `path`, `start` and `duration` are what this stage decided. `path` is
+    a string because it is about to be JSON; the two measurements the selection
+    made are not carried, having already done their work there.
+    """
+    from training.scripts.prepare_moespeech import concatenate
+
+    utts = [
+        {
+            "id": "clip_0001",
+            "speaker": "ずんだもん",
+            "duration": 1.25,
+            "transcript": "こんにちは",
+            "wav": _wav(tmp_path / "clip_0001.wav", 1.25, 440.0),
+            "cer": 0.2,
+            "mos": 2.75,
+        }
+    ]
+    (entry,) = concatenate(utts, tmp_path / "joined.wav", target_sec=60.0)
+    assert entry == {
+        "id": "clip_0001",
+        "speaker": "ずんだもん",
+        "transcript": "こんにちは",
+        "path": str(tmp_path / "joined.wav"),
+        "start": 0.0,
+        "duration": 1.25,
+    }
+
+
+def test_a_speaker_left_with_no_clips_writes_no_file(tmp_path):
+    """The cutoffs can empty a speaker, and an empty wav is not a training
+    file: the aligner would read a header and no samples, and whatever it made
+    of that would go into the manifest."""
+    from training.scripts.prepare_moespeech import concatenate
+
+    assert concatenate([], tmp_path / "joined.wav", target_sec=60.0) == []
+    assert not (tmp_path / "joined.wav").exists()
+
+
+def test_a_kill_during_the_write_leaves_no_file_to_be_trusted(tmp_path, monkeypatch):
+    """This runs on an instance that can be reclaimed mid-write.
+
+    A half-written `joined.wav` is a valid wav that is merely shorter than the
+    manifest says, so every offset past the truncation reads as silence or
+    fails to seek -- and a re-run that finds the file sitting there has no way
+    to tell it from a finished one. So the samples land beside the name first
+    and are renamed in only once all of them are there.
+    """
+    from pathlib import Path
+
+    import training.scripts.prepare_moespeech as m
+    from training.scripts.prepare_moespeech import concatenate
+
+    def killed(path, *a, **kw):
+        Path(path).write_bytes(b"RIFF")  # what the kill would have left behind
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(m.sphn, "write_wav", killed)
+    with pytest.raises(KeyboardInterrupt):
+        concatenate(_clips(tmp_path, 1.0, [440.0]), tmp_path / "joined.wav", target_sec=60.0)
+    assert not (tmp_path / "joined.wav").exists()

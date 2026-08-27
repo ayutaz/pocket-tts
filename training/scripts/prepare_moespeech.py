@@ -25,6 +25,8 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import jiwer
+import numpy as np
+import sphn
 import typer
 from huggingface_hub import hf_hub_download
 
@@ -394,3 +396,115 @@ def probe_utterances(root: Path) -> dict:
         "mos": _distribution([m for _, _, m in rows]),
         "retention": _retention(rows),
     }
+
+
+def _joined_path(out_wav: Path, index: int) -> Path:
+    """The `index`-th pseudo-long file of one speaker's run.
+
+    The first one is the name the caller gave, exactly: a caller that names its
+    output has to be able to find it again without knowing how many files the
+    run happened to need. The rest are numbered beside it.
+    """
+    if index == 0:
+        return out_wav
+    return out_wav.with_name(f"{out_wav.stem}_{index:03d}{out_wav.suffix}")
+
+
+def _write_joined(parts: list, sample_rate: int, path: Path) -> None:
+    """Write one pseudo-long recording, and let nothing see it half-written.
+
+    A truncated wav is still a valid wav -- it is simply shorter than the
+    manifest says -- so every offset past the point the kill arrived reads as
+    silence or fails to seek, and a re-run that finds the file sitting there
+    cannot tell it from a finished one. So the samples land beside the name and
+    are renamed in only once all of them are there; `os.replace` is atomic on
+    both POSIX and Windows.
+    """
+    joined = np.concatenate(parts, axis=1)
+    partial = path.with_name(f"{path.name}.partial")
+    sphn.write_wav(str(partial), joined[0], sample_rate)
+    os.replace(partial, path)
+
+
+def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> list[dict]:
+    """Join one speaker's clips into pseudo-long recordings, and say where each went.
+
+    The median character's mean clip is 5.8 seconds and the loader keeps a
+    second of audio on either side of the cut it makes, so what training would
+    otherwise see is under five seconds of target audio. Joining a speaker's
+    clips end to end gives the loader room to cut. The returned entries are
+    what the manifest is written out of -- one per clip, in the order they were
+    handed over, each naming the file its audio landed in and the window inside
+    that file it occupies.
+
+    Every offset is measured from the samples actually laid down, not from the
+    annotation's `duration`, and no silence is inserted between clips. A gap,
+    or a length taken on trust from a JSON somebody else's tool wrote, slides
+    every later clip in the file by the difference, and nothing downstream can
+    detect that: the manifest still parses, every offset is still inside a real
+    file, and the model simply learns from speech that does not match its text.
+
+    A run is cut into as many files as it takes for none of them to run past
+    `target_sec` -- what that bounds is the alignment pass, which holds a whole
+    file at once. Clips themselves are never cut, so one longer than the target
+    gets a file to itself. Offsets restart at zero in each file, being offsets
+    into the file they name.
+
+    Clips are never joined across speakers, and a mixed list raises here rather
+    than being grouped: the caller groups, and everything after this treats a
+    cut anywhere inside one of these files as one voice -- the loader takes one
+    side of the cut as the voice prompt for the other, so a file holding two
+    speakers would teach the model that the prompt does not decide the voice.
+
+    The audio is left at its own 44.1 kHz; the loader resamples as it reads.
+    A re-run lays the same clips down in the same order and writes the same
+    bytes to the same names, so being killed anywhere in here costs only the
+    files that had not been renamed into place yet.
+    """
+    speakers = {u["speaker"] for u in utterances}
+    if len(speakers) > 1:
+        raise ValueError(f"concatenate() takes one speaker at a time, got {sorted(speakers)}")
+
+    out_wav = Path(out_wav)
+    out_wav.parent.mkdir(parents=True, exist_ok=True)
+    entries: list[dict] = []
+    parts: list = []  # the clips of the file being built, at its own sample rate
+    cursor = 0  # samples already laid down in that file
+    written = 0  # files finished, which is the index of the one being built
+    sample_rate = None
+
+    for u in utterances:
+        wav, sr = sphn.read(str(u["wav"]))
+        if sample_rate is None:
+            sample_rate = sr
+        elif sr != sample_rate:
+            # Concatenating these would play one of them at the wrong speed and
+            # put every offset after it out by a factor nothing reports.
+            raise ValueError(f"{u['wav']}: {sr} Hz among {sample_rate} Hz clips")
+        n_samples = wav.shape[1]
+        target_samples = round(target_sec * sample_rate)
+        if parts and cursor + n_samples > target_samples:
+            _write_joined(parts, sample_rate, _joined_path(out_wav, written))
+            parts, cursor, written = [], 0, written + 1
+        duration = n_samples / sample_rate
+        if abs(duration - u["duration"]) > 0.1:
+            # Not an error and not corrected: the audio is what was written, so
+            # the audio is what the manifest describes. Worth seeing, though --
+            # it means the corpus's own durations cannot be trusted elsewhere.
+            logger.debug(f"{u['wav']}: annotated {u['duration']:.2f}s, audio {duration:.2f}s")
+        entries.append(
+            {
+                "id": u["id"],
+                "speaker": u["speaker"],
+                "transcript": u["transcript"],
+                "path": str(_joined_path(out_wav, written)),
+                "start": round(cursor / sample_rate, 3),
+                "duration": round(duration, 3),
+            }
+        )
+        parts.append(wav)
+        cursor += n_samples
+
+    if parts:
+        _write_joined(parts, sample_rate, _joined_path(out_wav, written))
+    return entries
