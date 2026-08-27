@@ -156,11 +156,20 @@ def read_annotation(path: Path) -> dict | None:
     the loader reads silence and trains on it as speech, which nothing
     downstream can detect.
 
+    A JSON that is not an object at all is dropped the same way. The scan that
+    calls this picks up every `.json` under the extract root, and a character
+    zip may well ship an index or a metadata file among the per-clip ones; a
+    list or a bare number parses without complaint and then has no `.get`, so
+    without this check one such file raises AttributeError -- not a decode
+    error, not caught by the caller -- and ends a pass 40 minutes in.
+
     `id`, `speaker` and `wav` come from the path because the JSON carries none
     of them: the audio is the file's sibling and the speaker is the directory
     the zip was unpacked into.
     """
     data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        return None
     whisper = data.get("anime_whisper_transcription")
     parakeet = data.get("parakeet_jp_transcription")
     duration = data.get("duration")
@@ -281,7 +290,7 @@ def probe_utterances(root: Path) -> dict:
     if unreadable or incomplete:
         logger.warning(
             f"skipped {unreadable + incomplete} of {len(rows) + unreadable + incomplete} "
-            f"annotations: {unreadable} unreadable, {incomplete} missing a required field"
+            f"json files: {unreadable} unreadable, {incomplete} not usable as an annotation"
         )
     return {
         "count": len(rows),

@@ -376,6 +376,19 @@ def test_an_empty_transcription_is_dropped(tmp_path):
     assert read_annotation(_annotation(tmp_path, "b", "こんにちは", "")) is None
 
 
+def test_a_json_that_is_not_an_object_is_dropped(tmp_path):
+    """Not every `.json` under the extract root is an annotation -- a character
+    zip may ship an index or a metadata file among the per-clip ones. A list or
+    a bare number parses without complaint and then has no `.get`, so treating
+    it as an annotation raises AttributeError rather than returning None."""
+    from training.scripts.prepare_moespeech import read_annotation
+
+    for content in ("[]", "3", '"text"', "null"):
+        p = tmp_path / "index.json"
+        p.write_text(content, encoding="utf-8")
+        assert read_annotation(p) is None, content
+
+
 def test_an_annotation_names_its_clip_and_its_speaker(tmp_path):
     """Neither is in the JSON: the wav is its sibling and the speaker is the
     directory the zip was unpacked into. Later stages concatenate by wav and
@@ -390,15 +403,53 @@ def test_an_annotation_names_its_clip_and_its_speaker(tmp_path):
     assert a["wav"] == spk / "clip_0001.wav"
 
 
-def test_probe_reports_retention_at_several_thresholds(tmp_path):
-    """The output that decides the next task's defaults."""
+def test_retention_excludes_on_mos(tmp_path):
+    """The output that decides the next task's defaults -- the MOS half of it,
+    which is where `--min-mos` will be read from.
+
+    Every clip here has identical transcriptions, so CER is exactly 0.0 for all
+    ten and passes every row of the grid: the only thing that can separate
+    seven clips from three is the `mos >= min_mos` comparison. That isolation
+    is the point. With a default MOS shared by the whole fixture the retention
+    numbers come out right for the wrong reason -- the CER predicate produces
+    them and an inverted MOS comparison changes nothing -- and probe.json then
+    reports that a 2.0-MOS corpus survives `--min-mos 4.0`.
+
+    The row is looked up rather than searched for, because a 7 somewhere in a
+    40-row table says nothing about which cutoffs produced it.
+    """
     from training.scripts.prepare_moespeech import probe_utterances
 
     for i in range(10):
-        _annotation(tmp_path, f"u{i}", "こんにちは", "こんにちは" if i < 7 else "違う")
+        _annotation(tmp_path, f"u{i}", "こんにちは", "こんにちは", mos=4.2 if i < 7 else 2.0)
+
     stats = probe_utterances(tmp_path)
     assert stats["count"] == 10
-    assert any(r["kept"] == 7 for r in stats["retention"]), stats["retention"]
+    row = next(r for r in stats["retention"] if r["max_cer"] == 1.0 and r["min_mos"] == 3.5)
+    assert row["kept"] == 7, row
+    assert row["fraction"] == 0.7, row
+
+
+def test_retention_keeps_the_clips_sitting_exactly_on_the_cer_cutoff(tmp_path):
+    """The CER half, at the boundary. `max_cer=0.0` -- the two ASRs agree
+    exactly -- is the most informative row in the table and the first one a
+    reader goes to, and it is also the only row where `<=` and `<` differ for
+    a corpus of perfectly agreeing clips: strict, it reports kept=0, which
+    reads as "nothing here is trustworthy" for a corpus in which seven clips
+    are as trustworthy as this dataset can show.
+
+    MOS is held above the row's `min_mos` of 0.0 for all ten, so the CER
+    comparison is the only thing doing any excluding.
+    """
+    from training.scripts.prepare_moespeech import probe_utterances
+
+    for i in range(10):
+        _annotation(tmp_path, f"u{i}", "こんにちは", "こんにちは" if i < 7 else "違う", mos=4.2)
+
+    stats = probe_utterances(tmp_path)
+    assert stats["count"] == 10
+    row = next(r for r in stats["retention"] if r["max_cer"] == 0.0 and r["min_mos"] == 0.0)
+    assert row["kept"] == 7, row
 
 
 def test_probe_reports_a_distribution_and_not_just_an_average(tmp_path):
@@ -416,6 +467,29 @@ def test_probe_reports_a_distribution_and_not_just_an_average(tmp_path):
     assert dist["median"] == 4.5, dist  # the mean of these is 13.6
     ordered = [dist[k] for k in ("min", "p10", "p25", "median", "p75", "p90", "max")]
     assert ordered == sorted(ordered), dist
+
+
+def test_probe_reports_each_quantity_under_its_own_name(tmp_path):
+    """cer and mos are two floats on the same row, and reporting one under the
+    other's name is invisible in probe.json: CER lives in [0, ~1.6] and
+    speechMOS in [1, 5], so a transposed file reads as a corpus with alarming
+    transcripts and implausibly good audio rather than as a bug -- and the next
+    stage sets both cutoffs off exactly these numbers.
+
+    The two are given disjoint ranges here, CER over [0.0, 1.0] and MOS over
+    [1.0, 5.0] with nothing below 1.0, so no swap survives all four bounds.
+    """
+    from training.scripts.prepare_moespeech import probe_utterances
+
+    _annotation(tmp_path, "u0", "あい", "あい", mos=1.0)  # cer 0.0
+    _annotation(tmp_path, "u1", "あい", "うえ", mos=5.0)  # cer 1.0, both characters wrong
+    _annotation(tmp_path, "u2", "あい", "あえ", mos=3.0)  # cer 0.5
+
+    stats = probe_utterances(tmp_path)
+    assert stats["cer"]["min"] == 0.0, stats["cer"]
+    assert stats["cer"]["max"] == 1.0, stats["cer"]
+    assert stats["mos"]["min"] == 1.0, stats["mos"]
+    assert stats["mos"]["max"] == 5.0, stats["mos"]
 
 
 def test_probe_walks_the_per_character_directories(tmp_path):
@@ -439,6 +513,23 @@ def test_probe_survives_a_corrupt_json(tmp_path):
     _annotation(tmp_path, "good", "あ", "あ")
     (tmp_path / "bad.json").write_text("{not json", encoding="utf-8")
     assert probe_utterances(tmp_path)["count"] == 1
+
+
+def test_probe_survives_a_json_that_is_valid_but_is_not_an_annotation(tmp_path):
+    """The corrupt-json case above only reaches the decode-error branch. A file
+    that parses fine and is not an object -- the index json a character zip
+    ships beside its clips -- reaches the field lookups instead and raises
+    AttributeError, which is not a decode error and would end the pass over
+    one file that was never a clip in the first place."""
+    from training.scripts.prepare_moespeech import probe_utterances
+
+    _annotation(tmp_path, "good", "あ", "あ")
+    (tmp_path / "index.json").write_text("[]", encoding="utf-8")
+
+    stats = probe_utterances(tmp_path)
+    assert stats["count"] == 1
+    assert stats["incomplete"] == 1, stats
+    assert stats["unreadable"] == 0, stats
 
 
 def test_probe_counts_what_it_skipped(tmp_path):
