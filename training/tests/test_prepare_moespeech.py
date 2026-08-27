@@ -606,3 +606,71 @@ def test_probe_counts_what_it_skipped(tmp_path):
     assert stats["count"] == 1
     assert stats["unreadable"] == 1
     assert stats["incomplete"] == 1
+
+
+def test_utterances_over_the_cer_limit_are_dropped(tmp_path):
+    from training.scripts.prepare_moespeech import select_utterances
+
+    _annotation(tmp_path, "agree", "こんにちは", "こんにちは")
+    _annotation(tmp_path, "differ", "こんにちは", "全然違う文章です")
+    kept = list(select_utterances(tmp_path, max_cer=0.2, min_mos=0.0))
+    assert [u["id"] for u in kept] == ["agree"]
+
+
+def test_utterances_below_the_mos_floor_are_dropped(tmp_path):
+    from training.scripts.prepare_moespeech import select_utterances
+
+    _annotation(tmp_path, "clean", "あ", "あ", mos=4.0)
+    _annotation(tmp_path, "noisy", "あ", "あ", mos=1.0)
+    kept = list(select_utterances(tmp_path, max_cer=1.0, min_mos=3.0))
+    assert [u["id"] for u in kept] == ["clean"]
+
+
+def test_the_kept_transcript_is_normalized(tmp_path):
+    """The manifest transcript, the tokenizer corpus and a user's inference
+    input have to be the same distribution. align_data normalizes what it
+    writes back; this must match, or the two disagree from the start."""
+    from training.scripts.prepare_moespeech import select_utterances
+
+    _annotation(tmp_path, "wide", "ＡＢＣです", "ＡＢＣです")
+    (u,) = list(select_utterances(tmp_path, max_cer=1.0, min_mos=0.0))
+    assert u["transcript"] == "ABCです"
+
+
+def test_an_empty_transcript_is_dropped(tmp_path):
+    """A zero-length transcript aligns to nothing and trains on nothing."""
+    from training.scripts.prepare_moespeech import select_utterances
+
+    _annotation(tmp_path, "empty", "", "")
+    assert list(select_utterances(tmp_path, max_cer=1.0, min_mos=0.0)) == []
+
+
+def test_selection_survives_the_files_the_probe_already_survived(tmp_path):
+    """The selection pass walks the same 400,000 json files the probe walked,
+    and runs after it. A bad file the probe counted and logged must not end
+    this pass instead -- the operator has already been told about that file,
+    read the probe's numbers, chosen cutoffs from them, and started what is by
+    then the expensive half of the run.
+    """
+    from training.scripts.prepare_moespeech import select_utterances
+
+    _annotation(tmp_path, "good", "あ", "あ")
+    (tmp_path / "bad.json").write_text("{not json", encoding="utf-8")
+    (tmp_path / "index.json").write_text("[]", encoding="utf-8")
+
+    kept = list(select_utterances(tmp_path, max_cer=1.0, min_mos=0.0))
+    assert [u["id"] for u in kept] == ["good"]
+
+
+def test_a_transcript_that_normalization_empties_is_dropped(tmp_path):
+    """The emptiness check has to sit after normalization, not before it. A
+    transcription of nothing but a full-width space is a string read_annotation
+    keeps -- it is not empty, and the two ASRs agree on it perfectly -- and
+    normalization then leaves nothing of it. Written out, that is a manifest
+    entry with audio and no text: the aligner matches it to nothing and the
+    model trains on the silence-or-noise under an empty label.
+    """
+    from training.scripts.prepare_moespeech import select_utterances
+
+    _annotation(tmp_path, "blank", "\u3000", "\u3000")  # U+3000, ideographic space
+    assert list(select_utterances(tmp_path, max_cer=1.0, min_mos=0.0)) == []

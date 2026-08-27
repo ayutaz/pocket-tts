@@ -20,11 +20,15 @@ import os
 import random
 import shutil
 import zipfile
+from collections import Counter
+from collections.abc import Iterator
 from pathlib import Path
 
 import jiwer
 import typer
 from huggingface_hub import hf_hub_download
+
+from pocket_tts.utils.text_normalization import normalize_japanese
 
 logger = logging.getLogger("prepare_moespeech")
 app = typer.Typer(pretty_exceptions_show_locals=False)
@@ -36,6 +40,11 @@ EXTRACT_MARKER = ".complete"  # beside the directory, not in it
 # cutoff off, not cutoffs: nothing here filters anything.
 CER_THRESHOLDS = (0.0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 1.0)
 MOS_THRESHOLDS = (0.0, 2.5, 3.0, 3.5, 4.0)
+# There is deliberately no default cutoff: it is read off probe.json's retention
+# table, and this corpus has never been measured, so any number written here now
+# would be a guess that afterwards is indistinguishable from a measurement.
+DEFAULT_MAX_CER = None
+DEFAULT_MIN_MOS = None
 
 
 def select_characters(info_csv: Path, hours: float, order: str = "largest") -> list[dict]:
@@ -189,6 +198,84 @@ def read_annotation(path: Path) -> dict | None:
     }
 
 
+def _scan_annotations(root: Path, skipped: Counter) -> Iterator[dict]:
+    """Every usable annotation under `root`, in path order.
+
+    The probe and the selection walk the same 400,000 files and must agree on
+    which of them are annotations at all, or the retention table an operator
+    reads their cutoffs off describes a different corpus from the one those
+    cutoffs are then applied to. So both walk through here.
+
+    The scan is `rglob` because the extract root holds one directory per
+    character; `glob` would report an empty corpus for the real data while
+    passing on any fixture that keeps its JSON flat.
+
+    A file that cannot be read is counted in `skipped` and passed over rather
+    than raising: one bad JSON in 400,000 must not end a pass that takes 40
+    minutes to reach it. Counted, though -- a pass that quietly returns 300,000
+    of 400,000 clips looks exactly like a corpus that was only ever 300,000
+    long. `skipped` belongs to the caller because this is a generator: an
+    exhausted one cannot report anything back, and the probe has to publish
+    those two numbers.
+    """
+    for path in sorted(root.rglob("*.json")):
+        try:
+            row = read_annotation(path)
+        except (OSError, ValueError, TypeError) as e:
+            skipped["unreadable"] += 1
+            logger.debug(f"{path}: unreadable ({e})")
+            continue
+        if row is None:
+            skipped["incomplete"] += 1
+            continue
+        yield row
+
+
+def select_utterances(root: Path, max_cer: float, min_mos: float) -> Iterator[dict]:
+    """The utterances worth training on, out of everything under `root`.
+
+    This is where the probe's measurements become decisions. Both cutoffs are
+    required rather than defaulted -- see DEFAULT_MAX_CER above -- because the
+    right values are a property of this corpus, which nothing has measured yet.
+
+    An utterance is kept when the two ASRs agree closely enough (`cer` at most
+    `max_cer`) and the audio scores well enough (`mos` at least `min_mos`).
+    Both comparisons are inclusive, matching the retention table exactly, so
+    the count an operator read there is the count they get.
+
+    The transcript is normalized on the way out, with the same function
+    align_data.py applies under --segmenter japanese. Doing it here rather than
+    leaving it to the aligner keeps the manifest, the tokenizer corpus and a
+    user's inference input in one distribution; a mismatch between them raises
+    nothing and shows up only as a model that never quite becomes intelligible.
+
+    Normalization can empty a transcript that was not empty -- a transcription
+    of nothing but spaces or control characters is one such -- so the emptiness
+    check comes after it, not before. A zero-length transcript aligns to
+    nothing and trains on nothing, and the aligner would carry it all the way
+    to the manifest before anyone noticed.
+    """
+    # The counts go nowhere here on purpose: the probe already reported them to
+    # the operator over this same tree, and repeating them would read as a
+    # second, different set of unusable files.
+    skipped: Counter = Counter()
+    for row in _scan_annotations(root, skipped):
+        if row["cer"] > max_cer or row["mos"] < min_mos:
+            continue
+        transcript = normalize_japanese(row["transcript"])
+        if not transcript:
+            continue
+        yield {
+            "id": row["id"],
+            "speaker": row["speaker"],
+            "wav": row["wav"],
+            "duration": row["duration"],
+            "transcript": transcript,
+            "cer": row["cer"],
+            "mos": row["mos"],
+        }
+
+
 def _distribution(values: list[float]) -> dict:
     """min / percentiles / median / max / mean of one measured quantity.
 
@@ -262,31 +349,15 @@ def probe_utterances(root: Path) -> dict:
     threshold is applied here and none is recommended -- this exists so the
     next stage's cutoffs come from the corpus rather than from a guess.
 
-    The scan is `rglob` because the extract root holds one directory per
-    character; `glob` would report an empty corpus for the real data while
-    passing on any fixture that keeps its JSON flat.
-
-    A file that cannot be read is counted and skipped rather than raising: one
-    bad JSON in 400,000 must not end a pass that takes 40 minutes to reach it.
-    Counted, though, and logged -- a pass that quietly returns 300,000 of
-    400,000 clips looks exactly like a corpus that was only ever 300,000 long.
-    Only the three measured numbers are retained per clip, not the row: the
+    Files that cannot be read are skipped and counted by `_scan_annotations`,
+    which the selection pass shares so that both see the same corpus. Only the
+    three measured numbers are retained per clip, not the row: the
     transcriptions of a whole corpus do not need to be in memory at once for
     this, and at this scale that is gigabytes.
     """
-    rows: list[tuple[float, float, float]] = []
-    unreadable = incomplete = 0
-    for path in sorted(root.rglob("*.json")):
-        try:
-            row = read_annotation(path)
-        except (OSError, ValueError, TypeError) as e:
-            unreadable += 1
-            logger.debug(f"{path}: unreadable ({e})")
-            continue
-        if row is None:
-            incomplete += 1
-            continue
-        rows.append((row["duration"], row["cer"], row["mos"]))
+    skipped: Counter = Counter()
+    rows = [(r["duration"], r["cer"], r["mos"]) for r in _scan_annotations(root, skipped)]
+    unreadable, incomplete = skipped["unreadable"], skipped["incomplete"]
     if unreadable or incomplete:
         logger.warning(
             f"skipped {unreadable + incomplete} of {len(rows) + unreadable + incomplete} "
