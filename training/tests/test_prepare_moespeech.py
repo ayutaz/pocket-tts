@@ -1198,3 +1198,155 @@ def test_a_kill_during_the_write_leaves_no_file_to_be_trusted(tmp_path, monkeypa
     assert not (tmp_path / "joined.wav").exists()
     # The bytes did land -- beside the name, under one a re-run does not trust.
     assert (tmp_path / "joined.wav.partial").read_bytes() == b"RIFF"
+
+
+def test_no_speaker_appears_in_both_splits(tmp_path):
+    """A speaker in both makes the valid loss optimistic, and the number that
+    is supposed to say 'stop training' stops meaning anything."""
+    from training.scripts.prepare_moespeech import split_by_speaker
+
+    entries = [{"speaker": f"s{i % 5}", "duration": 600.0} for i in range(50)]
+    train, valid = split_by_speaker(entries, valid_hours=1.0)
+    assert {e["speaker"] for e in train} & {e["speaker"] for e in valid} == set()
+
+
+def test_valid_speakers_have_more_than_one_utterance(tmp_path):
+    """The eval protocol clones a voice from one utterance and synthesizes
+    another, so a speaker with a single entry cannot be scored at all."""
+    from training.scripts.prepare_moespeech import split_by_speaker
+
+    entries = [{"speaker": f"s{i % 5}", "duration": 600.0} for i in range(50)]
+    _, valid = split_by_speaker(entries, valid_hours=1.0)
+    from collections import Counter
+
+    counts = Counter(e["speaker"] for e in valid)
+    assert all(c > 1 for c in counts.values()), counts
+
+
+def test_a_speaker_with_one_utterance_is_kept_but_never_held_out(tmp_path):
+    """The corpus's tail is speakers with a handful of lines, and the test above
+    is satisfied by a corpus that has none of them.
+
+    Held out, such a speaker cannot be scored: its one utterance is spent on the
+    voice prompt and there is nothing left to synthesize. Dropped, it costs
+    training data for nothing -- one utterance is a perfectly good training
+    example, it is only useless as an evaluation one. So it trains, whatever the
+    held-out set still needs: here the target is far more than the corpus holds,
+    so an implementation that merely stops early once the hours are reached
+    takes the singletons too.
+    """
+    from training.scripts.prepare_moespeech import split_by_speaker
+
+    alone = [{"speaker": f"one{i}", "duration": 1800.0} for i in range(10)]
+    paired = [{"speaker": f"two{i}", "duration": 1800.0} for i in range(4) for _ in range(2)]
+    train, valid = split_by_speaker(alone + paired, valid_hours=100.0)
+    assert {e["speaker"] for e in valid} == {f"two{i}" for i in range(4)}
+    assert {e["speaker"] for e in train} == {f"one{i}" for i in range(10)}
+
+
+def test_the_split_is_deterministic(tmp_path):
+    from training.scripts.prepare_moespeech import split_by_speaker
+
+    entries = [{"speaker": f"s{i % 9}", "duration": 300.0} for i in range(90)]
+    a, _ = split_by_speaker(entries, valid_hours=1.0)
+    b, _ = split_by_speaker(entries, valid_hours=1.0)
+    assert [e["speaker"] for e in a] == [e["speaker"] for e in b]
+
+
+def test_the_split_keeps_every_entry(tmp_path):
+    """Whatever valid does not take, train trains on. A speaker that cannot be
+    held out is not thereby unusable, and neither is one the target was already
+    met before reaching."""
+    from training.scripts.prepare_moespeech import split_by_speaker
+
+    entries = [{"speaker": f"s{i % 7}", "duration": 400.0, "id": f"u{i:03d}"} for i in range(70)]
+    entries.append({"speaker": "lonely", "duration": 400.0, "id": "u070"})
+    train, valid = split_by_speaker(entries, valid_hours=1.0)
+    assert sorted(e["id"] for e in train + valid) == sorted(e["id"] for e in entries)
+
+
+def test_the_held_out_size_is_asked_for_in_hours(tmp_path):
+    """`duration` is seconds and `valid_hours` is hours. Three speakers of
+    twenty minutes make the hour; one of them does not, however the units are
+    confused on the way."""
+    from training.scripts.prepare_moespeech import split_by_speaker
+
+    entries = [{"speaker": f"s{i}", "duration": 600.0} for i in range(9) for _ in range(2)]
+    _, valid = split_by_speaker(entries, valid_hours=1.0)
+    assert len({e["speaker"] for e in valid}) == 3, valid
+
+
+def test_the_manifest_is_utf8_and_reloadable(tmp_path):
+    """Windows defaults to cp932; a manifest written through it is unreadable
+    and the failure appears far from here."""
+    from training.scripts.prepare_moespeech import write_manifest
+
+    path = tmp_path / "m.jsonl"
+    write_manifest(
+        [{"path": "a.wav", "duration": 1.0, "transcript": "こんにちは", "start": 0.0}], path
+    )
+    with open(path, encoding="utf-8") as f:
+        assert json.loads(f.readline())["transcript"] == "こんにちは"
+
+
+def test_the_manifest_carries_what_the_loader_requires(tmp_path):
+    """training/dataloader.py's Entry: path, duration, transcript, start."""
+    from training.scripts.prepare_moespeech import write_manifest
+
+    path = tmp_path / "m.jsonl"
+    write_manifest([{"path": "a.wav", "duration": 1.0, "transcript": "あ", "start": 2.5}], path)
+    with open(path, encoding="utf-8") as f:
+        row = json.loads(f.readline())
+    assert {"path", "duration", "transcript", "start"} <= set(row)
+
+
+def test_the_manifest_says_how_many_utterances_it_holds(tmp_path):
+    """One JSON object per line, and the count the caller logs comes from the
+    lines that were written rather than from the list it handed over."""
+    from training.scripts.prepare_moespeech import write_manifest
+
+    path = tmp_path / "m.jsonl"
+    rows = [{"path": "a.wav", "duration": 1.0, "transcript": "あ", "start": 0.0}] * 3
+    assert write_manifest(rows, path) == 3
+    with open(path, encoding="utf-8") as f:
+        assert len(f.readlines()) == 3
+
+
+def test_the_manifest_holds_the_japanese_unescaped(tmp_path):
+    """Escaped into ASCII every line still parses, so nothing downstream would
+    notice -- but a manifest nobody can read with `head` or grep for a speaker's
+    line is a manifest nobody checks, and it is also the version where the
+    explicit utf-8 above stops mattering until the day it silently does."""
+    from training.scripts.prepare_moespeech import write_manifest
+
+    path = tmp_path / "m.jsonl"
+    write_manifest(
+        [{"path": "a.wav", "duration": 1.0, "transcript": "こんにちは", "start": 0.0}], path
+    )
+    assert "こんにちは" in path.read_text(encoding="utf-8")
+
+
+def test_a_kill_partway_through_the_manifest_leaves_no_manifest(tmp_path, monkeypatch):
+    """A half-written manifest is still valid JSONL -- it is merely short.
+
+    Nothing downstream can tell it from a finished one: every line parses, every
+    path exists, and a re-run that skips the stage because `train.jsonl` is
+    there trains on however much of the corpus the kill let through. So the
+    lines land beside the name and are renamed in only once they are all there.
+    """
+    import training.scripts.prepare_moespeech as m
+    from training.scripts.prepare_moespeech import write_manifest
+
+    real, seen = json.dumps, []
+
+    def killed(obj, **kw):
+        seen.append(obj)
+        if len(seen) > 1:
+            raise KeyboardInterrupt
+        return real(obj, **kw)
+
+    monkeypatch.setattr(m.json, "dumps", killed)
+    rows = [{"path": "a.wav", "duration": 1.0, "transcript": "あ", "start": 0.0}] * 2
+    with pytest.raises(KeyboardInterrupt):
+        write_manifest(rows, tmp_path / "m.jsonl")
+    assert not (tmp_path / "m.jsonl").exists()

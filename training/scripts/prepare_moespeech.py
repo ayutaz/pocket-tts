@@ -20,7 +20,7 @@ import os
 import random
 import shutil
 import zipfile
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -508,3 +508,103 @@ def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> lis
     if parts:
         _write_joined(parts, sample_rate, _joined_path(out_wav, written))
     return entries
+
+
+def split_by_speaker(entries: list[dict], valid_hours: float) -> tuple[list, list]:
+    """Hold out whole speakers, never single utterances, for the valid set.
+
+    Split by utterance and the same voice stands on both sides. The validation
+    loss then measures a voice the model has already fitted, which is precisely
+    what it exists not to do: it is the number that decides when to stop, and it
+    would report a model that has memorized these speakers as a model that has
+    learned to speak Japanese. Held out whole, a valid speaker is a voice the
+    weights have never seen, and the loss over it means what it is read as.
+
+    An utterance-level split also breaks the eval protocol outright. Scoring a
+    voice means cloning it from one utterance and synthesizing another, so a
+    held-out speaker needs at least two -- and a random utterance-level split
+    over a corpus whose tail is speakers with a handful of lines produces plenty
+    with exactly one. Speakers with a single utterance are therefore never held
+    out. They are not dropped either: one utterance is a fine training example
+    and only a useless evaluation one, so it goes to train.
+
+    Speakers are taken smallest-first until `valid_hours` is reached. Every hour
+    held out is an hour not trained on, and this granularity is one whole
+    speaker: the smallest eligible ones buy the most distinct voices per held-out
+    hour, and keep the overshoot past the target down to the size of one small
+    speaker rather than one of the largest.
+
+    The result is a pure function of the entries -- no seed, no shuffle, no
+    clock. This script is re-run after being killed, and a split that moved
+    between runs would put a speaker the previous run validated on into this
+    run's training set, at which point the loss over the rest of that set is
+    quietly optimistic for the remainder of the run and nothing says so.
+    """
+    by_speaker: dict[str, list[dict]] = defaultdict(list)
+    for entry in entries:
+        by_speaker[entry["speaker"]].append(entry)
+    seconds = {s: sum(e["duration"] for e in rows) for s, rows in by_speaker.items()}
+
+    # Name breaks the ties, so equal-length speakers order the same way twice.
+    eligible = sorted(
+        (s for s, rows in by_speaker.items() if len(rows) > 1), key=lambda s: (seconds[s], s)
+    )
+    held_out: set[str] = set()
+    target, taken = valid_hours * 3600, 0.0
+    for speaker in eligible:
+        if taken >= target:
+            break
+        held_out.add(speaker)
+        taken += seconds[speaker]
+
+    train = [e for e in entries if e["speaker"] not in held_out]
+    valid = [e for e in entries if e["speaker"] in held_out]
+    logger.info(
+        f"held out {len(held_out)} speakers ({taken / 3600:.2f}h, {len(valid)} utterances) "
+        f"of {len(by_speaker)}; {len(train)} utterances left to train on"
+    )
+    if taken < target:
+        # Not an error -- a small corpus simply has less to hold out -- but the
+        # valid set is smaller than asked for and that has to be said out loud.
+        logger.warning(
+            f"only {taken / 3600:.2f}h of the {valid_hours:.2f}h asked for could be held out: "
+            f"{sum(1 for rows in by_speaker.values() if len(rows) == 1)} of {len(by_speaker)} "
+            f"speakers have a single utterance and cannot be evaluated on"
+        )
+    return train, valid
+
+
+def write_manifest(entries: list[dict], path: Path) -> int:
+    """Write one JSON object per line, the format the loader reads, and say how
+    many.
+
+    Each entry is written whole. `training/dataloader.py` picks the fields it
+    needs out of the object by name -- `path`, `duration`, `transcript`, `start`
+    -- and ignores the rest, so carrying `id` and `speaker` along costs a few
+    bytes a line and makes the manifest answerable afterwards: which speakers
+    ended up held out, and which clip a bad sample came from, are questions the
+    four fields the loader reads cannot answer.
+
+    UTF-8 is explicit because this machine's default is cp932, and so is
+    `ensure_ascii=False` -- the transcripts are Japanese and a manifest nobody
+    can read with `head` is a manifest nobody checks. The two go together: with
+    the escapes on, the file would be ASCII and the encoding would not matter
+    until the day something wrote a raw character into it, far from here.
+
+    The lines land beside the name and are renamed in once they are all there.
+    A manifest cut short by a kill is still valid JSONL -- every line parses and
+    every path exists -- so nothing downstream can tell it from a finished one,
+    and a re-run that skips this stage because the file is present would train
+    on however much of the corpus the kill let through.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_name(f"{path.name}.partial")
+    written = 0
+    with open(partial, "w", encoding="utf-8") as f:
+        for entry in entries:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            written += 1
+    os.replace(partial, path)
+    logger.info(f"{path}: {written} utterances")
+    return written
