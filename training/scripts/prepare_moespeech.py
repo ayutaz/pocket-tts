@@ -32,7 +32,7 @@ import typer
 from huggingface_hub import hf_hub_download
 
 from pocket_tts.utils.text_normalization import normalize_japanese
-from training.scripts.prepare_data import align
+from training.scripts.prepare_data import align, already_aligned
 
 logger = logging.getLogger("prepare_moespeech")
 app = typer.Typer(pretty_exceptions_show_locals=False)
@@ -758,9 +758,24 @@ def require_japanese_segmenter(will_align: bool) -> None:
     and both live in that group. An `align_data` that will not import at all is
     a different failure and is left to raise as itself.
 
-    A run with no cutoffs stops at the probe and never reaches the aligner, so
-    it is not refused -- but it is told, because that run is the long one and
-    the group can be installed while it downloads.
+    `will_align` is the caller's answer to "will stage 8 actually align", which
+    is not the same question as "was this run given both cutoffs". A run with no
+    cutoffs stops at the probe and never reaches the aligner; so does a re-run
+    over a finished tree, since `align` skips an output it finds already there
+    -- and that command is the one an operator retypes after a preemption, so it
+    is typed over trees in every state, complete ones included. The caller asks
+    `prepare_data.already_aligned` rather than restating when `align` skips, so
+    the two cannot come to disagree.
+
+    Neither of those runs is refused -- but both are told, because the probe run
+    is the long one and the group can be installed while it downloads.
+
+    What the question cannot see is a run that will rebuild the manifests it is
+    about to align: change the cutoffs over a finished tree and both alignments
+    are on disk when this is asked, then thrown away in stage 8 as older than
+    the manifests it has since rewritten. That run aligns without having been
+    refused, and fails the late way. Answering it would mean predicting stage 5
+    and stage 7 from here, which is the drift this argument is passed to avoid.
     """
     from training.scripts.align_data import SEGMENTERS
 
@@ -771,8 +786,8 @@ def require_japanese_segmenter(will_align: bool) -> None:
         install = "install it with: uv sync --group japanese"
         if not will_align:
             logger.warning(
-                f"the Japanese segmenter is not available ({e}); this run stops at the probe "
-                f"and does not need it, but the run after it does -- {install}"
+                f"the Japanese segmenter is not available ({e}); this run does not reach the "
+                f"aligner and does not need it, but a run that has to align does -- {install}"
             )
             return
         logger.error(
@@ -895,17 +910,30 @@ def main(
     if verbose:
         logger.setLevel(logging.DEBUG)
 
+    # Named up here, before anything is written, because stage 0 has to ask
+    # about the last stage's outputs: whether the aligner will run at all is
+    # what decides whether a missing segmenter is fatal or merely worth saying.
+    out_dir = Path(out)
+    zip_dir = Path(zips) if zips else out_dir / "zips"
+    extract_root = out_dir / "extracted"
+    train_manifest, valid_manifest = out_dir / "train.jsonl", out_dir / "valid.jsonl"
+    train_aligned = out_dir / "train_aligned.jsonl"
+    valid_aligned = out_dir / "valid_aligned.jsonl"
+
     # 0. The one thing that can fail for a reason no stage below can fix. It is
     #    asked before stage 1 because the answer never changes mid-run and the
     #    stage that needs it is the last one: see require_japanese_segmenter.
-    #    A run without both cutoffs stops at the probe and never aligns, so it
-    #    is warned rather than refused.
-    require_japanese_segmenter(will_align=max_cer is not None and min_mos is not None)
+    #    A run without both cutoffs stops at the probe and never aligns, and so
+    #    does one whose two alignments are already on disk -- align() skips an
+    #    output it finds finished, and that is asked of align()'s own predicate
+    #    rather than restated here. Both are warned rather than refused.
+    require_japanese_segmenter(
+        will_align=max_cer is not None
+        and min_mos is not None
+        and not all(already_aligned(p) for p in (train_aligned, valid_aligned))
+    )
 
-    out_dir = Path(out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    zip_dir = Path(zips) if zips else out_dir / "zips"
-    extract_root = out_dir / "extracted"
 
     # 1. Which speakers. 12.5 KB of info.csv decides what the other seven
     #    stages will ever touch, and answers it without fetching any audio.
@@ -1057,7 +1085,6 @@ def main(
     #    that had just been excluded -- with utterances.jsonl beside it saying
     #    otherwise, the alignment below kept for the same reason, and the run
     #    reporting success over the manifest the operator had rejected.
-    train_manifest, valid_manifest = out_dir / "train.jsonl", out_dir / "valid.jsonl"
     written_entries = sorted((out_dir / "entries").glob("*.jsonl"))
     if not _reusable(
         [train_manifest, valid_manifest],
@@ -1082,8 +1109,6 @@ def main(
     #    alignment older than the manifest it claims to align has to be thrown
     #    away here rather than kept or continued -- it describes rows the split
     #    above has since rewritten, and nothing in the file says so.
-    train_aligned = out_dir / "train_aligned.jsonl"
-    valid_aligned = out_dir / "valid_aligned.jsonl"
     for aligned, manifest in ((train_aligned, train_manifest), (valid_aligned, valid_manifest)):
         produced = [aligned, aligned.with_suffix(".partial")]
         produced += sorted(aligned.parent.glob(f"{aligned.stem}.shard*"))

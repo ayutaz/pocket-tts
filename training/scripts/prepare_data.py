@@ -70,6 +70,21 @@ def download(url: str, dest: Path, retries: int = 5, timeout: float = 30) -> Non
             time.sleep(min(2**attempt, 10))
 
 
+def already_aligned(out: Path) -> bool:
+    """Whether `align` would find `out` finished and skip it.
+
+    A predicate rather than a line inside `align` because one caller has to ask
+    the question before the run rather than during it: prepare_moespeech refuses
+    a run that will align without the Japanese segmenter installed, and a re-run
+    whose two alignments are already on disk aligns nothing and needs nothing.
+    Asked there as a restatement of this rule, the two would drift -- into
+    refusing a run with no work left, or into letting the late failure the check
+    exists to replace come back. `out` appears only once a pass has finished
+    (see below), so its existence is the whole answer.
+    """
+    return out.exists()
+
+
 def align(
     manifest: Path,
     out: Path,
@@ -84,7 +99,7 @@ def align(
     # preparing another language -- one written without spaces, aligned under
     # "whitespace", yields a single word per utterance, which raises nothing and
     # silently disables the loader's cut-and-prompt mechanism.
-    if out.exists():
+    if already_aligned(out):
         logger.info(f"{what} {out.resolve()} exists, skipping")
         return
     # Aligning streams into a .partial that --resume picks up after an interrupt; `out`

@@ -1811,6 +1811,11 @@ def _pipeline(tmp_path, monkeypatch):
     def fake_segmenter_check(will_align):
         calls["segmenter_check"].append((will_align, len(calls["download_called"])))
 
+    # Kept reachable behind the fake: the question main() computes is only worth
+    # anything if the real check answers it, and one test below puts this back
+    # to run exactly that -- a finished tree, re-run on a machine without MeCab.
+    real_segmenter_check = m.require_japanese_segmenter
+
     monkeypatch.setattr(m, "hf_hub_download", fake_fetch)
     monkeypatch.setattr(m, "download_characters", fake_download)
     monkeypatch.setattr(m, "extract_character", fake_extract)
@@ -1830,7 +1835,14 @@ def _pipeline(tmp_path, monkeypatch):
         options.update(overrides)
         return m.main(**options)
 
-    return SimpleNamespace(module=m, calls=calls, out=out_dir, run=run, speakers=speakers)
+    return SimpleNamespace(
+        module=m,
+        calls=calls,
+        out=out_dir,
+        run=run,
+        speakers=speakers,
+        real_segmenter_check=real_segmenter_check,
+    )
 
 
 def test_the_pipeline_skips_stages_whose_output_exists(tmp_path, monkeypatch):
@@ -2003,6 +2015,62 @@ def test_the_segmenter_is_checked_before_the_first_stage(tmp_path, monkeypatch):
     p.run(**CUTOFFS)
 
     assert p.calls["segmenter_check"] == [(True, 0)], p.calls["segmenter_check"]
+
+
+def test_a_re_run_with_nothing_left_to_align_does_not_need_the_segmenter(
+    tmp_path, monkeypatch, caplog
+):
+    """The check refuses a run that cannot finish -- not one with no work left.
+
+    Recovering from a preemption is retyping the same command, so it is typed
+    over trees in every state, a finished one included. Over that tree align()
+    finds both outputs already there and skips, the segmenter is never built,
+    and the run is a few file-existence checks long. Gated on "were both cutoffs
+    given" instead of "will the aligner run", that same command starts exiting 1
+    on a machine without the japanese group -- for work it was never going to do,
+    on a tree that is already complete.
+    """
+    import sys
+
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**CUTOFFS)
+    before = _tree(p.out)
+    assert (p.out / "train_aligned.jsonl").exists() and (p.out / "valid_aligned.jsonl").exists()
+
+    # The real check this time, on a machine that does not have the group --
+    # the same way its own tests simulate one, since CI syncs without it.
+    monkeypatch.setattr(p.module, "require_japanese_segmenter", p.real_segmenter_check)
+    monkeypatch.setitem(sys.modules, "fugashi", None)
+    caplog.set_level(logging.INFO)
+
+    p.run(**CUTOFFS)  # returns rather than raising typer.Exit
+
+    assert _tree(p.out) == before
+    # Told, though: the group is still what the next run needs if anything
+    # above the alignment ever moves.
+    said = "\n".join(record.message for record in caplog.records)
+    assert "uv sync --group japanese" in said, said
+
+
+def test_a_missing_alignment_still_refuses_a_run_without_the_segmenter(tmp_path, monkeypatch):
+    """The other half of the same question, over the tree a kill actually leaves.
+
+    Aligning is two calls, so a preemption between them leaves the training
+    alignment finished and the valid one absent -- and that re-run does align.
+    Answered by "are both there" rather than "is either there", it would be
+    waved through and would fail hours later inside the aligner's subprocess.
+    """
+    import sys
+
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**CUTOFFS)
+    (p.out / "valid_aligned.jsonl").unlink()
+
+    monkeypatch.setattr(p.module, "require_japanese_segmenter", p.real_segmenter_check)
+    monkeypatch.setitem(sys.modules, "fugashi", None)
+
+    with pytest.raises(typer.Exit):
+        p.run(**CUTOFFS)
 
 
 def test_the_run_stops_until_the_thresholds_have_been_chosen(tmp_path, monkeypatch, caplog):
