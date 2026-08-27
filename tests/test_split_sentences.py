@@ -187,8 +187,9 @@ def ja_tokenizer():
 
 
 def test_japanese_paragraph_splits_on_the_full_stop(ja_tokenizer):
-    """Without 。 in the boundary set this is one 51-token chunk, and
-    generation past roughly 90 characters drops words."""
+    """Without 。 in the boundary set this is one 33-token chunk (57
+    characters, 4 sentences), and generation past roughly 90 characters
+    drops words."""
     chunks = split_into_best_sentences(
         ja_tokenizer,
         _JA_PARAGRAPH,

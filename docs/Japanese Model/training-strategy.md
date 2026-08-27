@@ -215,28 +215,56 @@ uv run python -m training.scripts.train_tokenizer data/ja/tokenizer \
 
 ---
 
-## 未対応の課題（推論側・評価側）
+## 対応済み（推論側・評価側）
 
-いずれも `pocket_tts/` 側の変更が必要で、今回の学習側の範囲外です。**モデルが完成しても、これらを直すまでは実用品質になりません。**
+いずれも `pocket_tts/` 側の変更で、学習側の作業とは別枠で解消しました。基盤になっているのは、文の切り方と正規化の要不要を言語ごとに宣言する `TextRules`（frozen dataclass）と、`Config` の5フィールド（`text_normalizer` / `sentence_boundaries` / `clause_boundaries` / `terminal_punctuation` / `segment_separator`）です（`b21f5c9 Give a config somewhere to say how its language writes`）。既定値は今日の英語の挙動のままなので、他言語への影響はありません。
 
-### 推論時の正規化が未接続
+### 欠陥1: 推論時の正規化が未接続（**対応済み**）
 
-全角の `！` や `ＡＢＣ` をそのまま渡すと `<unk>` になり round-trip に失敗します（正規化後は unk 0 で完全一致）。日本語 IME は既定で全角の `？！` を出すため、**実害は大きい**です。コーパスの 17.6% が ASCII `?`、13.1% が `!` で終わっており、いずれも全角から折り畳まれたものです。
+全角の `！` や `ＡＢＣ` をそのまま渡すと `<unk>` になり round-trip に失敗していました（正規化後は unk 0 で完全一致）。日本語 IME は既定で全角の `？！` を出すため実害は大きく、コーパスの 17.6% が ASCII `?`、13.1% が `!` で終わっており、いずれも全角から折り畳まれたものでした。
 
-### 日本語が文分割されない
+対応: `training/scripts/ja_text.py` にあった `normalize()` を `pocket_tts/utils/text_normalization.py` の `normalize_japanese` として移設しました。`pocket_tts/` は `training/` をインポートできないため、この移設が推論側からの呼び出しを可能にしています。`prepare_text_prompt` は `rules` を受け取り、`resolve_normalizer(rules.normalizer)` でこの正規化を実行します。
 
-`tts_model.py` の `split_into_best_sentences` は境界トークンに `。！？` を含みません。実測: 66トークンの日本語段落が `max_tokens=32` でも**1チャンクのまま**返り、`Chunk has 66 tokens (max 32), generation may skip words` が出ます。既定の `MAX_TOKEN_PER_CHUNK=50` と実測 1.805 字/token から、**約90文字（3〜4文）を超える日本語入力は語が脱落します**。
+対応コミット: `118aad4 Move the Japanese normalization where inference can reach it`, `9e672d2 Stop appending a full stop to text whose language has none`
 
-### 半数の入力に ASCII ピリオドが付く
+### 欠陥2: 日本語が文分割されない（**対応済み**）
 
-`prepare_text_prompt` は英数字で終わるテキストに `.` を付けます。**学習発話の 49.4% が英数字（かな・漢字を含む）で終わる**一方、`.` で終わる学習発話は 0.001%（139.8万中13件）です。EOS の較正が効く位置で、モデルがほぼ見たことのないトークンを要求されます。
+`tts_model.py` の `split_into_best_sentences` は境界トークンに `。！？` を含んでいませんでした。実測: 66トークンの日本語段落が `max_tokens=32` でも**1チャンクのまま**返り、`Chunk has 66 tokens (max 32), generation may skip words` が出ていました。既定の `MAX_TOKEN_PER_CHUNK=50` と実測 1.805 字/token から、約90文字（3〜4文）を超える日本語入力は語が脱落する計算でした。
 
-### WER が日本語で機能しない
+対応: `split_into_best_sentences` が `rules` を受け取り、`sentence_boundaries` と `clause_boundaries` で境界を判定するようにしました。
 
-`training/eval/librispeech.py` の単語 WER は、分かち書きの無い日本語では**実質的に文単位の誤り率**になります。実測: 1文字だけ違う仮説が WER 1.0 で、全く無関係な仮説と同じスコアです。さらに `EnglishTextNormalizer` が**濁点を除去**します（`が`→`か`、`ご`→`こ`）。
+対応コミット: `a254dbb Split Japanese on its own sentence boundaries, and rejoin without spaces`（`71f8eb0`・`e68ac33` でトークナイザの fixture を `tests/fixtures/ja_tokenizer.model` としてコミットし、日本語のテストが CI で skip されず実行されるようにしています）
 
-!!! danger "検証の合否判定に WER を使ってはいけません"
-    チェコ語の WER 数値（2k step で 29.5% など）を日本語の go/no-go 基準として流用できません。**CER への差し替えが必要**です。それまでは耳による判定と loss の推移で見てください。
+### 欠陥3: 半数の入力に ASCII ピリオドが付く（**対応済み**）
+
+`prepare_text_prompt` は英数字で終わるテキストに `.` を付けていました。学習発話の 49.4% が英数字（かな・漢字を含む）で終わる一方、`.` で終わる学習発話は 0.001%（139.8万中13件）しかなく、EOS の較正が効く位置でモデルがほぼ見たことのないトークンを要求されていました。
+
+対応: 固定の `.` の代わりに `rules.terminal_punctuation` を付けるようにしました。日本語ではこれが空文字列なので、何も付きません。
+
+対応コミット: `9e672d2 Stop appending a full stop to text whose language has none`
+
+### 欠陥4: WER が日本語で機能しない（**対応済み** — 測定手段を用意した、という意味で）
+
+`training/eval/librispeech.py` の単語 WER は、分かち書きの無い日本語では実質的に文単位の誤り率になります。実測: 1文字だけ違う仮説が WER 1.0 で、全く無関係な仮説と同じスコアです。さらに `EnglishTextNormalizer` が濁点を除去します（`が`→`か`、`ご`→`こ`）。この性質自体は直しようがなく変わっていません。
+
+対応: `build_normalizer` と `--text-normalizer {english,basic}` を追加し、`EvalResults`（`results.json`）に `cer` を常時出力するようにしました。`basic` は濁点・半濁点を保持するので、日本語の評価では `basic` を使います。
+
+対応コミット: `694b384 Score with a metric that can tell Japanese generations apart`
+
+### 欠陥5: 分割した文が空白で繋ぎ直される（**対応済み** — 欠陥2の修正が作り出したもの）
+
+これは元の4件の一覧には無かった欠陥です。`split_into_best_sentences` は分割したセグメントをリテラルの `" "` で繋ぎ直しており、日本語は空白なしで書くのでこれは壊れています。ただしこの欠陥はこれまで一度も発火していませんでした。日本語は欠陥2のせいでそもそも分割されなかったからです。**欠陥2を直したことが、この欠陥5を初めて表面化させました。** 実測: テストの段落（57文字・空白ゼロ）を分割させると、2箇所に空白が注入されました。学習側で `data.word_separator: ""` が解決しているのと同じ問題です。
+
+対応: セグメントの結合に使う区切り文字を `rules.segment_separator` にし、日本語では空文字列にしました。欠陥2と同じコミットで一緒に直っています。
+
+対応コミット: `a254dbb Split Japanese on its own sentence boundaries, and rejoin without spaces`
+
+### 範囲外として残るもの
+
+- **日本語評価セットの構築** — 欠陥4への対応で CER を測る仕組みは用意しましたが、実際に評価に使う日本語の参照テキストと音声のペアはまだありません。
+- **ASR モデルの選定** — `training/README.md` が言うとおり、日本語に対応する ASR を選ぶ必要があります（上記「リスク2: ASR 転写の精度」参照）。
+
+どちらも音声データの取得を伴うため、データ収集フェーズの範囲です。
 
 ### フェーズ1: 検証（MoeSpeech のみ・$10・半日）
 
@@ -266,15 +294,18 @@ MoeSpeech 単独を選ぶ理由:
 | finetune 15k step（24層のまま、蒸留なし） | 1×H100 で 2.2h / $4〜9 |
 | **合計** | **$10前後・半日** |
 
-**判定できること** — トークナイザ、アライメント、`" ".join` 修正、`n_bins` 一致、日本語として意味が取れるか、EOS で停止するか。
+**判定できること** — トークナイザ、アライメント、`" ".join` 修正、`n_bins` 一致、日本語として意味が取れるか、EOS で停止するか、CER（`--text-normalizer basic`）。
 
 **判定できないこと** — 最終的な WER / UTMOS の絶対値、中立トーンの汎用性。
 
 !!! note "キャラ演技調になるのは仕様"
     ドメインがアニメ／ギャルゲなので、検証モデルはキャラクター演技調に喋ります。これを失敗と読み違えないでください。
 
+!!! danger "WER は日本語の go/no-go 基準にできません"
+    分かち書きの無い日本語では WER は実質的に文単位の誤り率になるため、PR #254 のチェコ語 WER（2k step で 29.5% など）を日本語の go/no-go 基準として流用できません。**判定基準は CER**です。ツール自体は用意できましたが、チェコ語の数値とは指標が違うので直接比較はできません。
+
 !!! tip "早期トリップワイヤ"
-    PR #254 のチェコ語は 2k step で WER 29.5%（既に言語として成立）でした。日本語は ASR 転写ぶん悪化するはずですが、**2〜3k step（約25分・$1〜2）で「日本語らしい音韻」すら出ないならパイプラインのバグ**と判断してよいです。ここで止めれば損失は $2 です。
+    チェコ語は 2k step で WER 29.5%（PR #254、既に言語として成立と読める水準）でした。日本語は指標が異なるため同じ数字を目標にはできませんが、**2〜3k step（約25分・$1〜2）で「日本語らしい音韻」すら出ないならパイプラインのバグ**と判断してよいのは変わりません。これは指標ではなく耳で聞いた判断なので、CER に差し替えても成立します。ここで止めれば損失は $2 です。
 
 ### フェーズ2以降
 

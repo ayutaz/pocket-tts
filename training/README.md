@@ -257,7 +257,7 @@ And for the distillation step (distilling a 24-layer teacher into a 6-layer stud
 
 When training on a new language, not all of these metrics transfer directly:
 
-- Word error rate: you need an ASR that supports your language. For the Czech example above, we could just use [Whisper](https://huggingface.co/openai/whisper-large-v3), but for rarer languages, you might need to find a different ASR.
+- Word error rate: you need an ASR that supports your language. For the Czech example above, we could just use [Whisper](https://huggingface.co/openai/whisper-large-v3), but for rarer languages, you might need to find a different ASR. For a language without word boundaries in its writing (e.g. Japanese), WER degenerates into a sentence-level error rate -- use Character Error Rate instead. `results.json` always reports `cer` alongside `wer`. Also pass `--text-normalizer basic` instead of the default `english`: the English normalizer strips diacritics, which is harmless for Czech but throws away meaning in languages whose diacritics matter, such as Japanese, where it silently removes voiced-sound marks (が becomes か).
 - Speaker similarity: Should work fine.
 - UTMOS: Works, but might be less accurate for other languages.
 

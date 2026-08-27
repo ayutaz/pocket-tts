@@ -23,8 +23,9 @@ Supported sources, all optional and combinable:
               spelling that could later reach it as a manifest transcript.
 --jsonl       Any manifest-shaped jsonl with a "transcript" field.
 
-Every line is passed through ja_text.normalize, which is what the manifest
-builder must apply too -- see that module for why.
+Every line is passed through normalize_japanese (from
+pocket_tts.utils.text_normalization, imported here as normalize), which is
+what the manifest builder must apply too -- see that module for why.
 """
 
 import json
