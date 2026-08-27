@@ -103,7 +103,7 @@
 | 項目 | コスト |
 |---|---|
 | ダウンロード | 472 GB（MoeSpeech 152 + GOL 320）。HF egress 無料、100 MB/s で約80分 |
-| ディスク | 素のまま約1 TB → 24 kHz mp3/opus 変換で 80〜150 GB。永続ボリューム $0.05〜0.10/GB/月 |
+| ディスク | 素のまま約1 TB。**前処理は変換しません**（`concatenate()` は 44.1 kHz のまま書き、リサンプルは dataloader が読み込み時に行う）ので、この形のまま持つ前提で見積もってください。mp3/opus 化すれば 80〜150 GB に落とせますが、それをする段はまだ実装されていません。永続ボリューム $0.05〜0.10/GB/月。フェーズ1（124h）の実数は下の「ディスク」参照 |
 | CPU 前処理 | リサンプル・連結・マニフェスト化。16コアで数時間 |
 | 強制アライメント | 2,640h で **8〜15 GPU-h**（$20〜60） |
 | トークナイザ学習 | CPU 数分 |
@@ -282,14 +282,35 @@ MoeSpeech 単独を選ぶ理由:
 - **22.05 kHz を混ぜると、出音がこもった時に「サンプルレートのせい」か「バグ」か区別できません。** 44.1 kHz 単独なら、悪ければバグです。
 - **話者ラベルが無いとリスク3の対処自体を検証できません。** MoeSpeech なら連結処理の正しさも同時に検証できます。
 
-さらに zip がキャラ単位なので、**30 GB / 約160キャラ / 約123h だけ落とせば足ります**（README の最低ラインは100h）。検証フェーズのボトルネックは GPU ではなく前処理の待ち時間なので、ここを削るのが最も効きます。
+さらに zip がキャラ単位なので、**落とすのは約30 GB / 約124h で足ります**（README の最低ラインは100h）。既定の `--order largest` なら約28個の zip で 124h に届きます（`--order random` だと約160キャラ必要で、落とす量は同じです）。検証フェーズのボトルネックは GPU ではなく前処理の待ち時間なので、ここを削るのが最も効きます。
+
+**ただしダウンロード量とディスク所要量は別物です。** 実行中はこの 30 GB が同時に4つ分に膨らみます。インスタンスを借りる前に下の「ディスク」を読んでください。
 
 **実行コマンド**
+
+先に依存です。**`uv sync` だけでは足りません。** ステージ8のアライメントは MeCab（fugashi +
+unidic-lite）を必要とし、これは `pyproject.toml` の `[dependency-groups]` にある `japanese`
+グループです。extra ではないので `--extra` ではなく `--group` を使います。
+
+```bash
+uv sync --group japanese
+```
+
+（`dev` は既定で入るのでこれ1本で足ります。逆に素の `uv sync` は fugashi と unidic-lite を
+**アンインストールします**。）
+
+入れ忘れは高くつきます。`align_data._japanese_segmenter` は fugashi を遅延 import するため、
+ダウンロード・展開・probe・選定・連結・両マニフェストまで全部通り切ってから最後に落ち、しかも
+アライナは別プロセスなので表に出るのは `CalledProcessError` の終了コードであって、足りない
+パッケージの名前ではありません。**そのため main() は、アライメントまで行く実行（`--max-cer` と
+`--min-mos` の両方が与えられた実行）ではステージ1の前にこの import を確かめて止まります。**
+probe で止まる実行はこれを必要としないので、警告だけ出して続けます（ダウンロードを待つ間に
+入れられます）。
 
 zip の取得からアライメント済みマニフェストまでは1コマンドで通ります。
 
 ```bash
-python -m training.scripts.prepare_moespeech --hours 124 --out data/ja
+uv run python -m training.scripts.prepare_moespeech --hours 124 --out data/ja
 ```
 
 閾値には既定値がありません（この corpus を測ったものが存在しないため）。初回はステージ4の
@@ -297,31 +318,52 @@ probe を書いた直後に停止するので、`data/ja/probe.json` の retenti
 `--min-mos` を決め、**同じコマンドに2つを足して再実行**します。ステージ5から続きます。
 
 ```bash
-python -m training.scripts.prepare_moespeech --hours 124 --out data/ja \
+uv run python -m training.scripts.prepare_moespeech --hours 124 --out data/ja \
   --max-cer <probe.json から読む> --min-mos <probe.json から読む>
 ```
 
+`--out` 以下は0段目を除いて8つです（0段目は上のセグメンタ確認で、ディスクには何も残しません）。
+
 | # | ステージ | 出力（`--out` 以下） | 再実行でスキップする条件 | 所要時間 |
 |---|---|---|---|---|
-| 1 | キャラ選定 | `characters.json` | ファイルが在る | 未計測 |
+| 1 | キャラ選定 | `characters.json` | ファイルが在る（`--hours` が違っても選び直さず、警告して再利用する） | 未計測 |
 | 2 | ダウンロード | `zips/<name>.zip` | zip が在る（`.partial` は無視する） | 未計測 |
 | 3 | 展開 | `extracted/<name>/` | `extracted/<name>.complete` が在る | 未計測 |
-| 4 | probe | `probe.json` | ファイルが在る | 未計測 |
-| 5 | 発話選定 | `utterances.jsonl` | ファイルが在り、`extracted/*.complete` より新しい | 未計測 |
+| 4 | probe | `probe.json` | 在り、かつ**選定話者の** `extracted/<name>.complete` と `characters.json` のどれよりも新しい | 未計測 |
+| 5 | 発話選定 | `utterances.jsonl` | 在り、かつ**上と同じ入力 + `cutoffs.json`** のどれよりも新しい | 未計測 |
 | 6 | 連結 | `audio/<speaker>.wav`・`entries/<speaker>.jsonl` | その話者の `entries/<speaker>.jsonl` が在り、`utterances.jsonl` より新しい | 未計測 |
-| 7 | マニフェスト | `train.jsonl`・`valid.jsonl` | 両方が在り、`entries/*.jsonl` より新しい | 未計測 |
-| 8 | アライメント | `train_aligned.jsonl`・`valid_aligned.jsonl` | 出力が在り、元のマニフェストより新しい（中断時の `.partial` は `--resume` が拾う） | 未計測 |
+| 7 | マニフェスト | `train.jsonl`・`valid.jsonl` | 両方が在り、`utterances.jsonl` と `entries/*.jsonl` のどれよりも新しい | 未計測 |
+| 8 | アライメント | `train_aligned.jsonl`・`valid_aligned.jsonl` | 出力が元のマニフェストより新しい（古ければ `.partial`・`.shard*` ごと捨てて張り直す。中断時の `.partial` は `align()` の `--resume` が拾う） | 未計測 |
 
-スキップの判定は**出力の有無と更新時刻**で、オプションは見ていません。閾値や `--target-sec` を
-変えて実行し直したい場合は、その段の出力を消してから打ち直してください。**消すのは1つで足ります。**
-各段は自分の入力より新しい出力しか再利用しないので、`utterances.jsonl` を消せば `entries/`・
-`audio/`・`train.jsonl`・`valid.jsonl`・`*_aligned.jsonl` まで一緒に作り直されます。これが無いと、
-厳しい `--min-mos` で打ち直しても `utterances.jsonl` だけが書き換わり、`train.jsonl` は却下した
-はずの選定を指したまま「完了」と表示されます。`--hours` を増やして新しいキャラを展開した場合も
-同じ理由で発話選定からやり直しになります。
+ステージ6は書くだけでなく**消します**。選定から外れた話者の `entries/<speaker>.jsonl` と、そこに
+書かれていた `audio/` の wav を消し、`--target-sec` を伸ばして必要ファイル数が減ったときも余った
+`<speaker>_NNN.wav` を消します。`audio/` は 124h・44.1 kHz で数十 GB あり、preemptible
+インスタンスのディスクは固定なので、放置は後続の段を殺します。
 
-`probe.json` だけは有無のみで判定します。ここは何も決めない計測で、後段はこのファイルを読まない
-（閾値を選ぶ人間が読む）ので、測り直したいときは消してください。
+**スキップの判定は出力の有無と更新時刻で、オプションは基本的に見ていません。例外は `--max-cer`
+と `--min-mos` の2つだけです。** ステージ5はこの対を `cutoffs.json` に書き（前回と違うときだけ
+書きます）、それを発話選定の入力に数えます。したがって**閾値を変えて同じコマンドを打ち直すだけで、
+選定・オフセット・`audio/`・両マニフェスト・両アライメントまで自動で作り直されます。何も消す必要は
+ありません**（`test_new_cutoffs_rebuild_the_selection_they_decided` が固定しています）。これが無い
+場合に何が起きるかが、この仕組みの理由です —— 厳しい `--min-mos` で打ち直しても
+`utterances.jsonl` だけが書き換わり、`train.jsonl` は却下したはずの選定を指したまま「完了」と
+表示されます。
+
+それ以外のオプション（`--target-sec`・`--valid-hours`・`--order`）はどこにも記録されないので、
+**変えても何も再実行されません。その段の出力を消してから打ち直してください。消すのは1つで
+足ります。** 各段は自分の入力より新しい出力しか再利用しないので、`utterances.jsonl` を消せば
+`entries/`・`audio/`・`train.jsonl`・`valid.jsonl`・`*_aligned.jsonl` まで一緒に作り直されます。
+
+`--hours` は3つ目の扱いです。**`characters.json` が在る限り話者は選び直されません。**`--hours`
+を増やしても減らしても、「この `characters.json` は `--hours` X の選定で、`--hours` Y に再利用して
+いる。選び直すなら消せ」と警告が出るだけで、キャラは増えも減りもしません。増減させたいときは
+`characters.json` を消してください。消せば選定が書き直され、その更新時刻によって probe から下が
+全部作り直されます（`test_a_speaker_a_wider_selection_adds_reaches_the_manifests`）。
+
+`probe.json` も他と同じ規則で、有無だけでは判定しません。選定話者の `.complete` か
+`characters.json` より古ければ測り直します —— 後から展開された話者を含まない retention 表や、
+もう使わない話者を含んだままの retention 表で閾値を決めてしまわないためです。単に測り直したい
+ときは消してください。
 
 **所要時間は全て未計測です。** vast.ai 上でまだ一度も実行していないので実測値がありません。
 下の見積り表は着手前の試算であり、初回実行後にこの列を実測で置き換えてください。
@@ -336,12 +378,52 @@ python -m training.scripts.prepare_moespeech --hours 124 --out data/ja \
 1発話が1単語になり、カット点が消えて dataloader の voice prompt 機構が黙って無効になります
 （リスク1）。
 
+**ディスク: 150 GB 用意してください（30 GB では足りません）**
+
+124h の実行は完了時点で**同じ音声を4つ持ちます**。どれも自動では消えません。
+
+| 置き場所 | 中身 | 概算 |
+|---|---|---|
+| `$HF_HOME`（既定 `~/.cache/huggingface`） | `hf_hub_download` のキャッシュ。zip の1つ目のコピー | 約30 GB |
+| `<out>/zips/` | そこから `zips/` へ複製した2つ目 | 約30 GB |
+| `<out>/extracted/` | 展開した wav + json | 約37 GB |
+| `<out>/audio/` | 連結した擬似長尺 wav（44.1 kHz のまま） | 最大約39 GB |
+| **ピーク合計** | | **約136 GB** |
+
+算数です。[datasets.md](datasets.md) の実測（zip 151.6 GB、展開後約184 GB、623h）からの按分で、
+**すべて概算**です。キャラごとの圧縮率のばらつきは見ていません。
+
+```
+zip          : 151.6 GB ÷ 623h × 124h ≈ 30 GB
+展開後       : 184   GB ÷ 623h × 124h ≈ 37 GB
+連結 wav     : 124h × 3600秒 × 44100 Hz × 2 byte ≈ 39 GB（16bit mono 無圧縮）
+HF キャッシュ: zip と同じ            ≈ 30 GB
+```
+
+`--hours` を変えるときは4本の式の 124 を差し替えてください。
+
+`audio/` に入るのは選定を通った発話だけなので 39 GB は上限です。相互 CER と speechMOS で
+20〜40% 落ちる想定（リスク2）なら実際は 24〜31 GB でしょう。ただし**閾値を決めるより先に
+ディスクを確保するなら上限で見てください。**
+
+24 kHz への変換は**しません**。`concatenate()` は 44.1 kHz のまま書き、リサンプルは dataloader が
+読み込み時に行います。
+
+**消してよいもの、消したときの代償**
+
+| 消せるもの | いつから | 打ち直したときの代償 |
+|---|---|---|
+| HF キャッシュ | `zips/` に全 zip が揃った後 | **なし。** ステージ2は `zips/<name>.zip` の有無だけを見るので、キャッシュが無くても再取得しません。**まずこれを消してください（約30 GB）** |
+| `<out>/zips/` | `extracted/<name>.complete` が全話者ぶん揃った後 | **約30 GB の再ダウンロード。** main は毎回ダウンロード段を通り、zip が無ければ展開済みでも落とし直します（そのときキャッシュぶんの30 GB も一時的に要ります） |
+| `<out>/extracted/` | ステージ8まで終わり、**このコマンドをもう打たないと決めた**後 | **ほぼ全部。** 打ち直すと再展開され、`.complete` の更新時刻が新しくなるので probe・選定・連結・マニフェスト・アライメントまで作り直しになります |
+| `<out>/audio/`・`entries/`・`*.jsonl` | — | **消さないでください。** 学習が読むのはこれです |
+
 **見積り**
 
 | 工程 | コスト |
 |---|---|
-| DL（30 GB） | 約5分 |
-| 展開・24 kHz 変換・同一キャラ連結・マニフェスト化 | 16コアで1〜2時間 |
+| DL（30 GB、ディスクには60 GB 書かれる） | 約5分 |
+| 展開・同一キャラ連結（44.1 kHz のまま）・マニフェスト化 | 16コアで1〜2時間 |
 | 強制アライメント（123h） | 約1 GPU-h / $2〜4 |
 | finetune 15k step（24層のまま、蒸留なし） | 1×H100 で 2.2h / $4〜9 |
 | **合計** | **$10前後・半日** |
@@ -358,6 +440,14 @@ python -m training.scripts.prepare_moespeech --hours 124 --out data/ja \
 
 !!! tip "早期トリップワイヤ"
     チェコ語は 2k step で WER 29.5%（PR #254、既に言語として成立と読める水準）でした。日本語は指標が異なるため同じ数字を目標にはできませんが、**2〜3k step（約25分・$1〜2）で「日本語らしい音韻」すら出ないならパイプラインのバグ**と判断してよいのは変わりません。これは指標ではなく耳で聞いた判断なので、CER に差し替えても成立します。ここで止めれば損失は $2 です。
+
+!!! note "ruff の4件は元からです"
+    `bash scripts/dev/ruff-index.sh` をこのフェーズで触った5ファイルにかけると4件出ます
+    ——`align_data.py:41` と `prepare_data.py:40` の UP035（`typing_extensions` からの
+    `Annotated`）、`prepare_data.py:64` と `test_prepare_data.py:16` の FURB122。**4件とも
+    `0eeb407` 時点のファイルで再現する既存の指摘**で、この作業が触った行ではありません。
+    uvx が引く ruff が新しくなって既定ルールが増えたので見えているだけです。壊したわけでは
+    ないので、無関係なコードを書き換えて黙らせないでください。
 
 ### フェーズ2以降
 

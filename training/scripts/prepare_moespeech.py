@@ -484,10 +484,17 @@ def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> lis
     file, and the model simply learns from speech that does not match its text.
 
     A run is cut into as many files as it takes for none of them to run past
-    `target_sec` -- what that bounds is the alignment pass, which holds a whole
-    file at once. Clips themselves are never cut, so one longer than the target
-    gets a file to itself. Offsets restart at zero in each file, being offsets
-    into the file they name.
+    `target_sec`. What that bounds is this function: `_write_joined` holds a
+    whole file in memory to concatenate it, and a preemption costs the file in
+    flight. It is not what bounds either reader -- `align_data.read_window` and
+    the loader's `_load_window` both read the window a row names and never the
+    file it sits in, so neither one's memory goes with this number. The floor
+    is that joining has to be worth doing: at 120 s the corpus's 5.8-second
+    median clip means about twenty per file, and 120 s is four times the
+    loader's `max_duration_sec`, so a file stays long against anything read out
+    of it. Clips themselves are never cut, so one longer than the target gets a
+    file to itself. Offsets restart at zero in each file, being offsets into
+    the file they name.
 
     Clips are never joined across speakers, and a mixed list raises here rather
     than being grouped: the caller groups, and everything after this treats a
@@ -731,6 +738,51 @@ def _stale(output: Path, inputs: list[Path]) -> Path | None:
     return max(moved, key=lambda p: p.stat().st_mtime, default=None)
 
 
+def require_japanese_segmenter(will_align: bool) -> None:
+    """Refuse a run that cannot finish, before it spends the day finding out.
+
+    Stage 8 segments with MeCab, which `align_data._japanese_segmenter` imports
+    lazily, out of a dependency group that is not part of a plain `uv sync`:
+
+        uv sync --group japanese
+
+    Without it the run downloads, unpacks, probes, selects, concatenates and
+    writes both manifests -- tens of gigabytes and hours of a paid instance --
+    and only then fails. Worse, it fails through `prepare_data.align`, which
+    runs the aligner in a subprocess, so what surfaces is a CalledProcessError
+    naming a return code rather than the missing package.
+
+    Asked through `SEGMENTERS` rather than by importing fugashi here, so the
+    check cannot come to disagree with what stage 8 will actually construct:
+    building the tagger is what needs the dictionary as well as the wrapper,
+    and both live in that group. An `align_data` that will not import at all is
+    a different failure and is left to raise as itself.
+
+    A run with no cutoffs stops at the probe and never reaches the aligner, so
+    it is not refused -- but it is told, because that run is the long one and
+    the group can be installed while it downloads.
+    """
+    from training.scripts.align_data import SEGMENTERS
+
+    build = SEGMENTERS["japanese"]  # outside the try: a missing key is a bug here, not there
+    try:
+        build()
+    except Exception as e:
+        install = "install it with: uv sync --group japanese"
+        if not will_align:
+            logger.warning(
+                f"the Japanese segmenter is not available ({e}); this run stops at the probe "
+                f"and does not need it, but the run after it does -- {install}"
+            )
+            return
+        logger.error(
+            f"stage 8 aligns with the Japanese segmenter, which is not available ({e}). "
+            f"{install}. Nothing has been fetched or written: this is checked before the "
+            "first stage precisely so it is not found out after 30 GB and several hours."
+        )
+        raise typer.Exit(1) from e
+
+
 def _reusable(outputs: list[Path], inputs: list[Path], keeping: str) -> bool:
     """Whether every one of `outputs` still stands for the work it records.
 
@@ -778,8 +830,10 @@ def main(
     target_sec: Annotated[
         float,
         typer.Option(
-            help="longest pseudo-recording to build out of one speaker's clips. Well past "
-            "the loader's max_duration_sec, and short enough that the aligner holds one"
+            help="longest pseudo-recording to build out of one speaker's clips. Long enough "
+            "that joining is worth doing and well past the loader's max_duration_sec; short "
+            "enough that a preemption costs one small file, since this stage builds each in "
+            "memory"
         ),
     ] = 120.0,
     zips: Annotated[
@@ -812,18 +866,26 @@ def main(
     measures it. Read them off `probe.json` and run the same command again with
     --max-cer and --min-mos, and it carries on from there.
 
-    What a stage skips on is its output, not the options it was given: changing
-    --target-sec or a cutoff after the stage that reads it has run does not
-    re-run it. Delete that stage's artifact to redo it under new options --
-    deleting is the only way to say so, and it is deliberate, since the
-    alternative is a stage that quietly redoes 30 GB of work.
+    What a stage skips on is its output and the timestamps of its inputs, not
+    the options it was given -- with one exception. --max-cer and --min-mos are
+    written to `cutoffs.json` and counted among the selection's inputs, so a
+    changed pair rebuilds the selection, the offsets, both manifests and both
+    alignments on its own. Nothing else on disk records them, and without that
+    a stricter cutoff would rewrite `utterances.jsonl` and change nothing else:
+    the run would report success over the selection it had just replaced.
 
-    Deleting one artifact is enough, though. What was built out of it is
-    rebuilt with it: a stage reuses its output only while that output is at
-    least as new as its inputs, so removing `utterances.jsonl` alone carries
-    through `entries/`, `train.jsonl`, `valid.jsonl` and both alignments.
-    Without that, a stricter --min-mos would rewrite `utterances.jsonl` and
-    change nothing else, and the run would train on the selection it replaced.
+    Every other option -- --target-sec, --valid-hours, --order -- is recorded
+    nowhere, so changing one re-runs nothing. Delete that stage's artifact to
+    redo it under a new value; deleting is the only way to say so, and it is
+    deliberate, since the alternative is a stage that quietly redoes 30 GB of
+    work. Deleting one is enough: what was built out of it is rebuilt with it,
+    so removing `utterances.jsonl` alone carries through `entries/`, `audio/`,
+    `train.jsonl`, `valid.jsonl` and both alignments.
+
+    --hours is the third case. `characters.json` is reused whenever it exists,
+    whatever --hours now says, and a mismatch is only warned about: delete that
+    file to select speakers again, and everything below re-runs against the new
+    selection.
     """
     logging.basicConfig(
         level=logging.INFO,
@@ -832,6 +894,13 @@ def main(
     )
     if verbose:
         logger.setLevel(logging.DEBUG)
+
+    # 0. The one thing that can fail for a reason no stage below can fix. It is
+    #    asked before stage 1 because the answer never changes mid-run and the
+    #    stage that needs it is the last one: see require_japanese_segmenter.
+    #    A run without both cutoffs stops at the probe and never aligns, so it
+    #    is warned rather than refused.
+    require_japanese_segmenter(will_align=max_cer is not None and min_mos is not None)
 
     out_dir = Path(out)
     out_dir.mkdir(parents=True, exist_ok=True)

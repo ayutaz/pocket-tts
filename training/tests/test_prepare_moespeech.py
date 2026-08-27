@@ -1100,8 +1100,10 @@ def test_no_output_file_runs_past_the_target(tmp_path):
 
     The test above only asks that a long run be split at all, which a split
     every hundredth clip satisfies while still writing files far longer than
-    the caller asked for. What the bound is for is the alignment stage, whose
-    memory use goes with the length of a single file.
+    the caller asked for. What the bound is for is this stage: `_write_joined`
+    holds a whole file in memory to concatenate it, and a preemption costs the
+    file in flight. Not the aligner -- `align_data.read_window` reads the
+    window each row names, never the file it sits in.
     """
     import sphn
 
@@ -1802,10 +1804,18 @@ def _pipeline(tmp_path, monkeypatch):
         calls["align"].append(dict(bound.arguments))
         out.write_text("", encoding="utf-8")
 
+    # Whether the japanese dependency group is installed is a property of the
+    # machine, exactly like the hub and the aligner, and CI syncs without it.
+    # Recorded rather than removed: the call and what had happened by the time
+    # it was made are the contract, and its own tests below run it for real.
+    def fake_segmenter_check(will_align):
+        calls["segmenter_check"].append((will_align, len(calls["download_called"])))
+
     monkeypatch.setattr(m, "hf_hub_download", fake_fetch)
     monkeypatch.setattr(m, "download_characters", fake_download)
     monkeypatch.setattr(m, "extract_character", fake_extract)
     monkeypatch.setattr(m, "align", fake_align)
+    monkeypatch.setattr(m, "require_japanese_segmenter", fake_segmenter_check)
     for name in ("probe_utterances", "select_utterances", "concatenate", "split_by_speaker"):
         monkeypatch.setattr(m, name, _recording(calls, name, getattr(m, name)))
 
@@ -1841,6 +1851,7 @@ def test_the_pipeline_skips_stages_whose_output_exists(tmp_path, monkeypatch):
     # would be satisfied by a main() that does nothing at all.
     done = {stage: len(c) for stage, c in p.calls.items()}
     assert done == {
+        "segmenter_check": 1,
         "info.csv": 1,
         "download_called": 1,
         "download": 2,
@@ -1870,6 +1881,9 @@ def test_the_pipeline_skips_stages_whose_output_exists(tmp_path, monkeypatch):
     assert {stage: len(c) for stage, c in p.calls.items()} == done | {
         "download_called": 2,
         "extract_called": 4,
+        # Asked once per run, before anything else: it costs an import and the
+        # answer can change between runs, which is the point of asking again.
+        "segmenter_check": 2,
     }
     assert _tree(p.out) == before
 
@@ -1905,6 +1919,90 @@ def test_alignment_uses_the_japanese_segmenter_and_a_kana_model(tmp_path, monkey
     # --align-shards is a count of GPUs and belongs to the long pass; the valid
     # manifest is one speaker's worth and is aligned in one process.
     assert [c["shards"] for c in p.calls["align"]] == [3, 1], p.calls["align"]
+
+
+def test_a_missing_segmenter_stops_the_run_before_it_fetches_anything(monkeypatch, caplog):
+    """The one dependency a plain `uv sync` does not install, checked first.
+
+    fugashi and unidic-lite are the `japanese` dependency group, and
+    align_data imports fugashi lazily inside the segmenter -- so an unprepared
+    instance gets through the download, the extraction, the probe, the
+    selection, the concatenation and both manifests before anything asks for
+    it. That is 30 GB and hours of a paid instance, and what finally surfaces
+    is a CalledProcessError from the aligner's subprocess, which names a return
+    code and not a package.
+
+    Simulated by making the import fail rather than by uninstalling anything,
+    so this runs the same way on a machine that has the group and on CI, which
+    syncs without it.
+    """
+    import sys
+
+    from training.scripts.prepare_moespeech import require_japanese_segmenter
+
+    monkeypatch.setitem(sys.modules, "fugashi", None)
+    caplog.set_level(logging.INFO)
+
+    with pytest.raises(typer.Exit):
+        require_japanese_segmenter(will_align=True)
+
+    said = "\n".join(record.message for record in caplog.records)
+    assert "uv sync --group japanese" in said, said
+
+
+def test_a_run_that_will_not_align_is_told_rather_than_stopped(monkeypatch, caplog):
+    """A run with no cutoffs stops at the probe, so it does not need the group.
+
+    Refusing it would refuse the run the operator has to make first -- the
+    probe is what the cutoffs are read off. Saying so anyway is the point: that
+    run is the long one, and the group can be installed while it downloads.
+    """
+    import sys
+
+    from training.scripts.prepare_moespeech import require_japanese_segmenter
+
+    monkeypatch.setitem(sys.modules, "fugashi", None)
+    caplog.set_level(logging.INFO)
+
+    require_japanese_segmenter(will_align=False)  # returns rather than raising
+
+    said = "\n".join(record.message for record in caplog.records)
+    assert "uv sync --group japanese" in said, said
+
+
+def test_the_installed_segmenter_satisfies_the_check():
+    """The other direction: an instance that is ready must not be turned away.
+
+    Without this the check is only known to fail, and a check that always
+    fails would refuse every correctly prepared run -- the same wasted day it
+    exists to prevent, in the other direction.
+    """
+    pytest.importorskip("fugashi", reason="uv sync --group japanese")
+    pytest.importorskip("unidic_lite", reason="uv sync --group japanese")
+
+    from training.scripts.prepare_moespeech import require_japanese_segmenter
+
+    require_japanese_segmenter(will_align=True)
+
+
+def test_the_segmenter_is_checked_before_the_first_stage(tmp_path, monkeypatch):
+    """Early is the whole value: after stage 1 the check has already cost hours.
+
+    Pinned as "nothing had been fetched when it was asked", which is what an
+    operator gets back for a missing package -- an error in the first second,
+    with the disk untouched -- rather than as a call count, which a check made
+    at the end of the run would satisfy just as well.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+
+    with pytest.raises(typer.Exit):  # no cutoffs: stops at the probe
+        p.run()
+    assert p.calls["segmenter_check"] == [(False, 0)], p.calls["segmenter_check"]
+    p.calls.clear()  # the recording below is the second run's, not both runs'
+
+    p.run(**CUTOFFS)
+
+    assert p.calls["segmenter_check"] == [(True, 0)], p.calls["segmenter_check"]
 
 
 def test_the_run_stops_until_the_thresholds_have_been_chosen(tmp_path, monkeypatch, caplog):
@@ -2259,6 +2357,9 @@ def test_a_re_run_whose_artifacts_all_share_a_timestamp_redoes_nothing(tmp_path,
     assert {stage: len(c) for stage, c in p.calls.items()} == done | {
         "download_called": 2,
         "extract_called": 4,
+        # Asked once per run, before anything else: it costs an import and the
+        # answer can change between runs, which is the point of asking again.
+        "segmenter_check": 2,
     }
     assert _tree(p.out) == before
 
