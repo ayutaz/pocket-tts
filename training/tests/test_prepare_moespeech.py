@@ -356,6 +356,28 @@ def test_disagreeing_transcripts_score_high_cer(tmp_path):
     assert a["cer"] > 0.5
 
 
+def test_cer_is_measured_against_the_transcript_the_manifest_will_carry(tmp_path):
+    """Which of the two ASRs is the reference decides the number, not just its
+    sign. jiwer normalises the edit distance by the reference's length, so the
+    two orders stop agreeing the moment the systems disagree about *length* --
+    which is the commonest ASR failure, one of them truncating.
+
+    The pair here is deliberately lopsided: fifteen characters against two.
+    Measured against the whisper side, which is the string `transcript` carries
+    into the manifest, the disagreement is 13/15 and the clip sits inside the
+    `max_cer=1.0` row of the retention grid. Measured the other way round it is
+    6.5 -- outside every row in the grid -- so the swap would move the whole
+    retention table and the whole reported CER distribution with it. Both
+    orders are `> 0.5` here, and both are `> 0` on any pair that disagrees at
+    all, so only an assertion naming the value has a side to it.
+    """
+    from training.scripts.prepare_moespeech import read_annotation
+
+    a = read_annotation(_annotation(tmp_path, "a", "こんにちは今日はいい天気ですね", "こん"))
+    assert a["transcript"] == "こんにちは今日はいい天気ですね"
+    assert a["cer"] == pytest.approx(13 / 15), a["cer"]  # reversed, this pair is 6.5
+
+
 def test_an_annotation_missing_a_field_is_dropped(tmp_path):
     """Rather than defaulting: a missing duration would become a wrong
     manifest entry, and the loader would read a window that is not there."""
@@ -450,6 +472,44 @@ def test_retention_keeps_the_clips_sitting_exactly_on_the_cer_cutoff(tmp_path):
     assert stats["count"] == 10
     row = next(r for r in stats["retention"] if r["max_cer"] == 0.0 and r["min_mos"] == 0.0)
     assert row["kept"] == 7, row
+
+
+def test_probe_reports_hours_of_audio_and_not_seconds_of_it(tmp_path):
+    """`hours` is the column an operator actually reads: the question put to
+    this table is not "what fraction survives" but "does --max-cer 0.1 still
+    leave me the hundred hours I was asked for". It is also the only number in
+    probe.json carried in a different unit from the field it is summed from,
+    and a seconds- or minutes-for-hours slip is invisible in the file itself --
+    every row simply reads uniformly larger, the strictest cutoff appears to
+    clear the target, and the shortfall surfaces only after the corpus has been
+    built. The same seam has caught this file once already on the other side,
+    where info.csv's column is minutes and `--hours` is hours.
+
+    Durations differ between the kept clips and the dropped ones (7 x 30 s
+    agreeing, 3 x 90 s not) so that the corpus total, the kept total, and any
+    count-times-average stand-in for either are three different numbers: the
+    corpus is 480 s and the `max_cer=0.0` row keeps 210 s of it, which is
+    exactly the point `_retention` exists to make -- 70% of the clips is 44% of
+    the audio.
+    """
+    from training.scripts.prepare_moespeech import probe_utterances
+
+    for i in range(10):
+        agrees = i < 7
+        _annotation(
+            tmp_path,
+            f"u{i}",
+            "こんにちは",
+            "こんにちは" if agrees else "違う",
+            duration=30.0 if agrees else 90.0,
+            mos=4.2,
+        )
+
+    stats = probe_utterances(tmp_path)
+    assert stats["hours"] == pytest.approx(480.0 / 3600)
+    row = next(r for r in stats["retention"] if r["max_cer"] == 0.0 and r["min_mos"] == 0.0)
+    assert row["kept"] == 7, row
+    assert row["hours"] == pytest.approx(210.0 / 3600), row
 
 
 def test_probe_reports_a_distribution_and_not_just_an_average(tmp_path):
