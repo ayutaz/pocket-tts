@@ -33,6 +33,7 @@ from pocket_tts.models.mimi import build_mimi
 from pocket_tts.modules.stateful_module import StatefulModule, increment_steps, init_states
 from pocket_tts.quantization import RECOMMENDED_CONFIG, apply_dynamic_int8
 from pocket_tts.utils.config import CONFIGS_DIR, Config, load_config
+from pocket_tts.utils.text_normalization import TextRules, resolve_normalizer
 from pocket_tts.utils.utils import (
     _ORIGINS_OF_PREDEFINED_VOICES,
     DEBUG_MIMI,
@@ -960,9 +961,13 @@ class TTSModel(nn.Module):
 
 
 def prepare_text_prompt(
-    text: str, pad_with_spaces_for_short_inputs: bool, remove_semicolons: bool
+    text: str,
+    pad_with_spaces_for_short_inputs: bool,
+    remove_semicolons: bool,
+    *,
+    rules: TextRules = TextRules(),
 ) -> tuple[str, int]:
-    text = text.strip()
+    text = resolve_normalizer(rules.normalizer)(text).strip()
     if text == "":
         raise ValueError("Text prompt cannot be empty")
     text = text.replace("\n", " ").replace("\r", " ").replace("  ", " ")
@@ -978,10 +983,11 @@ def prepare_text_prompt(
     if not text[0].isupper():
         text = text[0].upper() + text[1:]
 
-    # Let's make sure it ends with some kind of punctuation
-    # If it ends with a letter or digit, we add a period.
+    # Let's make sure it ends with some kind of punctuation.
+    # Kana and kanji are isalnum() too, so a language that does not write a
+    # terminal stop sets rules.terminal_punctuation to "" and gets none.
     if text[-1].isalnum():
-        text = text + "."
+        text = text + rules.terminal_punctuation
 
     # The model does not perform well when there are very few tokens, so
     # we can add empty spaces at the beginning to increase the token count.
