@@ -90,57 +90,99 @@ def test_an_unknown_order_is_refused(tmp_path):
         select_characters(info, hours=1.0, order="larget")
 
 
+FETCHED = b"PK\x03\x04fake"
+
+
+def _fake_hub(tmp_path):
+    """A stand-in for huggingface_hub whose cache is *not* the destination.
+
+    The real `hf_hub_download` returns a path inside its own cache, and moving
+    those bytes into `dest` is the only reason `download_characters` exists. A
+    fake that wrote straight into `dest` would make that move invisible: the
+    fetched file and the destination file would be the same file, so an
+    implementation that transferred nothing at all would still pass.
+    """
+    cache = tmp_path / "hf_cache"
+    cache.mkdir()
+    dest = tmp_path / "zips"
+    calls = []
+
+    def fake_fetch(repo_id, filename, **kw):
+        calls.append((repo_id, filename, kw.get("repo_type")))
+        p = cache / filename
+        p.write_bytes(FETCHED)
+        return str(p)
+
+    return dest, calls, fake_fetch
+
+
 def test_download_skips_what_is_already_complete(tmp_path, monkeypatch):
     """Re-running after an interrupt must not re-fetch 5 GB it already has."""
     from training.scripts import prepare_moespeech as m
 
-    calls = []
-
-    def fake_fetch(repo_id, filename, **kw):
-        calls.append(filename)
-        p = tmp_path / filename
-        p.write_bytes(b"PK\x03\x04fake")
-        return str(p)
-
+    dest, calls, fake_fetch = _fake_hub(tmp_path)
     monkeypatch.setattr(m, "hf_hub_download", fake_fetch)
-    (tmp_path / "aaa.zip").write_bytes(b"PK\x03\x04already here")
+    dest.mkdir()
+    (dest / "aaa.zip").write_bytes(b"PK\x03\x04already here")
 
-    m.download_characters(["aaa", "bbb"], tmp_path, repo="fake/repo")
-    assert calls == ["bbb.zip"], calls
+    paths = m.download_characters(["aaa", "bbb"], dest, repo="fake/repo")
+
+    # The repo and repo_type are asserted, not just the filename: these zips
+    # live in a dataset repo, and without repo_type="dataset" the hub resolves
+    # the name in the model namespace and every fetch 404s.
+    assert calls == [("fake/repo", "bbb.zip", "dataset")], calls
+    assert (dest / "aaa.zip").read_bytes() == b"PK\x03\x04already here"
+    assert (dest / "bbb.zip").read_bytes() == FETCHED
+    assert [p.name for p in paths] == ["aaa.zip", "bbb.zip"]
 
 
 def test_download_returns_a_path_for_every_requested_character(tmp_path, monkeypatch):
     """A caller that gets fewer paths than it asked for would silently train on
-    a smaller corpus than intended."""
+    a smaller corpus than intended. One zip is already present so the list spans
+    both branches -- forgetting to append the skipped one is the likeliest way
+    to lose a path, and on a re-run that is where nearly every speaker sits."""
     from training.scripts import prepare_moespeech as m
 
-    def fake_fetch(repo_id, filename, **kw):
-        p = tmp_path / filename
-        p.write_bytes(b"PK\x03\x04fake")
-        return str(p)
-
+    dest, calls, fake_fetch = _fake_hub(tmp_path)
     monkeypatch.setattr(m, "hf_hub_download", fake_fetch)
-    paths = m.download_characters(["aaa", "bbb", "ccc"], tmp_path, repo="fake/repo")
+    dest.mkdir()
+    (dest / "bbb.zip").write_bytes(b"PK\x03\x04already here")
+
+    paths = m.download_characters(["aaa", "bbb", "ccc"], dest, repo="fake/repo")
+
     assert [p.name for p in paths] == ["aaa.zip", "bbb.zip", "ccc.zip"]
+    assert [p.parent for p in paths] == [dest, dest, dest]
+    assert calls == [("fake/repo", "aaa.zip", "dataset"), ("fake/repo", "ccc.zip", "dataset")]
 
 
 def test_download_does_not_trust_a_leftover_partial(tmp_path, monkeypatch):
     """A kill mid-copy leaves `<name>.zip.partial`, not `<name>.zip`. If that
-    partial were mistaken for a completed download, the corpus would silently
-    train on a truncated (or missing) zip forever -- re-running never fixes it."""
+    partial were mistaken for a completed download -- or promoted into place as
+    if resuming it -- the corpus would silently train on a truncated zip
+    forever, and re-running would never fix it."""
     from training.scripts import prepare_moespeech as m
 
-    calls = []
-
-    def fake_fetch(repo_id, filename, **kw):
-        calls.append(filename)
-        p = tmp_path / filename
-        p.write_bytes(b"PK\x03\x04fake")
-        return str(p)
-
+    dest, calls, fake_fetch = _fake_hub(tmp_path)
     monkeypatch.setattr(m, "hf_hub_download", fake_fetch)
-    (tmp_path / "aaa.zip.partial").write_bytes(b"PK\x03\x04truncated")
+    dest.mkdir()
+    (dest / "aaa.zip.partial").write_bytes(b"PK\x03\x04truncated")
 
-    paths = m.download_characters(["aaa"], tmp_path, repo="fake/repo")
-    assert calls == ["aaa.zip"], calls
+    paths = m.download_characters(["aaa"], dest, repo="fake/repo")
+
+    assert calls == [("fake/repo", "aaa.zip", "dataset")], calls
     assert [p.name for p in paths] == ["aaa.zip"]
+    assert (dest / "aaa.zip").read_bytes() == FETCHED
+    assert not (dest / "aaa.zip.partial").exists()
+
+
+def test_download_creates_the_destination_directory(tmp_path, monkeypatch):
+    """The stage runs on a fresh instance where `dest` does not exist yet."""
+    from training.scripts import prepare_moespeech as m
+
+    dest, _calls, fake_fetch = _fake_hub(tmp_path)
+    monkeypatch.setattr(m, "hf_hub_download", fake_fetch)
+    assert not dest.exists()
+
+    paths = m.download_characters(["aaa"], dest, repo="fake/repo")
+
+    assert paths[0].read_bytes() == FETCHED
