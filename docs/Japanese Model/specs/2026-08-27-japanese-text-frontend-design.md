@@ -56,6 +56,19 @@ docstring 自身が「推論側は未接続」と記している。
 **この帰結として、PR #254 のチェコ語 WER 数値を日本語の go/no-go 基準に
 流用できない。** 検証ランの判定手段として CER が要る。
 
+### 5. 分割した文が空白で繋ぎ直される
+
+`split_into_best_sentences` は分割したセグメントをチャンクに詰め直す際、
+`current_chunk += " " + sentence`（`tts_model.py:1076`）で連結する。
+
+**これは欠陥2の修正が作り出す欠陥である。** 現状は日本語が分割されないため
+再結合も起きない。境界に `。` を足した瞬間、分割された文が学習テキストに
+存在しない空白で繋ぎ直される。ローダ側で `data.word_separator: ""` として
+直したのと同じ問題が、推論側に残っている。
+
+実測: 上記の段落を `max_tokens=32` で詰め直すと、**空白が2個注入される**
+（セグメント自体は綺麗にデコードされる。注入源は詰め直しのループのみ）。
+
 ## 設計方針
 
 `pocket_tts/utils/config.py` の `Config` に**言語別のテキスト規則を持たせ、
@@ -80,6 +93,7 @@ text_normalizer: str | None = None    # "japanese" なら正規化器を通す
 sentence_boundaries: str = ".!...?"   # split_into_best_sentences の文境界
 clause_boundaries: str = ",;:"        # 長すぎる文の再分割に使う節境界
 terminal_punctuation: str = "."       # 無句読点終わりに補う文字。"" なら補わない
+segment_separator: str = " "          # チャンク内で文をつなぐ文字列
 ```
 
 `StrictModel` は `extra="forbid"` だが、**新フィールドに既定値があるため
@@ -92,6 +106,7 @@ text_normalizer: japanese
 sentence_boundaries: ".!...?。…"
 clause_boundaries: ",;:、"
 terminal_punctuation: ""
+segment_separator: ""
 ```
 
 ### 値の根拠（すべてコーパス実測）
@@ -103,6 +118,7 @@ terminal_punctuation: ""
 | `、` を節境界に追加 | 65.3% の行が含む。`,` と同じ役割 |
 | ASCII `.!?` を残す | 正規化が全角 `？！` を ASCII に畳むため、実際に届くのはこちら（行末 `?` 17.6%、`!` 13.1%、全角は**0件**） |
 | `terminal_punctuation: ""` | 49.4% が無句読点終わり、`。` 終わりは 1.12%。**何も足さないのが分布に最も近い** |
+| `segment_separator: ""` | 日本語は空白で書かない。学習側の `data.word_separator: ""` と対になる設定 |
 
 !!! check "境界が BPE に吸収されていないことを検証済み"
     BPE は `。` を `です。` のような大きなピースに畳み込みうる。そうなっていれば
@@ -132,6 +148,7 @@ class TextRules:
     sentence_boundaries: str = ".!...?"
     clause_boundaries: str = ",;:"
     terminal_punctuation: str = "."
+    segment_separator: str = " "   # チャンク内で文をつなぐ文字列
 
 
 def prepare_text_prompt(
@@ -203,6 +220,7 @@ TDD。実装より先にテストを書き、失敗を確認してから通す�
 | 英語の回帰 | 既定の `TextRules()` で `prepare_text_prompt` と `split_into_best_sentences` の出力が現行と一致すること。**既存モデルを壊していない唯一の証明** |
 | 文分割 | `。` を含む段落が複数チャンクに割れること。`tests/test_split_sentences.py` に追記 |
 | 句読点補完 | `terminal_punctuation=""` でかな終わりの文に何も足されないこと。既定では `.` が足されること |
+| チャンク結合 | `segment_separator=""` で分割した日本語が空白なしに繋がること。既定では空白で繋がること |
 | 正規化 | 全角 `？！ＡＢＣ` が畳まれること。`…` と `゛` が保存されること（既存 `test_ja_text.py` から移設） |
 | CER | 1文字違いと無関係な文が別スコアになること。`BasicTextNormalizer` が濁点を保持し `EnglishTextNormalizer` が落とすこと |
 | 評価名 | `--text-normalizer` を変えると `eval_dir_name` が変わること |
