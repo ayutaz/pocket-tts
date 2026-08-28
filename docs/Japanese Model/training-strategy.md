@@ -547,6 +547,36 @@ HF キャッシュ: zip と同じ            ≈ 30 GB
 !!! tip "早期トリップワイヤ"
     チェコ語は 2k step で WER 29.5%（PR #254、既に言語として成立と読める水準）でした。日本語は指標が異なるため同じ数字を目標にはできませんが、**2〜3k step（約25分・$1〜2）で「日本語らしい音韻」すら出ないならパイプラインのバグ**と判断してよいのは変わりません。これは指標ではなく耳で聞いた判断なので、CER に差し替えても成立します。ここで止めれば損失は $2 です。
 
+!!! danger "GPU を借りる前に — 学習側に3つ穴があります"
+    マニフェスト構築を終えたあと、フェーズ1を「明日インスタンスを借りて実行する人」の目で
+    読み直して出たものです。**どれもマニフェスト側ではなく学習側**で、設定ファイルは意図的に
+    変更していません（どう直すかは判断が要るため）。借りる前に片付けてください。
+
+    **1. `data/ja/` はリポジトリに入っていません。** `.gitignore:95` の `/data*/` が
+    ディレクトリごと除外していて、`git ls-files data/ja/` は空を返します。新しいインスタンスに
+    clone しただけでは `tokenizer.model` も `corpus.txt` も `gol_metadata.csv` も
+    `moe20_metadata.csv` もありません。前処理8段を全部終えたあと、**学習開始時に
+    `SentencePieceTokenizer.__init__` がファイル無しで落ちます**。上のフェーズ0は「実施済み」と
+    書かれていますが、それはこの開発機の話です。`data/ja/tokenizer.model` をインスタンスへ
+    転送し、`vocab_size` が 8000 であることを確かめてから GPU を借りてください。作り直す場合は
+    gated repo 2つ（`midralab/gol-dataset-2k-ljspeech`、
+    `ayousanz/moe-speech-20speakers-ljspeech`）から metadata.csv を取ったうえで、
+    `finetune_language_ja.yaml` 冒頭のコマンド列をその順に実行します。
+
+    **2. `max_steps` は 250000 です。** `finetune_language_ja.yaml` は
+    `finetune_language.yaml` を継承しており、そこが 250k step（`:36`）になっています。この
+    フェーズの見積りは「15k step・2.2h・$4〜9」ですが、そのまま起動すると**約36時間・$75〜145**
+    のジョブが始まります。`training/train.py` は設定ファイルのパスしか受け取らない
+    （`assert len(sys.argv) == 2`）ので、**yaml を書き換える以外に止める手段はありません**。
+    15k step で止めるなら起動前に `max_steps` を書き換えてください。`ckpt_freq: 2500` なので
+    最終チェックポイントは `checkpoint_00015000.pt` になります。
+
+    **3. すぐ上の「早期トリップワイヤ」は現状では発火できません。** `sample_freq` の既定は
+    10000（`training/args.py:116`）で、`finetune_language_ja.yaml` は上書きしていません。
+    `train.py` は `(step + 1) % sample_freq == 0` で合成するので、**最初の wav が出るのは
+    10k step ≈ 1.45時間 ≈ $3〜6** です。「2〜3k step・$1〜2 で耳で判断して止める」を実際に
+    行うには、ja 設定に `sample_freq: 500` 程度を足す必要があります。
+
 !!! note "ruff の4件は元からです"
     `bash scripts/dev/ruff-index.sh` をこのフェーズで触った5ファイルにかけると4件出ます
     ——`align_data.py:41` と `prepare_data.py:40` の UP035（`typing_extensions` からの
