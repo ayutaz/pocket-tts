@@ -302,10 +302,39 @@ uv sync --group japanese
 入れ忘れは高くつきます。`align_data._japanese_segmenter` は fugashi を遅延 import するため、
 ダウンロード・展開・probe・選定・連結・両マニフェストまで全部通り切ってから最後に落ち、しかも
 アライナは別プロセスなので表に出るのは `CalledProcessError` の終了コードであって、足りない
-パッケージの名前ではありません。**そのため main() は、アライメントまで行く実行（`--max-cer` と
-`--min-mos` の両方が与えられた実行）ではステージ1の前にこの import を確かめて止まります。**
-probe で止まる実行はこれを必要としないので、警告だけ出して続けます（ダウンロードを待つ間に
-入れられます）。
+パッケージの名前ではありません。**そのため確認は2箇所に入っています。**
+
+**1つ目はステージ0**（ステージ1の前、まだ1バイトも落としていない位置）です。ここで止めるのは
+「この実行はアライナに到達する」と判断したときだけで、その判断式は
+`require_japanese_segmenter(will_align=...)` に渡される次の式です ——
+**`--max-cer` と `--min-mos` の両方が与えられ、かつ「両アライメントが在り、かつ `cutoffs.json`
+が今回渡した対とちょうど同じ」ではないとき**。場合分けするとこうなります。
+
+| 実行 | ステージ0 |
+|---|---|
+| 閾値が片方でも無い（probe で止まる実行） | **警告のみ。** アライナに到達しないので必要ありません（ダウンロードを待つ間に入れられます） |
+| 閾値が揃い、両アライメントが在り、`cutoffs.json` も同じ対 | **警告のみ。** 作り直すものが何も無く、`align()` は出力の有無だけでスキップします。preemption 後に同じコマンドを打ち直すのがこれです（`test_a_re_run_with_nothing_left_to_align_does_not_need_the_segmenter`） |
+| 閾値が揃い、アライメントが片方でも欠けている | **`exit 1`**（`test_a_missing_alignment_still_refuses_a_run_without_the_segmenter`） |
+| 閾値が揃い、両アライメントは在るが `cutoffs.json` の対が違う（無い・読めない場合も含む） | **`exit 1`。** 閾値を変えるとステージ5が選定を、ステージ7が両マニフェストを書き直し、ステージ8は両アライメントを古いものとして捨てます。つまり「在る」ことは「残る」ことを意味しません（`test_changed_cutoffs_over_a_finished_tree_are_refused_again`） |
+
+ステージ0の答えは**まだ予測**です。ステージ5と7がマニフェストに何をするかを上から言い当てる
+ことはできないので、外すときは拒否側に外します —— 要らなかった拒否の代償は
+`uv sync --group japanese` の30秒、見逃しの代償は有料インスタンスの1日だからです。
+
+**2つ目はステージ8**、2回の `align()` のそれぞれ1行前です（`require_segmenter_to_align()`）。
+ここではもう予測ではありません。マニフェストは全て書かれ、古いアライメントは捨てられた後なので、
+`already_aligned()`（= 出力が在るか）が答えの全部です。出力が在ればそのまま戻り、無ければ
+セグメンタを実際に組んでみて、駄目ならパッケージ名を出して `exit 1` します。ステージ0が構造上
+見られないのは**手で消された中間成果物**です —— `utterances.jsonl` を消せばステージ0の時点では
+両アライメントも `cutoffs.json` も揃っているのに、ステージ5〜7が全部書き直し、ステージ8が両方を
+捨てて張り直します。それを拾うのがこの2つ目で、`CalledProcessError` の終了コードが数時間後に
+出る代わりに、その場でパッケージ名の出る停止になります
+（`test_the_aligner_is_not_reached_when_only_the_late_guard_can_tell`）。上の段は全てディスクに
+残るので、入れて打ち直せばそこから続きます。
+
+どちらも `_japanese_segmenter_error()` を通り、`align_data.SEGMENTERS["japanese"]` を**実際に
+組んでみて**判定します（辞書も wrapper も `japanese` グループなので、import できるかだけを見ると
+足りない側を見逃します）。2箇所が別々の条件を持たないのはこのためです。
 
 zip の取得からアライメント済みマニフェストまでは1コマンドで通ります。
 
@@ -328,12 +357,12 @@ uv run python -m training.scripts.prepare_moespeech --hours 124 --out data/ja \
 |---|---|---|---|---|
 | 1 | キャラ選定 | `characters.json` | ファイルが在る（`--hours` が違っても選び直さず、警告して再利用する） | 未計測 |
 | 2 | ダウンロード | `zips/<name>.zip` | zip が在る（`.partial` は無視する） | 未計測 |
-| 3 | 展開 | `extracted/<name>/` | `extracted/<name>.complete` が在る | 未計測 |
+| 3 | 展開 | `extracted/<name>/`・`extracted/<name>.complete` | `extracted/<name>.complete` **と** `extracted/<name>/` の**両方**が在る（マーカーだけ在ってディレクトリが消えていれば展開し直す。ディレクトリだけ在ってマーカーが無ければ中断とみなし、消してから展開し直す）（`test_a_marker_without_its_directory_is_not_trusted`） | 未計測 |
 | 4 | probe | `probe.json` | 在り、かつ**選定話者の** `extracted/<name>.complete` と `characters.json` のどれよりも新しい | 未計測 |
-| 5 | 発話選定 | `utterances.jsonl` | 在り、かつ**上と同じ入力 + `cutoffs.json`** のどれよりも新しい | 未計測 |
+| 5 | 発話選定 | `utterances.jsonl`・`cutoffs.json` | 在り、かつ**上と同じ入力 + `cutoffs.json`** のどれよりも新しい（`cutoffs.json` は前回と違う対のときだけ書き直すので、同じ対なら更新時刻は動きません） | 未計測 |
 | 6 | 連結 | `audio/<speaker>.wav`・`entries/<speaker>.jsonl` | その話者の `entries/<speaker>.jsonl` が在り、`utterances.jsonl` より新しい | 未計測 |
 | 7 | マニフェスト | `train.jsonl`・`valid.jsonl` | 両方が在り、`utterances.jsonl` と `entries/*.jsonl` のどれよりも新しい | 未計測 |
-| 8 | アライメント | `train_aligned.jsonl`・`valid_aligned.jsonl` | 出力が元のマニフェストより新しい（古ければ `.partial`・`.shard*` ごと捨てて張り直す。中断時の `.partial` は `align()` の `--resume` が拾う） | 未計測 |
+| 8 | アライメント | `train_aligned.jsonl`・`valid_aligned.jsonl`・`*_aligned.jsonl.shards`（`align()` が使った `--align-shards` の記録） | 出力が元のマニフェストより新しい（古ければ `.partial`・`.shard*` ごと捨てて張り直す。中断時の `.partial` は `align()` の `--resume` が拾う） | 未計測 |
 
 ステージ6は書くだけでなく**消します**。選定から外れた話者の `entries/<speaker>.jsonl` と、そこに
 書かれていた `audio/` の wav を消し、`--target-sec` を伸ばして必要ファイル数が減ったときも余った
@@ -361,6 +390,31 @@ uv run python -m training.scripts.prepare_moespeech --hours 124 --out data/ja \
 **変えても何も再実行されません。その段の出力を消してから打ち直してください。消すのは1つで
 足ります。** 各段は自分の入力より新しい出力しか再利用しないので、`utterances.jsonl` を消せば
 `entries/`・`audio/`・`train.jsonl`・`valid.jsonl`・`*_aligned.jsonl` まで一緒に作り直されます。
+
+ここまでで触れたのは main() の12個のオプションのうち7個です。残る
+`--out`・`--zips`・`--repo`・`--align-model`・`--verbose` は再利用の判定に一切現れませんが、
+**このうち `--align-model` だけは黙って効かない**ので、先にそれを書きます。
+
+- **`--align-model`** —— **どこにも記録されず、どことも照合されません。** ステージ8のスキップは
+  `align()` が出力の有無だけで決めるので（`already_aligned()` は `out.exists()` そのものです）、
+  **完成した木に対して CTC モデルだけ差し替えて打ち直しても、何一つ再実行されません。警告すら
+  出ません**（`--order` は少なくとも `characters.json` に記録だけはされますが、これは記録も
+  ありません）。張り直したいときは `train_aligned.jsonl` と `valid_aligned.jsonl` を消して
+  ください（残っていれば `.partial`・`.shard*`・`*.shards` も一緒に）。かなを語彙に持たない
+  モデルを `align_data.py` が起動時に拒否するのは**実際に起動したときの話**で、スキップされた
+  実行では起動しません。
+- **`--out`** —— 再利用の判定は全てこの下のファイルの有無と更新時刻なので、別の `--out` は別の木
+  です。何も共有しません（共有するのは HF キャッシュだけなので、ダウンロードは再取得ではなく
+  キャッシュからの複製で済みます）。
+- **`--zips`** —— 既定は `<out>/zips`。ステージ2が見るのは `<zips>/<name>.zip` だけなので、別の
+  ディレクトリを指せば zip はそこへもう一度書かれます（キャッシュが在れば複製で、約30 GB）。
+  展開の判定は `<out>/extracted` 側のマーカーなので、展開はやり直しになりません。逆に**複数の
+  `--out` で同じ `--zips` を指せば、大きい `--hours` の実行が小さい実行の zip をそのまま使えます**
+  —— それがこのオプションの目的です。
+- **`--repo`** —— 記録も照合もされません。`info.csv` と zip の取得先を決めるだけなので、
+  `characters.json` と zip が既に在る木では**何も起きません**。別のリポジトリから取り直すときは
+  `characters.json` と `zips/` を消してください。
+- **`--verbose`** —— ログの詳細度だけです。ディスク上のものは何も変わりません。
 
 `--order` だけは「**記録はされるが、比較されない**」ことに注意してください。選定時の値は
 `characters.json` に `"order"` として書かれています（`prepare_moespeech.py` の選定書き出し）。
@@ -407,6 +461,12 @@ uv run python -m training.scripts.prepare_moespeech --hours 124 --out data/ja \
 算数です。[datasets.md](datasets.md) の実測（zip 151.6 GB、展開後約184 GB、623h）からの按分で、
 **すべて概算**です。キャラごとの圧縮率のばらつきは見ていません。
 
+分母の 623h は datasets.md の実測値で、同じ調査の 395,000発話 × 平均5.68秒 ≈ 623h と整合します。
+按分の分子（151.6 GB と 184 GB）を測ったのと同じ出所なので、ここはこの値を使います。
+なお `prepare_moespeech.py` の docstring と設計文書は 621h と書いています。これは同じ corpus を
+`info.csv` の `total_duration_min` を473キャラぶん合計して測った別の値で、差は 0.3% ——
+この見積り自体の精度よりはるかに小さいので、どちらを入れても下の4式の答えは変わりません。
+
 ```
 zip          : 151.6 GB ÷ 623h × 124h ≈ 30 GB
 展開後       : 184   GB ÷ 623h × 124h ≈ 37 GB
@@ -432,6 +492,8 @@ HF キャッシュ: zip と同じ            ≈ 30 GB
 | `<out>/extracted/` | ステージ8まで終わり、**このコマンドをもう打たないと決めた**後 | **ほぼ全部。** 打ち直すと再展開され、`.complete` の更新時刻が新しくなるので probe・選定・連結・マニフェスト・アライメントまで作り直しになります |
 | `<out>/audio/`・`train_aligned.jsonl`・`valid_aligned.jsonl` | — | **消さないでください。学習が読むのはこれだけです。** `finetune_language_ja.yaml` の `train_jsonl`/`valid_jsonl` がこの2つのマニフェストを指し、その各行の `path` が `audio/` の wav を指します |
 | `entries/`・`utterances.jsonl`・`probe.json`・`train.jsonl`・`valid.jsonl` | いつでも | **消せます。代償は下の段を作り直すことだけです。** `utterances.jsonl` を消せば `entries/`・`audio/`・両マニフェスト・両アライメントまで作り直し（`--target-sec` を変える手順がこれです。上の「それ以外のオプション」参照）、`train.jsonl`・`valid.jsonl` を消せば分割とアライメントのやり直し、`probe.json` は測り直すだけです。ただし `entries/<speaker>.jsonl` は**選定から外れた話者の `audio/` を消すための唯一の手掛かり**でもあるので、先に消すとその wav は以後誰にも消されず残ります |
+| `cutoffs.json` | — | **消しても得はありません。** ステージ5の出力で、`--max-cer`/`--min-mos` を記録している唯一の場所です。消すと次の実行がその場で書き直し、**その新しい更新時刻が `utterances.jsonl` を古くする**ので、閾値は同じままなのに選定・オフセット・`audio/`・両マニフェスト・両アライメントまで作り直しになります |
+| `*_aligned.jsonl.shards` | アライメントが完成した後 | **完成後は無害**（`align()` は出力が在れば分割数を見る前にスキップします）。**未完のアライメントが残っている状態で消すと危険です**: 前回の `--align-shards` を記録している唯一の場所なので、消してから違う分割数で打ち直すと `.partial`・`.shard*` が捨てられずに拾われ、同じ行を二重にアライメントして**マージ時に静かに重複します** |
 
 **見積り**
 
