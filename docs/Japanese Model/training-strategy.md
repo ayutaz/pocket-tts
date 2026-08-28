@@ -351,6 +351,19 @@ uv run python -m training.scripts.prepare_moespeech --hours 124 --out data/ja \
   --max-cer <probe.json から読む> --min-mos <probe.json から読む>
 ```
 
+!!! note "retention 表の `kept` はステージ5までの約束です"
+    表の件数はステージ5の選定が実際に残す件数と一致します（probe と選定が同じ走査を共有して
+    いるため。`test_selection_keeps_exactly_as_many_clips_as_the_table_promised`）。ただし
+    **マニフェストに載る件数はそこからさらに減ることがあります**。ステージ6の `concatenate()` が
+    飛ばすクリップがあるからです —— wav が開けないもの（欠損・切り詰め・フレーム数0）と、
+    **その話者で最初に開けたクリップに固定したサンプルレート／チャンネル数と食い違う**ものです。
+    飛ばした数は
+    `<話者>: N of M clips could not be joined and are not in the manifest` という警告に、
+    固定した値とその固定元のクリップは続く1行に出ます（固定と食い違って飛ばした数が繋げた数を
+    上回るときは、この行も警告に上がります —— 固定したクリップの側が外れだった徴候です）。
+    **表と `train.jsonl` の行数が合わないときの差はここなので、件数はこのログで確かめて
+    ください。**
+
 `--out` 以下は0段目を除いて8つです（0段目は上のセグメンタ確認で、ディスクには何も残しません）。
 
 | # | ステージ | 出力（`--out` 以下） | 再実行でスキップする条件 | 所要時間 |
@@ -362,7 +375,7 @@ uv run python -m training.scripts.prepare_moespeech --hours 124 --out data/ja \
 | 5 | 発話選定 | `utterances.jsonl`・`cutoffs.json` | 在り、かつ**上と同じ入力 + `cutoffs.json`** のどれよりも新しい（`cutoffs.json` は前回と違う対のときだけ書き直すので、同じ対なら更新時刻は動きません） | 未計測 |
 | 6 | 連結 | `audio/<speaker>.wav`・`entries/<speaker>.jsonl` | その話者の `entries/<speaker>.jsonl` が在り、`utterances.jsonl` より新しい | 未計測 |
 | 7 | マニフェスト | `train.jsonl`・`valid.jsonl` | 両方が在り、`utterances.jsonl` と `entries/*.jsonl` のどれよりも新しい | 未計測 |
-| 8 | アライメント | `train_aligned.jsonl`・`valid_aligned.jsonl`・`*_aligned.jsonl.shards`（`align()` が使った `--align-shards` の記録） | 出力が元のマニフェストより新しい（古ければ `.partial`・`.shard*` ごと捨てて張り直す。中断時の `.partial` は `align()` の `--resume` が拾う） | 未計測 |
+| 8 | アライメント | `train_aligned.jsonl`・`valid_aligned.jsonl`・`*_aligned.jsonl.shards`（`align()` が使った分割数の記録。valid 側は常に `1`） | 出力が元のマニフェストより新しい（古ければ `.partial`・`.shard*` ごと捨てて張り直す。中断時の `.partial` は `align()` の `--resume` が拾う） | 未計測 |
 
 ステージ6は書くだけでなく**消します**。選定から外れた話者の `entries/<speaker>.jsonl` と、そこに
 書かれていた `audio/` の wav を消し、`--target-sec` を伸ばして必要ファイル数が減ったときも余った
@@ -378,7 +391,12 @@ uv run python -m training.scripts.prepare_moespeech --hours 124 --out data/ja \
 `utterances.jsonl` だけが書き換わり、`train.jsonl` は却下したはずの選定を指したまま「完了」と
 表示されます。
 
-例外の3つ目、`--align-shards` は効き方が違い、**効くのは中断で残った途中結果に対してだけ**です。
+例外の3つ目、`--align-shards` は効き方が違います。まず**掛かるのは学習側のマニフェストだけ**
+です —— valid 側は `align(valid_manifest, valid_aligned, 1, ...)` と分割数 `1` が直接書かれて
+いて（`prepare_moespeech.py:1341`）、`--align-shards` をいくつにしても変わりません。ステージ8
+全体を分割するオプションではなく、`train_aligned.jsonl` を分割するオプションです
+（`valid_aligned.jsonl.shards` は常に `1` が書かれます）。そのうえで、**効くのは中断で残った
+途中結果に対してだけ**です。
 `align()` は分割数を出力の隣（`train_aligned.jsonl.shards`）に記録し、前回と違う数で打ち直すと
 `.partial` と `.shard*`（マニフェスト側の分割ぶんも）を捨ててアライメントを最初からやり直します
 （`prepare_data.py:113-123`）。各ワーカーの `--resume` は (path, start) で再開位置を決めるため、
@@ -536,6 +554,11 @@ HF キャッシュ: zip と同じ            ≈ 30 GB
     `0eeb407` 時点のファイルで再現する既存の指摘**で、この作業が触った行ではありません。
     uvx が引く ruff が新しくなって既定ルールが増えたので見えているだけです。壊したわけでは
     ないので、無関係なコードを書き換えて黙らせないでください。
+
+    5件目を作らないための注記: `prepare_moespeech.py` の `_japanese_segmenter_error()` は
+    `except Exception` を**返します**（送出しないので BLE001 が付きます）。あの広さは意図した
+    ものなので、理由を添えた `# noqa: BLE001` を1行だけ置いてあります。件数が5になっていたら
+    この作業で増えたということなので、既存4件と混ぜずに直してください。
 
 ### フェーズ2以降
 

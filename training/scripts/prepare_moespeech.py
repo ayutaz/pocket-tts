@@ -523,12 +523,12 @@ def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> lis
     side of the cut as the voice prompt for the other, so a file holding two
     speakers would teach the model that the prompt does not decide the voice.
     That one is a caller's bug and stops the run; a clip whose audio is
-    missing or truncated, or recorded at another rate, or in a different number
-    of channels, is corpus data and costs only that clip. Raising there would
-    end the run at the same clip on every re-run -- the selection is
-    deterministic and read back off `utterances.jsonl` -- with no way past it
-    but hand-editing that file, which is the one thing this script is built not
-    to need. A skipped clip simply never reaches `entries`,
+    missing or truncated, or holding no frames at all, or recorded at another
+    rate, or in a different number of channels, is corpus data and costs only
+    that clip. Raising there would end the run at the same clip on every re-run
+    -- the selection is deterministic and read back off `utterances.jsonl` --
+    with no way past it but hand-editing that file, which is the one thing this
+    script is built not to need. A skipped clip simply never reaches `entries`,
     which is already what the manifest should say about it.
 
     The audio is left at its own 44.1 kHz; the loader resamples as it reads.
@@ -548,14 +548,18 @@ def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> lis
     written = 0  # files finished, which is the index of the one being built
     sample_rate = None
     channels = None  # of the first readable clip, like the rate beside it
+    pinned_by = None  # and the clip those two came from, so the summary can name it
 
     skipped = 0
+    pin_skipped = 0  # of those, the ones that disagreed with the pin rather than being broken
     mismatched = 0  # clips whose audio is not the length the annotation claims
     who = next(iter(speakers), out_wav.stem)
 
-    def skip(wav_path, why) -> None:
-        nonlocal skipped
+    def skip(wav_path, why, *, pin: bool = False) -> None:
+        nonlocal skipped, pin_skipped
         skipped += 1
+        if pin:
+            pin_skipped += 1
         if skipped % 100 == 1:  # one line per hundred: this can be the whole corpus
             logger.warning(f"not joining ({skipped} so far): {wav_path}: {why}")
 
@@ -569,12 +573,27 @@ def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> lis
             # the expected surprises of the first real run.
             skip(u["wav"], e)
             continue
+        n_samples = wav.shape[1]
+        if n_samples == 0:
+            # A valid header over no frames at all reads fine -- sphn returns
+            # shape (1, 0) -- so it clears the read, the rate and the channel
+            # count, and then lays down nothing: `cursor` does not advance, and
+            # the next clip is handed the same (path, start) as this one. That
+            # pair is what `align_data._entry_key` and `_resume_done` resume on,
+            # so a resumed alignment reads the two as one utterance and drops
+            # the second without a word -- and the manifest carries a
+            # zero-length window besides. Corpus data like a truncated clip, and
+            # it costs the same one clip. Skipped before the pin below as well:
+            # a clip that contributes no samples has no business deciding the
+            # rate and channel count every clip after it is measured against.
+            skip(u["wav"], "no audio frames")
+            continue
         if sample_rate is None:
-            sample_rate, channels = sr, wav.shape[0]
+            sample_rate, channels, pinned_by = sr, wav.shape[0], u["wav"]
         elif sr != sample_rate:
             # Joining it anyway would play it at the wrong speed and put every
             # offset after it in the file out by a factor nothing reports.
-            skip(u["wav"], f"{sr} Hz among {sample_rate} Hz clips")
+            skip(u["wav"], f"{sr} Hz among {sample_rate} Hz clips", pin=True)
             continue
         elif wav.shape[0] != channels:
             # Skipped for the same reason as the rate, and urgently: this one
@@ -584,9 +603,8 @@ def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> lis
             # stereo clip among mono ones raises where nothing catches it and
             # ends the whole run, at the same clip on every re-run, with no way
             # past it but hand-editing utterances.jsonl.
-            skip(u["wav"], f"{wav.shape[0]} channels among {channels}-channel clips")
+            skip(u["wav"], f"{wav.shape[0]} channels among {channels}-channel clips", pin=True)
             continue
-        n_samples = wav.shape[1]
         target_samples = round(target_sec * sample_rate)
         if parts and cursor + n_samples > target_samples:
             _write_joined(parts, sample_rate, _joined_path(out_wav, written))
@@ -607,14 +625,18 @@ def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> lis
                 "speaker": u["speaker"],
                 "transcript": u["transcript"],
                 "path": str(_joined_path(out_wav, written)),
-                # Six decimals rather than three because this number is a
-                # key, not a display: align_data resumes on (path, start), so
-                # two clips whose combined length rounds to the same
-                # millisecond would be one utterance to `_resume_done` and the
-                # second would be dropped from a resumed alignment without a
-                # word. Microseconds cannot collide for any real clip.
+                # Six decimals for both, for two reasons that meet at the
+                # same rounding. `start` is a key rather than a display:
+                # align_data resumes on (path, start), so two clips whose
+                # combined length rounds to the same millisecond would be one
+                # utterance to `_resume_done` and the second would be dropped
+                # from a resumed alignment without a word. `duration` is the
+                # length of the window both readers then ask for, and at
+                # milliseconds any clip shorter than half of one becomes 0.0 --
+                # `read_window` would ask sphn for a zero-length window out of a
+                # clip that has real audio in it. Microseconds are below both.
                 "start": round(cursor / sample_rate, 6),
-                "duration": round(duration, 3),
+                "duration": round(duration, 6),
             }
         )
         parts.append(wav)
@@ -624,12 +646,31 @@ def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> lis
         _write_joined(parts, sample_rate, _joined_path(out_wav, written))
     if skipped:
         # Said once at the end as well as every hundredth time above: this is
-        # how many clips the manifest is short of the selection, and a speaker
-        # whose first clip set the rate can lose every clip after it that way.
+        # how many clips the manifest is short of the selection.
         logger.warning(
             f"{who}: {skipped} of {len(utterances)} clips "
             "could not be joined and are not in the manifest"
         )
+    if pin_skipped:
+        # The line above says how many were lost; this one says to what. The
+        # rate and channel count are pinned by the first clip that opened and
+        # are never revisited -- a second pass over 400,000 clips to find the
+        # majority is not worth what it buys -- so a speaker whose first clip
+        # happens to be stereo, or resampled, loses every good clip after it,
+        # and without this the operator is left with a count and no reason for
+        # it. More clips skipped against the pin than were joined with it is
+        # the signature of exactly that, and is the one case worth a warning:
+        # a handful of odd clips among thousands is the corpus, while a
+        # majority disagreeing means the pin, not the clips, is the odd one.
+        pinned = (
+            f"{who}: joined at {sample_rate} Hz, {channels} channel(s), pinned by the first "
+            f"clip that opened ({pinned_by}); {pin_skipped} of {len(utterances)} clips "
+            f"disagreed with that and were skipped, against {len(entries)} joined"
+        )
+        if pin_skipped > len(entries):
+            logger.warning(f"{pinned} -- more skipped than joined, so suspect the pin itself")
+        else:
+            logger.info(pinned)
     if mismatched:
         # One line, at info, because the per-clip lines are debug and there can
         # be 400,000 of them: without this the operator either sees nothing or
@@ -828,7 +869,14 @@ def _japanese_segmenter_error() -> Exception | None:
     build = SEGMENTERS["japanese"]  # outside the try: a missing key is a bug here, not there
     try:
         build()
-    except Exception as e:
+    # Deliberately blind, and the width is the point: the question is whether
+    # stage 8 can run, and every way of answering no is an answer. A missing
+    # dictionary and a missing wrapper do not raise the same type, no API
+    # promises which types either can raise, and narrowing this to the ones seen
+    # today would turn tomorrow's into a crash inside the guard whose whole job
+    # is to keep the run from crashing hours later. Returned rather than
+    # swallowed: both callers put the exception in the line they stop on.
+    except Exception as e:  # noqa: BLE001
         return e
     return None
 
@@ -1102,9 +1150,12 @@ def main(
     names = [c["name"] for c in chosen["characters"]]
     logger.info(f"{len(names)} speakers, {chosen['hours_selected']:.1f}h of audio to fetch")
 
-    # 2 + 3. Fetch and unpack, speaker by speaker. Both stages decide per
-    #        speaker what they already have -- this is where the tens of
-    #        minutes are, and where a preemption would otherwise cost most.
+    # 2 + 3. Fetch every zip, then unpack them. `download_characters` returns
+    #        a list rather than yielding, so nothing is unpacked until all of
+    #        the zips are on disk -- the two stages do not overlap. Each still
+    #        decides per speaker what it already has, which is what a re-run
+    #        after a preemption rests on: this is where the tens of minutes
+    #        are, and where a kill would otherwise cost most.
     for zip_path in download_characters(names, zip_dir, repo=repo):
         extract_character(zip_path, extract_root)
 

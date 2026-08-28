@@ -1399,6 +1399,41 @@ def test_a_clip_whose_audio_cannot_be_read_costs_only_that_clip(tmp_path):
     assert _dominant_hz(tmp_path / "joined.wav", 1.0, 1.0) == pytest.approx(880.0, abs=2)
 
 
+def test_a_clip_with_no_audio_in_it_costs_only_that_clip(tmp_path):
+    """A valid header over zero frames clears every guard and then breaks them.
+
+    sphn reads it as shape (1, 0): the read succeeds, its sample rate matches,
+    its channel count matches, so nothing above stops it -- and then it lays
+    down no samples at all. `cursor` does not advance, so the clip after it is
+    handed the same (path, start) as this one, which is the pair align_data's
+    `_entry_key` and `_resume_done` use to decide what a resumed alignment has
+    already done: the two read as one utterance and the second is dropped
+    without a word. The entry it writes for itself is a zero-length window
+    besides, which `read_window` would go on to ask sphn for.
+
+    A clip with no audio is corpus data like a truncated one, so it is skipped
+    the same way and costs the same one clip -- and the clip after it takes the
+    offset it would have had.
+    """
+    from training.scripts.prepare_moespeech import concatenate
+
+    empty = {
+        "id": "silent",
+        "wav": _wav(tmp_path / "silent.wav", 0.0, 220.0),
+        "duration": 0.0,
+        "transcript": "あ",
+        "speaker": "spk",
+    }
+    clips = _clips(tmp_path, 1.0, [220.0, 880.0])
+
+    entries = concatenate([clips[0], empty, clips[1]], tmp_path / "joined.wav", target_sec=60.0)
+
+    assert [e["id"] for e in entries] == ["u0", "u1"], entries
+    assert [e["start"] for e in entries] == [0.0, 1.0], entries
+    assert all(e["duration"] > 0 for e in entries), entries
+    assert _dominant_hz(tmp_path / "joined.wav", 1.0, 1.0) == pytest.approx(880.0, abs=2)
+
+
 def test_a_concatenated_entry_carries_what_the_manifest_needs(tmp_path):
     """The whole dict, because the manifest is written straight out of it.
 
