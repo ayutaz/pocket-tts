@@ -14,7 +14,7 @@ import os
 import random
 import shutil
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -517,6 +517,47 @@ def test_an_annotation_names_its_clip_and_its_speaker(tmp_path):
     assert a["wav"] == spk / "clip_0001.wav"
 
 
+def test_the_speaker_is_the_character_and_not_the_directory_the_clip_sits_in(tmp_path):
+    """The scan walks each character's root with `rglob`, so the clips may sit
+    anywhere below it -- and `<name>/wav/clip.json` is an ordinary way to pack a
+    zip. Nobody has unpacked a real MoeSpeech zip, and every other fixture here
+    lays the clips flat, which is the one layout where the directory a JSON
+    sits in happens to be the character.
+
+    Read off the path in this one, every clip of every character is labelled
+    "wav". That is not a cosmetic wrong name: `concatenate` refuses a mixed
+    list by comparing exactly this label, so two characters sharing one would
+    be joined into a single recording -- the loader takes one side of a cut as
+    the voice prompt for the other, which is the property the whole pipeline
+    exists to protect -- the split would hold out a label rather than a voice,
+    and `audio/<speaker>.wav` would collide between them. None of it raises.
+
+    So the speaker is the root the scan is walking, which the scan knows, and
+    not the parent directory, which it does not.
+    """
+    from training.scripts.prepare_moespeech import probe_utterances, select_utterances
+
+    for name in ("kasumi", "yukino"):
+        nested = tmp_path / name / "wav"
+        nested.mkdir(parents=True)
+        _annotation(nested, "clip_0001", "あ", "あ")
+        _annotation(nested, "clip_0002", "い", "い")
+
+    kept = list(select_utterances(tmp_path, max_cer=1.0, min_mos=0.0, names=["kasumi", "yukino"]))
+
+    assert len(kept) == 4, kept
+    assert sorted({u["speaker"] for u in kept}) == ["kasumi", "yukino"], kept
+    # Two characters, and two of the utterances belong to each -- not one label
+    # holding all four, which is what reading the parent directory produces.
+    assert sorted(Counter(u["speaker"] for u in kept).values()) == [2, 2], kept
+    # And the audio is still the JSON's sibling, wherever the JSON sits.
+    for utterance in kept:
+        assert utterance["wav"] == utterance["wav"].parent / f"{utterance['id']}.wav"
+        assert utterance["wav"].parent.name == "wav"
+    # The probe walks the same tree through the same scan, so it counts them too.
+    assert probe_utterances(tmp_path, ["kasumi", "yukino"])["count"] == 4
+
+
 def test_retention_excludes_on_mos(tmp_path):
     """The output that decides the next task's defaults -- the MOS half of it,
     which is where `--min-mos` will be read from.
@@ -937,6 +978,17 @@ def _wav(path, seconds, hz, sr=44100):
     return path
 
 
+def _stereo_wav(path, seconds, hz, sr=44100):
+    """The same tone in two channels: the shape `np.concatenate` refuses."""
+    import numpy as np
+    import sphn
+
+    t = np.linspace(0, seconds, int(seconds * sr), endpoint=False)
+    tone = (0.5 * np.sin(2 * np.pi * hz * t)).astype(np.float32)
+    sphn.write_wav(str(path), np.stack([tone, tone]), sr)
+    return path
+
+
 def _clips(tmp_path, seconds, tones, speaker="spk"):
     """One utterance per tone, shaped the way select_utterances hands them over."""
     return [
@@ -1150,6 +1202,33 @@ def test_the_offsets_describe_the_audio_and_not_the_annotation(tmp_path):
     assert abs(_dominant_hz(out[1]["path"], out[1]["start"], out[1]["duration"]) - 880.0) < 5
 
 
+def test_two_clips_too_short_to_round_apart_still_get_different_starts(tmp_path):
+    """`start` is a key, not a display. align_data resumes on (path, start) --
+    `_entry_key` and `_resume_done` both -- so two clips that land on the same
+    pair are one utterance to a resumed alignment, and the second is dropped
+    from it without a word. Rounded to milliseconds, any two clips whose
+    combined length is under half of one collide; three samples is enough.
+    """
+    from training.scripts.prepare_moespeech import concatenate
+
+    seconds = 3 / 44100
+    utts = [
+        {
+            "id": f"u{i}",
+            "wav": _wav(tmp_path / f"u{i}.wav", seconds, 220.0),
+            "duration": seconds,
+            "transcript": "あ",
+            "speaker": "spk",
+        }
+        for i in range(3)
+    ]
+
+    entries = concatenate(utts, tmp_path / "joined.wav", target_sec=60.0)
+
+    starts = [e["start"] for e in entries]
+    assert len(set(starts)) == len(starts), starts
+
+
 def test_clips_from_two_speakers_are_never_joined(tmp_path):
     """Everything downstream assumes one voice per file.
 
@@ -1233,6 +1312,56 @@ def test_a_clip_at_another_sample_rate_is_never_joined_in(tmp_path):
     assert [e["id"] for e in entries] == ["u0", "u2"], entries
     # No hole where it was: the offsets are measured from the samples actually
     # laid down, so the clip after it starts where it starts.
+    assert [e["start"] for e in entries] == [0.0, 1.0], entries
+    assert _dominant_hz(tmp_path / "joined.wav", 1.0, 1.0) == pytest.approx(880.0, abs=2)
+
+
+def test_a_clip_with_another_channel_count_is_never_joined_in(tmp_path):
+    """The rate is guarded and the channel count was not, and this one is worse.
+
+    A clip at the wrong rate joins silently and mislabels its own window. A
+    stereo clip among mono ones does not join at all: `np.concatenate` refuses
+    arrays that disagree on any axis but the one it joins, and it runs inside
+    `_write_joined`, outside the try/except around `sphn.read` -- so the
+    ValueError escapes `concatenate` entirely and ends the run.
+
+    That contradicts this function's own contract, which is that a clip that is
+    missing, truncated or at another rate "is corpus data and costs only that
+    clip". The reason is the same one: 400,000 clips on a preemptible instance,
+    read back off a deterministic `utterances.jsonl`, so a raise here ends every
+    re-run at the same clip, with nothing to do about it but hand-edit that
+    file. And it is not the first clip that decides it -- the mono clips after
+    the stereo one are perfectly joinable, and would be lost with it.
+    """
+    from training.scripts.prepare_moespeech import concatenate
+
+    utts = [
+        {
+            "id": "u0",
+            "wav": _wav(tmp_path / "u0.wav", 1.0, 220.0),
+            "duration": 1.0,
+            "transcript": "あ",
+            "speaker": "spk",
+        },
+        {
+            "id": "u1",
+            "wav": _stereo_wav(tmp_path / "u1.wav", 1.0, 440.0),
+            "duration": 1.0,
+            "transcript": "い",
+            "speaker": "spk",
+        },
+        {
+            "id": "u2",
+            "wav": _wav(tmp_path / "u2.wav", 1.0, 880.0),
+            "duration": 1.0,
+            "transcript": "う",
+            "speaker": "spk",
+        },
+    ]
+
+    entries = concatenate(utts, tmp_path / "joined.wav", target_sec=60.0)
+
+    assert [e["id"] for e in entries] == ["u0", "u2"], entries
     assert [e["start"] for e in entries] == [0.0, 1.0], entries
     assert _dominant_hz(tmp_path / "joined.wav", 1.0, 1.0) == pytest.approx(880.0, abs=2)
 
@@ -1815,12 +1944,18 @@ def _pipeline(tmp_path, monkeypatch):
     # anything if the real check answers it, and one test below puts this back
     # to run exactly that -- a finished tree, re-run on a machine without MeCab.
     real_segmenter_check = m.require_japanese_segmenter
+    # The late half of the same check, faked for the same reason -- and as a
+    # no-op rather than a recording, so the stage counts above stay counts of
+    # the stages. It fires only where stage 0 could not see the work coming,
+    # which is one test below and no other.
+    real_late_check = m.require_segmenter_to_align
 
     monkeypatch.setattr(m, "hf_hub_download", fake_fetch)
     monkeypatch.setattr(m, "download_characters", fake_download)
     monkeypatch.setattr(m, "extract_character", fake_extract)
     monkeypatch.setattr(m, "align", fake_align)
     monkeypatch.setattr(m, "require_japanese_segmenter", fake_segmenter_check)
+    monkeypatch.setattr(m, "require_segmenter_to_align", lambda aligned: None)
     for name in ("probe_utterances", "select_utterances", "concatenate", "split_by_speaker"):
         monkeypatch.setattr(m, name, _recording(calls, name, getattr(m, name)))
 
@@ -1842,6 +1977,7 @@ def _pipeline(tmp_path, monkeypatch):
         run=run,
         speakers=speakers,
         real_segmenter_check=real_segmenter_check,
+        real_late_check=real_late_check,
     )
 
 
@@ -2071,6 +2207,116 @@ def test_a_missing_alignment_still_refuses_a_run_without_the_segmenter(tmp_path,
 
     with pytest.raises(typer.Exit):
         p.run(**CUTOFFS)
+
+
+def test_changed_cutoffs_over_a_finished_tree_are_refused_again(tmp_path, monkeypatch):
+    """Both alignments on disk is not proof that the run will not align.
+
+    Changing the cutoffs over a finished tree is the documented way to change
+    them, and it rebuilds everything: stage 5 rewrites the selection, stage 7
+    both manifests, and stage 8 then discards both alignments as older than the
+    manifests they claim to describe and aligns again. Asked only whether the
+    two files exist, this run is waved through and dies hours later inside the
+    aligner's subprocess, as a CalledProcessError naming a return code.
+
+    So the guard over-approximates: it is quiet only when the alignments are
+    there *and* the cutoffs beside them are the ones just given. The two
+    mistakes do not cost the same -- a refusal the run did not need costs
+    thirty seconds of `uv sync --group japanese`, and a pass it did not deserve
+    costs a day of a paid instance.
+    """
+    import sys
+
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**CUTOFFS)
+    before = _tree(p.out)
+
+    monkeypatch.setattr(p.module, "require_japanese_segmenter", p.real_segmenter_check)
+    monkeypatch.setitem(sys.modules, "fugashi", None)
+
+    with pytest.raises(typer.Exit):
+        p.run(max_cer=0.3, min_mos=1.0)  # a different pair from CUTOFFS
+
+    # Refused before the first stage, exactly as an unprepared run is: nothing
+    # was rebuilt, so the operator installs the group and retypes the command.
+    assert _tree(p.out) == before
+
+
+def test_the_aligner_is_not_reached_when_only_the_late_guard_can_tell(
+    tmp_path, monkeypatch, caplog
+):
+    """The hole the guard above still leaves, and what it costs.
+
+    Stage 0 cannot see a hand-deleted `utterances.jsonl`: both alignments are
+    on disk, the cutoffs beside them are the ones being passed, and by every
+    question it can ask nothing will be rebuilt. Then the selection is redone
+    because its file is gone, the offsets and both manifests follow it, and
+    stage 8 discards both alignments as stale and aligns.
+
+    Which is why the same question is asked again one line before each
+    `align()`, where every manifest has been written and the answer is finally
+    knowable. What was a CalledProcessError hours from now, naming a return
+    code, is a stop that names the package -- and everything above the
+    alignment stays on disk, so installing the group and retyping the command
+    picks up from there.
+    """
+    import sys
+
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**CUTOFFS)
+    _age(p.out)
+    (p.out / "utterances.jsonl").unlink()  # the one thing stage 0 cannot see
+
+    monkeypatch.setattr(p.module, "require_segmenter_to_align", p.real_late_check)
+    monkeypatch.setitem(sys.modules, "fugashi", None)
+    caplog.set_level(logging.INFO)
+
+    with pytest.raises(typer.Exit):
+        p.run(**CUTOFFS)
+
+    # Stage 0 really did wave it through -- otherwise this proves nothing about
+    # the late guard, only that something somewhere refused the run.
+    assert p.calls["segmenter_check"][-1] == (False, 1), p.calls["segmenter_check"]
+    # And the aligner was never reached: the two calls are the first run's.
+    assert len(p.calls["align"]) == 2, p.calls["align"]
+    said = "\n".join(record.message for record in caplog.records)
+    assert "uv sync --group japanese" in said, said
+
+
+def test_a_speaker_label_no_character_answers_to_stops_the_run(tmp_path, monkeypatch, caplog):
+    """The belt to the braces in `read_annotation`: labels are checked once.
+
+    Every guard below stage 6 compares the speaker label and not one of them
+    can check it. `concatenate` refuses a mixed list by comparing labels, so a
+    single wrong label shared by two characters *is* a mixed list and passes --
+    two voices joined into one recording, the loader taking one side of a cut
+    as the voice prompt for the other, the split holding out a label instead of
+    a character, and `audio/<speaker>.wav` written twice under one name.
+
+    A label the scan derived correctly is one of the selected characters by
+    construction, so that is what is checked, once, before a single wav is
+    joined or deleted. It is the last thing standing if the layout of a real
+    zip ever surprises the scan again.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    selecting = p.module.select_utterances
+
+    def mislabelled(*args, **kwargs):
+        # What reading the parent directory off a nested layout produces: every
+        # clip of every character under one label that is not a character.
+        for utterance in selecting(*args, **kwargs):
+            yield {**utterance, "speaker": "wav"}
+
+    monkeypatch.setattr(p.module, "select_utterances", mislabelled)
+    caplog.set_level(logging.ERROR)
+
+    with pytest.raises(typer.Exit):
+        p.run(**CUTOFFS)
+
+    assert not p.calls["concatenate"], "two characters were joined under one label"
+    assert not (p.out / "audio").exists()
+    said = "\n".join(record.message for record in caplog.records)
+    assert "wav" in said, said
 
 
 def test_the_run_stops_until_the_thresholds_have_been_chosen(tmp_path, monkeypatch, caplog):

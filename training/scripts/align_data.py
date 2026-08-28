@@ -338,11 +338,15 @@ def read_window(entry: dict):
     over that much audio is where an out-of-memory kill takes the whole pass
     down rather than one utterance.
 
-    `duration` is required of every row here -- `ManifestKey` validates it -- and
-    for a manifest with one utterance per file the window is the file, so this
-    costs those nothing. Reading past the end of a file is not an error either:
-    sphn returns what is there, so a duration a little longer than the audio
-    behaves exactly as reading the file whole did.
+    `duration` is read straight off the row, and a row without one raises a
+    KeyError here rather than being defaulted: `ManifestKey` declares it
+    `duration: float = 0.0`, but that model is not what this reads and a
+    default of any kind is the failure above wearing a number. Every manifest
+    this aligner is pointed at carries it, and for one with a single utterance
+    per file the window is the file, so this costs those nothing. Reading past
+    the end of a file is not an error either: sphn returns what is there, so a
+    duration a little longer than the audio behaves exactly as reading the file
+    whole did.
     """
     return sphn.read(
         entry["path"], start_sec=float(entry.get("start", 0.0)), duration_sec=entry["duration"]
@@ -561,7 +565,11 @@ def main(
                     sec_per_frame = (n_samples / sr) / t_frames
                     timed = _timed_words(words, norm, spans, sec_per_frame, keep_reading)
                     entry["words"] = _merge_phrases(timed, heads) if merge_heads else timed
-                    out_lines.append((order, json.dumps(entry) + "\n"))
+                    # ensure_ascii off for the reason prepare_moespeech's
+                    # write_manifest turns it off: a Japanese manifest nobody
+                    # can read with `head` is a manifest nobody checks. `fout`
+                    # is opened utf-8 above, so the characters themselves land.
+                    out_lines.append((order, json.dumps(entry, ensure_ascii=False) + "\n"))
                     n_ok += 1
             # Undo the length sort so the output follows input order.
             fout.writelines(line for _, line in sorted(out_lines))

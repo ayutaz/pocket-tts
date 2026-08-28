@@ -154,7 +154,7 @@ def extract_character(zip_path: Path, dest_root: Path) -> Path:
     return out
 
 
-def read_annotation(path: Path) -> dict | None:
+def read_annotation(path: Path, speaker: str | None = None) -> dict | None:
     """One clip's annotation, or None if it cannot stand as a training example.
 
     Every clip ships two independent ASR transcriptions and no manual one, so
@@ -192,9 +192,24 @@ def read_annotation(path: Path) -> dict | None:
     without this check one such file raises AttributeError -- not a decode
     error, not caught by the caller -- and ends a pass 40 minutes in.
 
-    `id`, `speaker` and `wav` come from the path because the JSON carries none
-    of them: the audio is the file's sibling and the speaker is the directory
-    the zip was unpacked into.
+    `id` and `wav` come from the path because the JSON carries neither: the
+    audio is the file's sibling. So is the speaker missing from the JSON, but
+    it does not come from the path -- the caller passes it, because only the
+    caller knows it. `_scan_annotations` walks each selected speaker's root
+    with `rglob`, which is to say it is built for the clips to sit anywhere
+    below `extracted/<name>/`, and `path.parent.name` is the speaker only in
+    the one layout where they sit directly in it. Nobody has unpacked a real
+    MoeSpeech zip; put the clips one directory down -- `<name>/wav/clip.json`,
+    an ordinary way to pack a zip -- and every clip of every character is
+    labelled `wav`. Everything downstream then trusts that label: `concatenate`
+    compares it to refuse a mixed list and would see one speaker where there
+    are two, joining two voices into one file and teaching the model that the
+    prompt does not decide the voice; the split would hold out a label rather
+    than a character; and `audio/<speaker>.wav` would collide between them.
+    None of it raises.
+
+    `path.parent.name` stays as the answer for a caller that names no speaker,
+    which is the flat layout a fixture lays out and nothing real.
     """
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
@@ -208,7 +223,7 @@ def read_annotation(path: Path) -> dict | None:
     whisper, parakeet = normalize_japanese(whisper), normalize_japanese(parakeet)
     return {
         "id": path.stem,
-        "speaker": path.parent.name,
+        "speaker": path.parent.name if speaker is None else speaker,
         "wav": path.with_suffix(".wav"),
         "duration": float(duration),
         "transcript": whisper,
@@ -253,7 +268,11 @@ def _scan_annotations(
 
     The scan is `rglob` because the extract root holds one directory per
     character; `glob` would report an empty corpus for the real data while
-    passing on any fixture that keeps its JSON flat.
+    passing on any fixture that keeps its JSON flat. Because it is `rglob`, the
+    speaker is this loop's to say and not `read_annotation`'s to infer: a zip
+    that puts its clips in a subdirectory of the character's would otherwise
+    label every one of them after that subdirectory. So the name of the root
+    being walked is handed over with each path.
 
     A file that cannot be read is counted in `skipped` and passed over rather
     than raising: one bad JSON in 400,000 must not end a pass that takes 40
@@ -265,10 +284,12 @@ def _scan_annotations(
     because this is a generator: an exhausted one cannot report anything back,
     and the probe has to publish those numbers.
     """
-    roots = [root] if names is None else [root / n for n in sorted(set(names))]
-    for path in (p for scan_root in roots for p in sorted(scan_root.rglob("*.json"))):
+    roots = [(root, None)] if names is None else [(root / n, n) for n in sorted(set(names))]
+    for speaker, path in (
+        (name, p) for scan_root, name in roots for p in sorted(scan_root.rglob("*.json"))
+    ):
         try:
-            row = read_annotation(path)
+            row = read_annotation(path, speaker)
         except (OSError, ValueError, TypeError) as e:
             skipped["unreadable"] += 1
             logger.debug(f"{path}: unreadable ({e})")
@@ -501,12 +522,13 @@ def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> lis
     cut anywhere inside one of these files as one voice -- the loader takes one
     side of the cut as the voice prompt for the other, so a file holding two
     speakers would teach the model that the prompt does not decide the voice.
-    That one is a caller's bug and stops the run; a clip whose audio is missing
-    or truncated, or recorded at another rate, is corpus data and costs only
-    that clip. Raising there would end the run at the same clip on every re-run
-    -- the selection is deterministic and read back off `utterances.jsonl` --
-    with no way past it but hand-editing that file, which is the one thing this
-    script is built not to need. A skipped clip simply never reaches `entries`,
+    That one is a caller's bug and stops the run; a clip whose audio is
+    missing or truncated, or recorded at another rate, or in a different number
+    of channels, is corpus data and costs only that clip. Raising there would
+    end the run at the same clip on every re-run -- the selection is
+    deterministic and read back off `utterances.jsonl` -- with no way past it
+    but hand-editing that file, which is the one thing this script is built not
+    to need. A skipped clip simply never reaches `entries`,
     which is already what the manifest should say about it.
 
     The audio is left at its own 44.1 kHz; the loader resamples as it reads.
@@ -525,8 +547,11 @@ def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> lis
     cursor = 0  # samples already laid down in that file
     written = 0  # files finished, which is the index of the one being built
     sample_rate = None
+    channels = None  # of the first readable clip, like the rate beside it
 
     skipped = 0
+    mismatched = 0  # clips whose audio is not the length the annotation claims
+    who = next(iter(speakers), out_wav.stem)
 
     def skip(wav_path, why) -> None:
         nonlocal skipped
@@ -545,11 +570,21 @@ def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> lis
             skip(u["wav"], e)
             continue
         if sample_rate is None:
-            sample_rate = sr
+            sample_rate, channels = sr, wav.shape[0]
         elif sr != sample_rate:
             # Joining it anyway would play it at the wrong speed and put every
             # offset after it in the file out by a factor nothing reports.
             skip(u["wav"], f"{sr} Hz among {sample_rate} Hz clips")
+            continue
+        elif wav.shape[0] != channels:
+            # Skipped for the same reason as the rate, and urgently: this one
+            # does not merely mislabel its own clip. `np.concatenate` refuses
+            # arrays that disagree on every axis but the one it joins, and it
+            # runs inside `_write_joined`, outside the try above -- so a single
+            # stereo clip among mono ones raises where nothing catches it and
+            # ends the whole run, at the same clip on every re-run, with no way
+            # past it but hand-editing utterances.jsonl.
+            skip(u["wav"], f"{wav.shape[0]} channels among {channels}-channel clips")
             continue
         n_samples = wav.shape[1]
         target_samples = round(target_sec * sample_rate)
@@ -560,7 +595,11 @@ def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> lis
         if abs(duration - u["duration"]) > 0.1:
             # Not an error and not corrected: the audio is what was written, so
             # the audio is what the manifest describes. Worth seeing, though --
-            # it means the corpus's own durations cannot be trusted elsewhere.
+            # it means the corpus's own durations cannot be trusted elsewhere,
+            # and that is a fact about the corpus rather than about any one
+            # clip, so it is counted here and reported once at the end. Per
+            # clip it is debug: 400,000 of these is not something anyone reads.
+            mismatched += 1
             logger.debug(f"{u['wav']}: annotated {u['duration']:.2f}s, audio {duration:.2f}s")
         entries.append(
             {
@@ -568,7 +607,13 @@ def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> lis
                 "speaker": u["speaker"],
                 "transcript": u["transcript"],
                 "path": str(_joined_path(out_wav, written)),
-                "start": round(cursor / sample_rate, 3),
+                # Six decimals rather than three because this number is a
+                # key, not a display: align_data resumes on (path, start), so
+                # two clips whose combined length rounds to the same
+                # millisecond would be one utterance to `_resume_done` and the
+                # second would be dropped from a resumed alignment without a
+                # word. Microseconds cannot collide for any real clip.
+                "start": round(cursor / sample_rate, 6),
                 "duration": round(duration, 3),
             }
         )
@@ -582,8 +627,17 @@ def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> lis
         # how many clips the manifest is short of the selection, and a speaker
         # whose first clip set the rate can lose every clip after it that way.
         logger.warning(
-            f"{next(iter(speakers), out_wav.stem)}: {skipped} of {len(utterances)} clips "
+            f"{who}: {skipped} of {len(utterances)} clips "
             "could not be joined and are not in the manifest"
+        )
+    if mismatched:
+        # One line, at info, because the per-clip lines are debug and there can
+        # be 400,000 of them: without this the operator either sees nothing or
+        # sees an unreadable flood, and the number that matters -- how much of
+        # this corpus's own metadata disagrees with its audio -- is in neither.
+        logger.info(
+            f"{who}: {mismatched} of {len(utterances)} clips are more than 0.1s from their "
+            "annotated duration; the manifest describes the audio that was written"
         )
     return entries
 
@@ -637,17 +691,24 @@ def split_by_speaker(entries: list[dict], valid_hours: float) -> tuple[list, lis
 
     train = [e for e in entries if e["speaker"] not in held_out]
     valid = [e for e in entries if e["speaker"] in held_out]
+    # Counted rather than merely skipped: a speaker with one utterance is
+    # dropped from what may be held out, silently and on every run, and how
+    # much of the corpus that is is a number the operator has no other way to
+    # see. It is only alarming when the valid set also came up short, which is
+    # the warning below; here it is one info line about the corpus's shape.
+    singletons = sum(1 for rows in by_speaker.values() if len(rows) == 1)
     logger.info(
         f"held out {len(held_out)} speakers ({taken / 3600:.2f}h, {len(valid)} utterances) "
-        f"of {len(by_speaker)}; {len(train)} utterances left to train on"
+        f"of {len(by_speaker)}; {len(train)} utterances left to train on; {singletons} "
+        "speakers have a single utterance and were never eligible"
     )
     if taken < target:
         # Not an error -- a small corpus simply has less to hold out -- but the
         # valid set is smaller than asked for and that has to be said out loud.
         logger.warning(
             f"only {taken / 3600:.2f}h of the {valid_hours:.2f}h asked for could be held out: "
-            f"{sum(1 for rows in by_speaker.values() if len(rows) == 1)} of {len(by_speaker)} "
-            f"speakers have a single utterance and cannot be evaluated on"
+            f"{singletons} of {len(by_speaker)} speakers have a single utterance and cannot "
+            "be evaluated on"
         )
     return train, valid
 
@@ -712,6 +773,21 @@ def _read_jsonl(path: Path) -> list[dict]:
         return [json.loads(line) for line in f]
 
 
+def _same_cutoffs(path: Path, cutoffs: dict) -> bool:
+    """Whether `path` already records exactly the cutoffs this run was given.
+
+    Read twice: stage 5 writes the file only when it would change, so an
+    unchanged pair does not touch the timestamp everything below is gated on;
+    and stage 0 asks the same question to tell a re-run that will rebuild the
+    manifests from one that will not. An unreadable or absent file answers no,
+    which rewrites it and refuses the run -- both of them the cheap direction.
+    """
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) == cutoffs
+    except (OSError, ValueError):
+        return False
+
+
 def _stale(output: Path, inputs: list[Path]) -> Path | None:
     """Whichever of `inputs` was written after `output` was built, if any.
 
@@ -738,6 +814,25 @@ def _stale(output: Path, inputs: list[Path]) -> Path | None:
     return max(moved, key=lambda p: p.stat().st_mtime, default=None)
 
 
+def _japanese_segmenter_error() -> Exception | None:
+    """None if align_data can build the Japanese segmenter, else why it cannot.
+
+    Asked through `SEGMENTERS` rather than by importing fugashi, so the answer
+    cannot come to disagree with what stage 8 will actually construct: building
+    the tagger needs the dictionary as well as the wrapper, and both live in
+    the `japanese` dependency group. An `align_data` that will not import at
+    all is a different failure and is left to raise as itself.
+    """
+    from training.scripts.align_data import SEGMENTERS
+
+    build = SEGMENTERS["japanese"]  # outside the try: a missing key is a bug here, not there
+    try:
+        build()
+    except Exception as e:
+        return e
+    return None
+
+
 def require_japanese_segmenter(will_align: bool) -> None:
     """Refuse a run that cannot finish, before it spends the day finding out.
 
@@ -752,12 +847,6 @@ def require_japanese_segmenter(will_align: bool) -> None:
     runs the aligner in a subprocess, so what surfaces is a CalledProcessError
     naming a return code rather than the missing package.
 
-    Asked through `SEGMENTERS` rather than by importing fugashi here, so the
-    check cannot come to disagree with what stage 8 will actually construct:
-    building the tagger is what needs the dictionary as well as the wrapper,
-    and both live in that group. An `align_data` that will not import at all is
-    a different failure and is left to raise as itself.
-
     `will_align` is the caller's answer to "will stage 8 actually align", which
     is not the same question as "was this run given both cutoffs". A run with no
     cutoffs stops at the probe and never reaches the aligner; so does a re-run
@@ -770,32 +859,70 @@ def require_japanese_segmenter(will_align: bool) -> None:
     Neither of those runs is refused -- but both are told, because the probe run
     is the long one and the group can be installed while it downloads.
 
-    What the question cannot see is a run that will rebuild the manifests it is
-    about to align: change the cutoffs over a finished tree and both alignments
-    are on disk when this is asked, then thrown away in stage 8 as older than
-    the manifests it has since rewritten. That run aligns without having been
-    refused, and fails the late way. Answering it would mean predicting stage 5
-    and stage 7 from here, which is the drift this argument is passed to avoid.
-    """
-    from training.scripts.align_data import SEGMENTERS
+    What the two alignments being there cannot say on its own is whether they
+    will survive the run: change the cutoffs over a finished tree and both are
+    on disk when this is asked, then thrown away in stage 8 as older than the
+    manifests stage 7 has since rewritten. Predicting that from here would mean
+    restating stages 5 and 7, which is the drift `will_align` is passed to
+    avoid -- so instead the caller answers the cheap half of it, and this guard
+    over-approximates: it is only quiet when the alignments are there *and* the
+    cutoffs on disk are the ones just given, which is to say when nothing can
+    be rebuilt. Changed cutoffs are refused, which is the documented main path
+    for changing them, and refusing costs thirty seconds of the install.
 
-    build = SEGMENTERS["japanese"]  # outside the try: a missing key is a bug here, not there
-    try:
-        build()
-    except Exception as e:
+    What that still lets through -- a hand-deleted `utterances.jsonl`, another
+    --align-model, another shard count -- `require_segmenter_to_align` catches
+    one line before each `align`, where the answer is no longer a prediction.
+    """
+    error = _japanese_segmenter_error()
+    if error is not None:
         install = "install it with: uv sync --group japanese"
         if not will_align:
             logger.warning(
-                f"the Japanese segmenter is not available ({e}); this run does not reach the "
-                f"aligner and does not need it, but a run that has to align does -- {install}"
+                f"the Japanese segmenter is not available ({error}); this run does not reach "
+                f"the aligner and does not need it, but a run that has to align does -- "
+                f"{install}"
             )
             return
         logger.error(
-            f"stage 8 aligns with the Japanese segmenter, which is not available ({e}). "
+            f"stage 8 aligns with the Japanese segmenter, which is not available ({error}). "
             f"{install}. Nothing has been fetched or written: this is checked before the "
             "first stage precisely so it is not found out after 30 GB and several hours."
         )
-        raise typer.Exit(1) from e
+        raise typer.Exit(1) from error
+
+
+def require_segmenter_to_align(aligned: Path) -> None:
+    """The guard above, asked again where the answer is finally knowable.
+
+    Stage 0 has to guess, because whether stage 8 aligns depends on what stages
+    5 and 7 will do to the manifests, and predicting those from up there is the
+    drift `will_align` exists to avoid. It therefore over-approximates: a run
+    given both cutoffs is refused unless nothing can be rebuilt. Here, one line
+    before `align`, the question is no longer a prediction -- every manifest has
+    been written and every stale alignment discarded, so `already_aligned` is
+    the whole answer.
+
+    The two guards do not cost the same and are not tuned the same way. A run
+    refused for nothing costs the operator thirty seconds of
+    `uv sync --group japanese`; a run waved through that cannot finish costs a
+    day of a paid instance and surfaces as a CalledProcessError out of the
+    aligner's subprocess, naming a return code rather than a package. So stage
+    0 leans towards refusing, and this catches whatever it still let past -- a
+    hand-deleted `utterances.jsonl`, a changed --align-model, a changed shard
+    count -- at the cost of a clean stop instead of that.
+    """
+    if already_aligned(aligned):
+        return
+    error = _japanese_segmenter_error()
+    if error is None:
+        return
+    logger.error(
+        f"{aligned} has to be aligned with the Japanese segmenter, which is not available "
+        f"({error}). Install it with: uv sync --group japanese, and run this again -- "
+        "everything above the alignment is on disk and will not be redone."
+    )
+    raise typer.Exit(1)
 
 
 def _reusable(outputs: list[Path], inputs: list[Path], keeping: str) -> bool:
@@ -919,18 +1046,31 @@ def main(
     train_manifest, valid_manifest = out_dir / "train.jsonl", out_dir / "valid.jsonl"
     train_aligned = out_dir / "train_aligned.jsonl"
     valid_aligned = out_dir / "valid_aligned.jsonl"
+    # Stage 5 is what writes these; they are named here because stage 0 has to
+    # ask whether stage 8's inputs are about to be rebuilt underneath it.
+    cutoffs_json = out_dir / "cutoffs.json"
+    cutoffs = {"max_cer": max_cer, "min_mos": min_mos}
 
     # 0. The one thing that can fail for a reason no stage below can fix. It is
     #    asked before stage 1 because the answer never changes mid-run and the
     #    stage that needs it is the last one: see require_japanese_segmenter.
     #    A run without both cutoffs stops at the probe and never aligns, and so
-    #    does one whose two alignments are already on disk -- align() skips an
-    #    output it finds finished, and that is asked of align()'s own predicate
-    #    rather than restated here. Both are warned rather than refused.
+    #    does one whose two alignments are already on disk *and* whose cutoffs
+    #    are the ones that built them -- align() skips an output it finds
+    #    finished, and that is asked of align()'s own predicate rather than
+    #    restated here. Both are warned rather than refused.
+    #    The cutoffs are half of that question because changing them rebuilds
+    #    both manifests in stage 7 and so discards both alignments in stage 8:
+    #    the alignments being there says nothing about whether they will still
+    #    be there when the aligner is reached. Anything this still lets past is
+    #    caught by require_segmenter_to_align, one line before each align().
     require_japanese_segmenter(
         will_align=max_cer is not None
         and min_mos is not None
-        and not all(already_aligned(p) for p in (train_aligned, valid_aligned))
+        and not (
+            all(already_aligned(p) for p in (train_aligned, valid_aligned))
+            and _same_cutoffs(cutoffs_json, cutoffs)
+        )
     )
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1008,9 +1148,7 @@ def main(
     #    the script or the operator to tell which cutoffs a given train.jsonl
     #    was built under. Written only when they differ, so an unchanged pair
     #    does not touch the file and nothing downstream is rebuilt.
-    cutoffs_json = out_dir / "cutoffs.json"
-    cutoffs = {"max_cer": max_cer, "min_mos": min_mos}
-    if not cutoffs_json.exists() or json.loads(cutoffs_json.read_text(encoding="utf-8")) != cutoffs:
+    if not _same_cutoffs(cutoffs_json, cutoffs):
         _write_json(cutoffs, cutoffs_json)
     utterances_jsonl = out_dir / "utterances.jsonl"
     selection_inputs = [*unpacked, characters_json, cutoffs_json]
@@ -1042,6 +1180,25 @@ def main(
     by_speaker: dict[str, list[dict]] = defaultdict(list)
     for utterance in utterances:
         by_speaker[utterance["speaker"]].append(utterance)
+    #    The braces to the belt above. Every guard from here down compares this
+    #    label and none of them can check it: concatenate refuses a mixed list
+    #    by comparing labels, so one wrong label shared by two characters is a
+    #    mixed list that passes -- two voices in one file, the loader taking one
+    #    as the prompt for the other, the split holding out a label instead of a
+    #    character, and audio/<speaker>.wav colliding between them. Nothing
+    #    raises and nothing downstream can see it. The one thing that can be
+    #    checked is that every label is a character this run selected, which is
+    #    true of a correct label by construction; it is asked here, before a
+    #    single wav is joined or deleted.
+    unexpected = sorted(set(by_speaker) - set(names))
+    if unexpected:
+        logger.error(
+            f"the selection holds speakers that were never selected: {unexpected}. These are "
+            "the directory names under the extract root, so the layout of the zips is not "
+            "what the scan assumes -- joining them would mix characters into one recording. "
+            "Nothing has been joined."
+        )
+        raise typer.Exit(1)
     audio_dir = out_dir / "audio"
     for part in sorted((out_dir / "entries").glob("*.jsonl")):
         if part.stem in by_speaker:
@@ -1116,6 +1273,11 @@ def main(
             if _stale(leftover, [manifest]):
                 logger.info(f"{leftover} was aligned from an older {manifest.name}; discarding it")
                 leftover.unlink()
+    #    And the question stage 0 could only guess at is asked again here,
+    #    where every manifest has been written and every stale alignment
+    #    discarded, so that a hole left up there costs a clean stop rather than
+    #    a CalledProcessError out of the aligner's subprocess hours from now.
+    require_segmenter_to_align(train_aligned)
     align(
         train_manifest,
         train_aligned,
@@ -1124,6 +1286,7 @@ def main(
         "training manifest",
         segmenter="japanese",
     )
+    require_segmenter_to_align(valid_aligned)
     align(valid_manifest, valid_aligned, 1, align_model, "valid manifest", segmenter="japanese")
     logger.info(f"Done. Training on {train_aligned.resolve()} and {valid_aligned.resolve()}")
 
