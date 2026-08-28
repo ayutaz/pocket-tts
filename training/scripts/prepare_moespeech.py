@@ -2,9 +2,14 @@
 
     python -m training.scripts.prepare_moespeech --hours 124 --out data/ja
 
-MoeSpeech is 621 hours of 44.1 kHz Japanese character speech, published as one
-zip per speaker with an ASR transcript, a duration and a speechMOS score beside
-each clip. This script selects speakers, fetches only their zips, filters the
+MoeSpeech is about 620 hours of 44.1 kHz Japanese character speech, published
+as one zip per speaker with an ASR transcript, a duration and a speechMOS score
+beside each clip. (621 h by summing info.csv's own `total_duration_min`; the
+survey in docs/Japanese Model/datasets.md says 623 h from the file count and the
+mean clip length. The two disagree by 0.3%, and the disk estimates there use
+623 throughout because its GB figures come from the same survey -- mixing the
+two sources across one proportion is what would make it wrong.) This script
+selects speakers, fetches only their zips, filters the
 utterances on transcript agreement, concatenates each speaker's clips into
 pseudo-long recordings, and runs forced alignment over the result.
 
@@ -427,9 +432,15 @@ def probe_utterances(root: Path, names: list[str] | None = None) -> dict:
     Files that cannot be read, and clips normalization leaves no text of, are
     skipped and counted by `_scan_annotations`, which the selection pass shares
     so that both see the same corpus -- the retention table below therefore
-    promises a count the selection actually delivers. Each kind is reported
+    promises a count the *selection* actually delivers. Each kind is reported
     under its own name, because "the manifest is smaller than the table said"
     has three different causes and only the counts tell them apart.
+
+    That promise reaches as far as the selection and no further. `concatenate`
+    drops more: a clip whose wav will not open, or whose sample rate or channel
+    count differs from the one its speaker's first readable clip pinned. So the
+    manifest can hold fewer clips than this table named, and the difference is
+    in that stage's own summary line rather than here.
 
     Only the three measured numbers are retained per clip, not the row: the
     transcriptions of a whole corpus do not need to be in memory at once for

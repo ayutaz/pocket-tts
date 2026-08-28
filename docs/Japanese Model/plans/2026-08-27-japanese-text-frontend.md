@@ -23,6 +23,16 @@
 
 ---
 
+!!! success "この計画は完了しています（2026-08-27〜28）"
+    推論側・評価側の欠陥5件はすべて対応済みです。内容の要約は
+    [学習戦略とコスト](../training-strategy.md)の「対応済み（推論側・評価側）」節にあります。
+
+    実行中に見つかった補足:
+
+    - **欠陥5（分割した文が空白で繋ぎ直される）は、欠陥2の修正が作り出したもの**でした。計画を書いている最中に発見し、この計画に追加しています
+    - 最終レビューで、**壊れた実装に対して通ってしまうテストが2件**見つかりました。片方は値を一度しかサンプルしないので、テスト対象の結合が一度も起きていませんでした。もう片方は `str.strip()` が既に落とす空白文字列を使っていました。どちらも修正済みです
+
+
 ### Task 0: 検証用ヘルパを用意する
 
 **目的:** 以降の全タスクで「テストが本当にバグを捕まえるか」を確認できるようにする。前回、実装を先に書いたテストが不具合のある挙動を assert したまま通り、訓練データの6%を壊していた。同じ失敗を繰り返さないための道具を先に置く。
@@ -37,7 +47,7 @@
 - Produces: `python scripts/dev/mutate.py <file> <old> <new>` — `old` がちょうど1箇所であることを確認して `new` に置換し、CRLF を保って書き戻す。0箇所または2箇所以上なら `AssertionError`。
 - Produces: `bash scripts/dev/ruff-index.sh <file>...` — `git add` 済みの内容（LF）を一時ディレクトリに展開して `uvx ruff check` と `uvx ruff format --check` を実行。
 
-- [ ] **Step 1: `mutate.py` を書く**
+- [x] **Step 1: `mutate.py` を書く**
 
 `sed -i` は CRLF ファイルでパターンが一致せず**無言で失敗する**（変異が適用されないのにテストが通り、「テストが弱い」と誤診する）。Python の `read_text` は改行を `\n` に正規化するのでこれを避けられる。
 
@@ -61,7 +71,7 @@ path.write_text(text.replace(old, new), encoding="utf-8", newline="\r\n")
 print(f"mutated {path}")
 ```
 
-- [ ] **Step 2: `ruff-index.sh` を書く**
+- [x] **Step 2: `ruff-index.sh` を書く**
 
 ```bash
 #!/usr/bin/env bash
@@ -80,7 +90,7 @@ uvx ruff check "$tmp"
 uvx ruff format --check "$tmp"
 ```
 
-- [ ] **Step 3: 両方を1回動かして確認する**
+- [x] **Step 3: 両方を1回動かして確認する**
 
 ```bash
 uv run python scripts/dev/mutate.py training/scripts/align_data.py "if w_idx < 0:" "if w_idx < 99:"
@@ -91,7 +101,7 @@ git add scripts/dev && bash scripts/dev/ruff-index.sh scripts/dev/mutate.py
 
 期待: 変異でテストが1件落ち、`git checkout` 後に全件通り、ruff が `All checks passed!` と `1 file already formatted` を出す。
 
-- [ ] **Step 4: コミット**
+- [x] **Step 4: コミット**
 
 ```bash
 git add scripts/dev/mutate.py scripts/dev/ruff-index.sh
@@ -129,7 +139,7 @@ unformatted."
 - Produces: `NORMALIZERS: dict[str, Callable[[str], str]]` — `{"japanese": normalize_japanese}`
 - Produces: `resolve_normalizer(name: str | None) -> Callable[[str], str]` — `None` なら恒等関数。未知の名前は `KeyError`。
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 `tests/test_text_normalization.py` を新規作成:
 
@@ -193,12 +203,12 @@ def test_an_unknown_normalizer_is_an_error():
         resolve_normalizer("japanesee")
 ```
 
-- [ ] **Step 2: 失敗を確認する**
+- [x] **Step 2: 失敗を確認する**
 
 Run: `uv run pytest tests/test_text_normalization.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'pocket_tts.utils.text_normalization'`
 
-- [ ] **Step 3: モジュールを移設する**
+- [x] **Step 3: モジュールを移設する**
 
 `training/scripts/ja_text.py` の中身をそのまま `pocket_tts/utils/text_normalization.py` へ移す。関数名を `normalize` → `normalize_japanese` に変え、docstring の「推論側は未接続」の記述を削り、レジストリを足す。`_PROTECTED` / `_RESTORE` / `_CONTROL` / `_SPACE_RUN` と `normalize()` の本体は1文字も変えない。
 
@@ -236,12 +246,12 @@ def resolve_normalizer(name: str | None) -> Callable[[str], str]:
     return _identity if name is None else NORMALIZERS[name]
 ```
 
-- [ ] **Step 4: テストが通ることを確認する**
+- [x] **Step 4: テストが通ることを確認する**
 
 Run: `uv run pytest tests/test_text_normalization.py -q`
 Expected: 6 passed
 
-- [ ] **Step 5: 既存の import 元を4箇所更新し、旧ファイルを消す**
+- [x] **Step 5: 既存の import 元を4箇所更新し、旧ファイルを消す**
 
 ```bash
 git rm training/scripts/ja_text.py
@@ -252,12 +262,12 @@ git rm training/scripts/ja_text.py
 - `training/tests/test_ja_text.py:11`: 同上
 - `training/tests/test_align_data.py:163`: 同上
 
-- [ ] **Step 6: 全テストが通ることを確認する**
+- [x] **Step 6: 全テストが通ることを確認する**
 
 Run: `uv run pytest tests/ training/tests/ -q -n 3`
 Expected: 全件 passed（既存119 + 新規6）
 
-- [ ] **Step 7: 移設先のテストが本当に効くことを確認する**
+- [x] **Step 7: 移設先のテストが本当に効くことを確認する**
 
 ```bash
 uv run python scripts/dev/mutate.py pocket_tts/utils/text_normalization.py \
@@ -269,7 +279,7 @@ git checkout -- pocket_tts/utils/text_normalization.py
 
 期待: `test_an_unknown_normalizer_is_an_error` が落ちる。落ちなければテストが弱い。
 
-- [ ] **Step 8: コミット**
+- [x] **Step 8: コミット**
 
 ```bash
 git add -A
@@ -309,7 +319,7 @@ with no symptom but a model that never quite becomes intelligible."
 - Produces: `TextRules` — frozen dataclass。`normalizer: str | None = None`, `sentence_boundaries: str = ".!...?"`, `clause_boundaries: str = ",;:"`, `terminal_punctuation: str = "."`, `segment_separator: str = " "`
 - Produces: `TextRules.from_config(config) -> TextRules` — classmethod
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 `tests/test_text_rules.py`:
 
@@ -379,12 +389,12 @@ def test_a_config_can_override_each_field():
     assert rules.segment_separator == ""
 ```
 
-- [ ] **Step 2: 失敗を確認する**
+- [x] **Step 2: 失敗を確認する**
 
 Run: `uv run pytest tests/test_text_rules.py -q`
 Expected: FAIL — `ImportError: cannot import name 'TextRules'`
 
-- [ ] **Step 3: `TextRules` を実装する**
+- [x] **Step 3: `TextRules` を実装する**
 
 `pocket_tts/utils/text_normalization.py` に追記:
 
@@ -418,7 +428,7 @@ class TextRules:
         )
 ```
 
-- [ ] **Step 4: `Config` にフィールドを足す**
+- [x] **Step 4: `Config` にフィールドを足す**
 
 `pocket_tts/utils/config.py` の `Config`、`remove_semicolons` の次の行に:
 
@@ -433,12 +443,12 @@ class TextRules:
     segment_separator: str = " "
 ```
 
-- [ ] **Step 5: テストが通ることを確認する**
+- [x] **Step 5: テストが通ることを確認する**
 
 Run: `uv run pytest tests/test_text_rules.py -q`
 Expected: 5 passed
 
-- [ ] **Step 6: 既定値のテストが本当に効くことを確認する**
+- [x] **Step 6: 既定値のテストが本当に効くことを確認する**
 
 ```bash
 uv run python scripts/dev/mutate.py pocket_tts/utils/text_normalization.py \
@@ -449,7 +459,7 @@ git checkout -- pocket_tts/utils/text_normalization.py
 
 期待: `test_the_defaults_are_todays_english_behaviour` と `test_a_released_config_gets_the_english_defaults` が落ちる。
 
-- [ ] **Step 7: コミット**
+- [x] **Step 7: コミット**
 
 ```bash
 git add -A
@@ -485,7 +495,7 @@ default -- without one, every released config would stop loading."
 - Consumes: Task 2 の `TextRules`、Task 1 の `resolve_normalizer`
 - Produces: `prepare_text_prompt(text, pad_with_spaces_for_short_inputs, remove_semicolons, *, rules=TextRules()) -> tuple[str, int]`
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 `tests/test_prepare_text_prompt.py`:
 
@@ -557,12 +567,12 @@ def test_text_that_normalizes_to_empty_is_an_error():
         prepare_text_prompt("　　", False, False, rules=JA)
 ```
 
-- [ ] **Step 2: 失敗を確認する**
+- [x] **Step 2: 失敗を確認する**
 
 Run: `uv run pytest tests/test_prepare_text_prompt.py -q`
 Expected: FAIL — `TypeError: prepare_text_prompt() got an unexpected keyword argument 'rules'`
 
-- [ ] **Step 3: `prepare_text_prompt` を書き換える**
+- [x] **Step 3: `prepare_text_prompt` を書き換える**
 
 `pocket_tts/models/tts_model.py` の import に `from pocket_tts.utils.text_normalization import TextRules, resolve_normalizer` を足し、関数を:
 
@@ -606,17 +616,17 @@ def prepare_text_prompt(
 
 正規化は空文字判定の**前**に走らせること。全角空白のみの入力は NFKC で半角空白になり `strip()` で空になる。順序を誤ると `text[0]` が `IndexError` を投げる。
 
-- [ ] **Step 4: テストが通ることを確認する**
+- [x] **Step 4: テストが通ることを確認する**
 
 Run: `uv run pytest tests/test_prepare_text_prompt.py -q`
 Expected: 7 passed
 
-- [ ] **Step 5: 既存テストが無変更で通ることを確認する**
+- [x] **Step 5: 既存テストが無変更で通ることを確認する**
 
 Run: `uv run pytest tests/ -q -n 3`
 Expected: 全件 passed。`tests/test_split_sentences.py` と `tests/test_generation_regressions.py` を1文字も変えずに通ること。
 
-- [ ] **Step 6: テストが本当に効くことを確認する**
+- [x] **Step 6: テストが本当に効くことを確認する**
 
 ```bash
 uv run python scripts/dev/mutate.py pocket_tts/models/tts_model.py \
@@ -627,7 +637,7 @@ git checkout -- pocket_tts/models/tts_model.py
 
 期待: `test_japanese_gets_no_period` が落ちる。
 
-- [ ] **Step 7: コミット**
+- [x] **Step 7: コミット**
 
 ```bash
 git add -A
@@ -669,7 +679,7 @@ an empty string and raises IndexError instead of the documented error."
 - Produces: `split_into_best_sentences(tokenizer, text_to_generate, max_tokens, pad_with_spaces_for_short_inputs, remove_semicolons, *, rules=TextRules()) -> list[str]`
 - Produces: `TTSModel.text_rules: TextRules`
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 `tests/test_split_sentences.py` の末尾に追記:
 
@@ -761,12 +771,12 @@ def test_japanese_chunks_reconstruct_the_input(ja_tokenizer):
 
 冒頭の import に `from pathlib import Path` と `from types import SimpleNamespace` を足すこと。
 
-- [ ] **Step 2: 失敗を確認する**
+- [x] **Step 2: 失敗を確認する**
 
 Run: `uv run pytest tests/test_split_sentences.py -q -k japanese`
 Expected: FAIL — `TypeError: ... unexpected keyword argument 'rules'`
 
-- [ ] **Step 3: `split_into_best_sentences` を書き換える**
+- [x] **Step 3: `split_into_best_sentences` を書き換える**
 
 署名:
 
@@ -801,12 +811,12 @@ def split_into_best_sentences(
             current_nb_of_tokens_in_chunk += nb_tokens
 ```
 
-- [ ] **Step 4: テストが通ることを確認する**
+- [x] **Step 4: テストが通ることを確認する**
 
 Run: `uv run pytest tests/test_split_sentences.py -q`
 Expected: 全件 passed（既存の英語ケースを含む）
 
-- [ ] **Step 5: 呼び出し側と回帰テストを直す**
+- [x] **Step 5: 呼び出し側と回帰テストを直す**
 
 `TTSModel.__init__` に `text_rules: TextRules = TextRules()` を kwarg で足し `self.text_rules = text_rules` を置く。`_from_pydantic_config` の `cls(...)` に `text_rules=TextRules.from_config(config)` を渡す。`tts_model.py:651` の `split_into_best_sentences(...)` と `:660` の `prepare_text_prompt(...)` に `rules=self.text_rules` を足す。
 
@@ -825,12 +835,12 @@ Expected: 全件 passed（既存の英語ケースを含む）
 
 同ファイルの `SimpleNamespace(...)` に `text_rules=TextRules()` を足し、`from pocket_tts.utils.text_normalization import TextRules` を import する。
 
-- [ ] **Step 6: 全テストが通ることを確認する**
+- [x] **Step 6: 全テストが通ることを確認する**
 
 Run: `uv run pytest tests/ training/tests/ -q -n 3`
 Expected: 全件 passed
 
-- [ ] **Step 7: 2つのテストがそれぞれ別の変異を捕まえることを確認する**
+- [x] **Step 7: 2つのテストがそれぞれ別の変異を捕まえることを確認する**
 
 ```bash
 uv run python scripts/dev/mutate.py pocket_tts/models/tts_model.py \
@@ -846,7 +856,7 @@ git checkout -- pocket_tts/models/tts_model.py
 
 期待: 1つ目で `test_japanese_chunks_carry_no_injected_spaces` が落ち、2つ目で `test_japanese_paragraph_splits_on_the_full_stop` が落ちる。片方の変異で両方落ちるなら、テストが分離できていない。
 
-- [ ] **Step 8: コミット**
+- [x] **Step 8: コミット**
 
 ```bash
 git add -A
@@ -886,7 +896,7 @@ the positional signature of split_into_best_sentences, so it gains **_."
 **Interfaces:**
 - Consumes: Task 2 の `TextRules.from_config`
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 `tests/test_text_rules.py` の末尾に追記:
 
@@ -918,12 +928,12 @@ def test_the_japanese_config_matches_its_tokenizer():
     assert config.flow_lm.lookup_table.n_bins == 8000
 ```
 
-- [ ] **Step 2: 失敗を確認する**
+- [x] **Step 2: 失敗を確認する**
 
 Run: `uv run pytest tests/test_text_rules.py -q -k japanese`
 Expected: FAIL — config ファイルが無い
 
-- [ ] **Step 3: config を書く**
+- [x] **Step 3: config を書く**
 
 `pocket_tts/config/italian_24l.yaml` を土台にする（24層・同じ構造）。変える点:
 
@@ -943,17 +953,17 @@ terminal_punctuation: ""            # 49.4% end unpunctuated; only 1.12% end in 
 segment_separator: ""               # Japanese is written without spaces
 ```
 
-- [ ] **Step 4: テストが通ることを確認する**
+- [x] **Step 4: テストが通ることを確認する**
 
 Run: `uv run pytest tests/test_text_rules.py -q`
 Expected: 8 passed
 
-- [ ] **Step 5: 既存 config が全部読めることを再確認する**
+- [x] **Step 5: 既存 config が全部読めることを再確認する**
 
 Run: `uv run pytest tests/test_text_rules.py::test_every_released_config_still_loads -q`
 Expected: PASS
 
-- [ ] **Step 6: コミット**
+- [x] **Step 6: コミット**
 
 ```bash
 git add -A
@@ -990,7 +1000,7 @@ run's output will be dropped into."
 - Produces: `EvalResults.cer: float`
 - Produces: `--text-normalizer {english,basic}`、既定 `english`
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 `training/tests/test_cer.py`:
 
@@ -1065,12 +1075,12 @@ def test_the_default_name_is_unchanged():
     assert eval_dir_name(_args("english"), 1000) == "libri_eval_step1000_t0.7_cfg1.0"
 ```
 
-- [ ] **Step 2: 失敗を確認する**
+- [x] **Step 2: 失敗を確認する**
 
 Run: `uv run pytest training/tests/test_cer.py -q`
 Expected: FAIL — `ImportError: cannot import name 'build_normalizer'`
 
-- [ ] **Step 3: 実装する**
+- [x] **Step 3: 実装する**
 
 `training/eval/librispeech.py` にモジュール階層で:
 
@@ -1111,18 +1121,18 @@ def build_normalizer(name: str):
 
 引数定義に `--text-normalizer` を `choices=["english", "basic"]`, `default="english"`, help に「日本語など、濁点や声調記号を落としてはいけない言語は basic」と添えて追加。
 
-- [ ] **Step 4: テストが通ることを確認する**
+- [x] **Step 4: テストが通ることを確認する**
 
 Run: `uv run pytest training/tests/test_cer.py -q`
 Expected: 7 passed
 
-- [ ] **Step 5: 既存の eval 命名テストを通す**
+- [x] **Step 5: 既存の eval 命名テストを通す**
 
 Run: `uv run pytest training/tests/test_eval_naming.py -q`
 
 落ちる場合、そのテストの `make_args` ヘルパが作る名前空間に `text_normalizer` が無いため。既定値 `"english"` を足す。
 
-- [ ] **Step 6: テストが本当に効くことを確認する**
+- [x] **Step 6: テストが本当に効くことを確認する**
 
 ```bash
 uv run python scripts/dev/mutate.py training/eval/librispeech.py \
@@ -1134,7 +1144,7 @@ git checkout -- training/eval/librispeech.py
 
 期待: `test_the_basic_normalizer_keeps_them` が落ちる。
 
-- [ ] **Step 7: コミット**
+- [x] **Step 7: コミット**
 
 ```bash
 git add -A
@@ -1172,17 +1182,17 @@ model from a broken one."
 - Modify: `docs/Japanese Model/training-strategy.md` — 「未対応の課題」の節と「フェーズ1」の節
 - Modify: `docs/Japanese Model/index.md`
 
-- [ ] **Step 1: 「未対応の課題」の節を書き換える**
+- [x] **Step 1: 「未対応の課題」の節を書き換える**
 
 節名を「対応済み（推論側・評価側）」に改める。5項目それぞれに、何を測って何を決めたかを1行、対応コミットのタイトルを1行残す。欠陥5（空白注入）は「欠陥2の修正が作り出したもの」と明記する。範囲外として残るもの（日本語評価セットの構築、ASR モデルの選定）を別項に分けて明示する。
 
-- [ ] **Step 2: フェーズ1の判定基準を直す**
+- [x] **Step 2: フェーズ1の判定基準を直す**
 
 「判定できること」に CER を加える。チェコ語の WER 29.5% をトリップワイヤとして参照している箇所を「WER は日本語では機能しないため CER で判定する。チェコ語の数値とは直接比較できない」に改める。2〜3k step の耳による判定はそのまま残す（これは指標に依存しない）。
 
-- [ ] **Step 3: `index.md` に spec と plan へのリンクを足す**
+- [x] **Step 3: `index.md` に spec と plan へのリンクを足す**
 
-- [ ] **Step 4: リンク切れが無いか確認する**
+- [x] **Step 4: リンク切れが無いか確認する**
 
 ```bash
 grep -ohE '\]\(([^)]+\.md)[^)]*\)' "docs/Japanese Model"/*.md | sed -E 's/\]\(//; s/[)#].*//' | sort -u
@@ -1190,7 +1200,7 @@ grep -ohE '\]\(([^)]+\.md)[^)]*\)' "docs/Japanese Model"/*.md | sed -E 's/\]\(//
 
 出力された各パスが実在することを確認する。
 
-- [ ] **Step 5: コミット**
+- [x] **Step 5: コミット**
 
 ```bash
 git add -A
@@ -1212,9 +1222,9 @@ whether Japanese phonology has appeared does not depend on the metric."
 
 ## 完了の定義
 
-- [ ] `uv run pytest tests/ training/tests/ -q -n 3` が全件通る
-- [ ] 変更した全ファイルで `bash scripts/dev/ruff-index.sh <files>` が通る
-- [ ] 各タスクの変異確認手順を実行し、期待したテストが落ちることを確認した
-- [ ] `grep -rn "^from training\|^import training" pocket_tts/` が0件
-- [ ] `pocket_tts/config/*.yaml` の全ファイルが `load_config` で読める
-- [ ] `training/scripts/ja_text.py` が存在しない
+- [x] `uv run pytest tests/ training/tests/ -q -n 3` が全件通る
+- [x] 変更した全ファイルで `bash scripts/dev/ruff-index.sh <files>` が通る
+- [x] 各タスクの変異確認手順を実行し、期待したテストが落ちることを確認した
+- [x] `grep -rn "^from training\|^import training" pocket_tts/` が0件
+- [x] `pocket_tts/config/*.yaml` の全ファイルが `load_config` で読める
+- [x] `training/scripts/ja_text.py` が存在しない

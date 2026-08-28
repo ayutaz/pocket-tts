@@ -301,8 +301,11 @@ uv sync --group japanese
 
 入れ忘れは高くつきます。`align_data._japanese_segmenter` は fugashi を遅延 import するため、
 ダウンロード・展開・probe・選定・連結・両マニフェストまで全部通り切ってから最後に落ち、しかも
-アライナは別プロセスなので表に出るのは `CalledProcessError` の終了コードであって、足りない
-パッケージの名前ではありません。**そのため確認は2箇所に入っています。**
+アライナは別プロセスなので表に出るのは終了コードであって、足りないパッケージの名前では
+ありません。既定の `--align-shards 1` では `subprocess.run(..., check=True)`
+（`prepare_data.py:140`）なので `CalledProcessError`、2以上では
+`assert p.wait() == 0`（`:177`）なので `AssertionError: an alignment shard failed` になります。
+どちらも「fugashi が無い」とは言いません。**そのため確認は2箇所に入っています。**
 
 **1つ目はステージ0**（ステージ1の前、まだ1バイトも落としていない位置）です。ここで止めるのは
 「この実行はアライナに到達する」と判断したときだけで、その判断式は
@@ -376,6 +379,19 @@ uv run python -m training.scripts.prepare_moespeech --hours 124 --out data/ja \
 | 6 | 連結 | `audio/<speaker>.wav`・`entries/<speaker>.jsonl` | その話者の `entries/<speaker>.jsonl` が在り、`utterances.jsonl` より新しい | 未計測 |
 | 7 | マニフェスト | `train.jsonl`・`valid.jsonl` | 両方が在り、`utterances.jsonl` と `entries/*.jsonl` のどれよりも新しい | 未計測 |
 | 8 | アライメント | `train_aligned.jsonl`・`valid_aligned.jsonl`・`*_aligned.jsonl.shards`（`align()` が使った分割数の記録。valid 側は常に `1`） | 出力が元のマニフェストより新しい（古ければ `.partial`・`.shard*` ごと捨てて張り直す。中断時の `.partial` は `align()` の `--resume` が拾う） | 未計測 |
+
+!!! note "`--valid-hours 1.0` でも valid は1時間になりません"
+    ステージ7は**話者を丸ごと** held-out します（発話単位で割ると同じ声が両側に立ち、
+    「学習を止めろ」と言うはずの数値が、その声を既に覚えたモデルを「日本語を覚えた」と
+    報告します）。粒度が話者1人なので、`--valid-hours` は**下限**であって目標ではありません。
+
+    取り方は**小さい話者から**で、`taken >= target` の判定が**足す前**にあるため、必ず
+    最低1人は取ります。既定の `--order largest` で124時間なら約28キャラ・平均4.4時間なので、
+    **最小の話者でも1時間を大きく超える**可能性が高く、valid が2〜4時間（コーパスの2〜4%）に
+    なるのが普通です。1時間ちょうどを期待して差分を「バグ」と読まないでください。
+
+    発話が1つしかない話者は held-out 対象から外れます（1発話では声をクローンして別の発話を
+    合成する評価ができない）。捨てはせず train に入り、その人数はログに1行出ます。
 
 ステージ6は書くだけでなく**消します**。選定から外れた話者の `entries/<speaker>.jsonl` と、そこに
 書かれていた `audio/` の wav を消し、`--target-sec` を伸ばして必要ファイル数が減ったときも余った
@@ -460,7 +476,9 @@ uv run python -m training.scripts.prepare_moespeech --hours 124 --out data/ja \
 
 アライメントは日本語に固定されています（`--segmenter japanese`、`--align-model` の既定は
 `vumichien/wav2vec2-large-xlsr-japanese-hiragana`）。かなを語彙に持たないモデルを渡すと
-`align_data.py` が起動時に拒否します。分かち書きの無い日本語を whitespace で分割すると
+`align_data.py` が拒否します（`:431`）。ただし**その検査は `_load_ctc_model`（`:424`）の
+後**なので、間違ったモデルは一度ダウンロードされ device に載ってから弾かれます。数十秒と
+数百 MB の話ですが、「起動した瞬間に落ちる」わけではありません。分かち書きの無い日本語を whitespace で分割すると
 1発話が1単語になり、カット点が消えて dataloader の voice prompt 機構が黙って無効になります
 （リスク1）。
 

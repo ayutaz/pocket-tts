@@ -27,6 +27,41 @@
 
 ---
 
+!!! success "この計画は完了しています（2026-08-28）"
+    8タスクすべてが実装・レビュー済みで、`training/tests/test_prepare_moespeech.py` に
+    **約100件**のテストがあります（この計画が予測した28件ではありません — レビューが
+    見つけた穴の分だけ増えています）。全体で **300 passed**。
+
+    **ただし実データの MoeSpeech には一度も触れていません。** 下の「この計画が終わっても
+    残ること」は、書いた時のまま今も有効です。
+
+    ### 実行中に、この計画を上書きした裁定が7件あります
+
+    実行前に計画をタスク対ごと・タスク単体ごとに走査して矛盾を洗い、以下を裁定しました。
+    **本文は当時の記録なので書き換えていません。以下が正です。**
+
+    | | 計画の記述 | 裁定 |
+    |---|---|---|
+    | R1 | Task 5 の既定値は Task 4 の実測から決める | **既定値は作らない。** 実データがこの開発機から到達不能で `probe.json` が存在しないため、実測から決めることが物理的にできない。`--max-cer` / `--min-mos` は `None` 既定で、`main` は probe を書いて停止する。「測る前に閾値を書かない」という計画自身の規律に従うと、これしかない |
+    | R2 | Task 2 は `shutil.copyfile` で取得先に直接コピー | **`.partial` に書いて `os.replace`。** 計画の実装例は Task 2 自身のゴール（「中断で生まれた不完全なファイルを取得済みと誤認しない」）と矛盾していた。コピー中に殺されると、まさにゴールが禁じたファイルが残る |
+    | R3 | `concatenate(utterances, out_wav: Path, target_sec)` | `out_wav` は**1本目の名前そのもの**、2本目以降は `<stem>_001.wav`。Task 6 の2つのテストが、片方は `joined.wav` を名前で読み、もう片方は複数パスを要求するため、両者が同時に成立する形はこれだけ |
+    | R4 | 「キャラを跨いで連結してはならない」 | **どのテストもそれを主張していなかった。** `concatenate` は話者が複数混ざったリストに対して例外を投げ、それをテストする |
+    | R5 | Task 6 の出力は `path` / `start` / `duration` | `id` / `speaker` / `transcript` も要る。Task 6 自身のテストと Task 7 の全体がそれを消費する |
+    | R6 | （記述なし） | `select_utterances` は `{"id","speaker","wav","duration","transcript","cer","mos"}` を返す。走査は `glob` ではなく **`rglob`** — テストは JSON を平置きするが、実データは1階層下に入れ子の可能性がある |
+    | R7 | 「`prepare_data.py` の `align()` をそのまま呼ぶ」 | 呼べなかった。`align()` に `--segmenter` を渡す口が無く、そのままでは**日本語を whitespace セグメンタでアライメント**する。`segmenter: str = "whitespace"` を足して両分岐で転送した。これは実装のやり直しではなく通し口である |
+
+    加えて、**各タスクの想定テスト数は下限であって一致させるべき数ではありません。** レビューが
+    見つけた穴の分だけ増えています。
+
+    ### レビューが見つけた、計画にもテストにも無かったもの
+
+    - **`start == 0.0` をアライナが「ファイル全体」と読んでいた。** 連結ファイルの先頭発話が必ず該当し、約20件に1件が他人の発話ごとアライメントされるところだった。英語パイプラインにもあった上流由来のバグ
+    - **話者ラベルが JSON の親ディレクトリ名だった。** クリップが入れ子だと全キャラが同じラベルになり、キャラ跨ぎ連結のガードが素通りする
+    - **valid が空でも Task 7 の2つの保証は真になる。** `set() & set() == set()` と空 Counter に対する `all([])`
+    - **フレーム数ゼロの wav が全ガードをすり抜ける。** `cursor` が進まないので次のクリップが同じ `start` を持つ
+    - **probe の残存率表が過大に約束していた。** 正規化で空になる転写を「残る」と数えていた
+
+
 ### Task 1: キャラ選定（音声を落とさずに規模を決める）
 
 **目的:** `info.csv` は 473 キャラ全ての `num_files` / `total_duration_min` / `f0_mean` を 12.5 KB で持つ。何を落とすかは、音声を1バイトも取得せずに決まる。ここを最初に固めると、以降のステージが扱う集合が確定する。
@@ -41,7 +76,7 @@
 - Produces: `select_characters(info_csv: Path, hours: float, order: str) -> list[dict]` — 各要素は `{"name", "num_files", "total_duration_min", "f0_mean"}`。`order` は `"largest"`（既定）または `"random"`。
 - Produces: `characters.json` — `{"hours_requested": float, "hours_selected": float, "order": str, "characters": [...]}`
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 `training/tests/test_prepare_moespeech.py`:
 
@@ -116,12 +151,12 @@ def test_asking_for_more_than_exists_returns_everything(tmp_path):
 
 最初のテスト関数（`pass` のもの）は実装しない。実データを要するので、書かずに削除すること。
 
-- [ ] **Step 2: 失敗を確認する**
+- [x] **Step 2: 失敗を確認する**
 
 Run: `uv run pytest training/tests/test_prepare_moespeech.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'training.scripts.prepare_moespeech'`
 
-- [ ] **Step 3: 最小限の実装**
+- [x] **Step 3: 最小限の実装**
 
 ```python
 """Turn MoeSpeech's per-character zips into an aligned training manifest.
@@ -193,12 +228,12 @@ def select_characters(info_csv: Path, hours: float, order: str = "largest") -> l
     return chosen
 ```
 
-- [ ] **Step 4: テストが通ることを確認する**
+- [x] **Step 4: テストが通ることを確認する**
 
 Run: `uv run pytest training/tests/test_prepare_moespeech.py -q`
 Expected: 5 passed
 
-- [ ] **Step 5: テストが本当に効くことを確認する**
+- [x] **Step 5: テストが本当に効くことを確認する**
 
 ```bash
 git add training/scripts/prepare_moespeech.py
@@ -212,7 +247,7 @@ git diff --stat   # 空であること
 
 期待: `test_largest_first_takes_the_biggest` が落ちる。
 
-- [ ] **Step 6: コミット**
+- [x] **Step 6: コミット**
 
 ```bash
 git add -A
@@ -247,7 +282,7 @@ download asks for the same set."
 - Consumes: Task 1 の `select_characters`
 - Produces: `download_characters(names: list[str], dest: Path, repo: str) -> list[Path]`
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 ```python
 def test_download_skips_what_is_already_complete(tmp_path, monkeypatch):
@@ -284,12 +319,12 @@ def test_download_returns_a_path_for_every_requested_character(tmp_path, monkeyp
     assert [p.name for p in paths] == ["aaa.zip", "bbb.zip", "ccc.zip"]
 ```
 
-- [ ] **Step 2: 失敗を確認する**
+- [x] **Step 2: 失敗を確認する**
 
 Run: `uv run pytest training/tests/test_prepare_moespeech.py -q -k download`
 Expected: FAIL — `AttributeError: module has no attribute 'download_characters'`
 
-- [ ] **Step 3: 実装**
+- [x] **Step 3: 実装**
 
 ```python
 from huggingface_hub import hf_hub_download
@@ -317,12 +352,12 @@ def download_characters(names: list[str], dest: Path, repo: str = DATASET_REPO) 
 
 `DATASET_REPO = "ayousanz/moe-speech-plus"` をモジュール先頭に定義すること。
 
-- [ ] **Step 4: テストが通ることを確認する**
+- [x] **Step 4: テストが通ることを確認する**
 
 Run: `uv run pytest training/tests/test_prepare_moespeech.py -q`
 Expected: 7 passed
 
-- [ ] **Step 5: 変異で確認する**
+- [x] **Step 5: 変異で確認する**
 
 ```bash
 git add training/scripts/prepare_moespeech.py
@@ -335,7 +370,7 @@ git diff --stat
 
 期待: `test_download_skips_what_is_already_complete` が落ちる。
 
-- [ ] **Step 6: コミット**
+- [x] **Step 6: コミット**
 
 ```bash
 git add -A
@@ -368,7 +403,7 @@ incomplete file there rather than here."
 **Interfaces:**
 - Produces: `extract_character(zip_path: Path, dest_root: Path) -> Path` — 展開先ディレクトリを返す
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 ```python
 def _make_zip(path, names):
@@ -414,25 +449,25 @@ def test_an_interrupted_extraction_is_redone(tmp_path):
     assert sorted(p.name for p in out.iterdir() if p.suffix == ".wav") == ["a.wav", "b.wav"]
 ```
 
-- [ ] **Step 2: 失敗を確認する**
+- [x] **Step 2: 失敗を確認する**
 
 Run: `uv run pytest training/tests/test_prepare_moespeech.py -q -k extract`
 Expected: FAIL — `ImportError: cannot import name 'extract_character'`
 
-- [ ] **Step 3: 実装**
+- [x] **Step 3: 実装**
 
 完了マーカー（例: 展開先に `.complete` を置く）で「完了」と「途中」を区別する。ディレクトリの存在だけで判定してはいけない — それが3つ目のテストが記述している失敗。
 
-- [ ] **Step 4: テストが通ることを確認する**
+- [x] **Step 4: テストが通ることを確認する**
 
 Run: `uv run pytest training/tests/test_prepare_moespeech.py -q`
 Expected: 10 passed
 
-- [ ] **Step 5: 変異で確認する**
+- [x] **Step 5: 変異で確認する**
 
 完了マーカーの確認を「ディレクトリの存在確認」に置き換える変異を当て、`test_an_interrupted_extraction_is_redone` が落ちることを確認する。手順は Task 2 Step 5 と同じ（`git add` を先に打つ）。
 
-- [ ] **Step 6: コミット**
+- [x] **Step 6: コミット**
 
 ```bash
 git add -A
@@ -463,7 +498,7 @@ finished one would quietly shrink the corpus with nothing to show for it."
 - Produces: `probe_utterances(root: Path) -> dict` — `{"count", "duration": {...}, "cer": {...}, "mos": {...}, "retention": [...]}`
 - Produces: `read_annotation(path: Path) -> dict | None` — 1つの JSON を読み、必要フィールドを欠くものは `None`
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 ```python
 def _annotation(tmp_path, name, whisper, parakeet, duration=5.0, mos=3.5):
@@ -526,25 +561,25 @@ def test_probe_survives_a_corrupt_json(tmp_path):
     assert probe_utterances(tmp_path)["count"] == 1
 ```
 
-- [ ] **Step 2: 失敗を確認する**
+- [x] **Step 2: 失敗を確認する**
 
 Run: `uv run pytest training/tests/test_prepare_moespeech.py -q -k "annotation or probe or cer"`
 Expected: FAIL — `ImportError: cannot import name 'read_annotation'`
 
-- [ ] **Step 3: 実装**
+- [x] **Step 3: 実装**
 
 `jiwer.cer` で相互 CER を取る（`training/eval/librispeech.py` が同じライブラリを使っている）。`probe.json` には分布（min / 中央値 / 各パーセンタイル / max）と、複数の閾値それぞれでの残存数を書く。
 
-- [ ] **Step 4: テストが通ることを確認する**
+- [x] **Step 4: テストが通ることを確認する**
 
 Run: `uv run pytest training/tests/test_prepare_moespeech.py -q`
 Expected: 15 passed
 
-- [ ] **Step 5: 変異で確認する**
+- [x] **Step 5: 変異で確認する**
 
 `read_annotation` の必須フィールド検査を外す変異を当て、`test_an_annotation_missing_a_field_is_dropped` が落ちることを確認する。
 
-- [ ] **Step 6: コミット**
+- [x] **Step 6: コミット**
 
 ```bash
 git add -A
@@ -582,7 +617,7 @@ and the loader would read silence and train on it as speech."
 - Consumes: Task 4 の `read_annotation`
 - Produces: `select_utterances(root: Path, max_cer: float, min_mos: float) -> Iterator[dict]`
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 ```python
 def test_utterances_over_the_cer_limit_are_dropped(tmp_path):
@@ -622,27 +657,27 @@ def test_an_empty_transcript_is_dropped(tmp_path):
     assert list(select_utterances(tmp_path, max_cer=1.0, min_mos=0.0)) == []
 ```
 
-- [ ] **Step 2: 失敗を確認する**
+- [x] **Step 2: 失敗を確認する**
 
 Run: `uv run pytest training/tests/test_prepare_moespeech.py -q -k "cer_limit or mos_floor or normalized or empty_transcript"`
 Expected: FAIL — `ImportError: cannot import name 'select_utterances'`
 
-- [ ] **Step 3: 実装**
+- [x] **Step 3: 実装**
 
 `pocket_tts.utils.text_normalization.normalize_japanese` を使って転写を正規化する（`align_data.py` の `NORMALIZERS["japanese"]` と同じ関数）。
 
 既定値は Task 4 の `probe.json` の実測から決め、**その根拠を1行のコメントで残す**。実測前にこの値を書いてはいけない。
 
-- [ ] **Step 4: テストが通ることを確認する**
+- [x] **Step 4: テストが通ることを確認する**
 
 Run: `uv run pytest training/tests/test_prepare_moespeech.py -q`
 Expected: 19 passed
 
-- [ ] **Step 5: 変異で確認する**
+- [x] **Step 5: 変異で確認する**
 
 正規化の呼び出しを外す変異を当て、`test_the_kept_transcript_is_normalized` が落ちることを確認する。
 
-- [ ] **Step 6: コミット**
+- [x] **Step 6: コミット**
 
 コミットメッセージには、**実測した閾値と、それを選んだ理由**を書くこと。
 
@@ -661,7 +696,7 @@ Expected: 19 passed
 **Interfaces:**
 - Produces: `concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> list[dict]` — 各要素に `path` / `start` / `duration` が入る
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 ```python
 def _wav(path, seconds, hz, sr=44100):
@@ -743,21 +778,21 @@ def test_every_utterance_survives_the_concatenation(tmp_path):
     assert sorted(e["id"] for e in out) == sorted(u["id"] for u in utts)
 ```
 
-- [ ] **Step 2: 失敗を確認する**
+- [x] **Step 2: 失敗を確認する**
 
 Run: `uv run pytest training/tests/test_prepare_moespeech.py -q -k concat`
 Expected: FAIL — `ImportError: cannot import name 'concatenate'`
 
-- [ ] **Step 3: 実装**
+- [x] **Step 3: 実装**
 
 44.1 kHz のまま書く。無音を挟まない（挟むなら、その分を `start` に必ず反映すること — 2つ目のテストがそれを捕まえる）。
 
-- [ ] **Step 4: テストが通ることを確認する**
+- [x] **Step 4: テストが通ることを確認する**
 
 Run: `uv run pytest training/tests/test_prepare_moespeech.py -q`
 Expected: 23 passed
 
-- [ ] **Step 5: 変異で確認する（このタスクは2つ当てる）**
+- [x] **Step 5: 変異で確認する（このタスクは2つ当てる）**
 
 ```bash
 git add training/scripts/prepare_moespeech.py
@@ -767,7 +802,7 @@ git add training/scripts/prepare_moespeech.py
 
 **2つの変異は別々のテストを落とさなければならない。** 片方の変異で両方落ちるなら、テストが分離できていない。
 
-- [ ] **Step 6: コミット**
+- [x] **Step 6: コミット**
 
 ```bash
 git add -A
@@ -808,7 +843,7 @@ the target in the same voice."
 - Produces: `split_by_speaker(entries: list[dict], valid_hours: float) -> tuple[list, list]`
 - Produces: `write_manifest(entries: list[dict], path: Path) -> int`
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 ```python
 def test_no_speaker_appears_in_both_splits(tmp_path):
@@ -866,13 +901,13 @@ def test_the_manifest_carries_what_the_loader_requires(tmp_path):
     assert {"path", "duration", "transcript", "start"} <= set(row)
 ```
 
-- [ ] **Step 2〜4:** 失敗を確認 → 実装 → 通ることを確認（28 passed）
+- [x] **Step 2〜4:** 失敗を確認 → 実装 → 通ることを確認（28 passed）
 
-- [ ] **Step 5: 変異で確認する**
+- [x] **Step 5: 変異で確認する**
 
 話者単位の分割を発話単位の分割に置き換える変異を当て、`test_no_speaker_appears_in_both_splits` が落ちることを確認する。
 
-- [ ] **Step 6: コミット**
+- [x] **Step 6: コミット**
 
 ```bash
 git add -A
@@ -907,7 +942,7 @@ where it was produced."
 - Consumes: `training.scripts.prepare_data.align`（`:72`）
 - Produces: `main(...)` — typer コマンド
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 ```python
 def test_the_pipeline_skips_stages_whose_output_exists(tmp_path, monkeypatch):
@@ -926,9 +961,9 @@ def test_alignment_uses_the_japanese_segmenter_and_a_kana_model(monkeypatch):
 
 実装時に本文を書くこと。「記録する fake」の形は `tests/test_generation_regressions.py` の `monkeypatch.setattr` が手本になる。
 
-- [ ] **Step 2〜4:** 失敗を確認 → 実装 → 通ることを確認
+- [x] **Step 2〜4:** 失敗を確認 → 実装 → 通ることを確認
 
-- [ ] **Step 5: 全体を通す**
+- [x] **Step 5: 全体を通す**
 
 ```bash
 uv run pytest training/tests/test_prepare_moespeech.py -q
@@ -936,11 +971,11 @@ uv run pytest tests/ training/tests/ -q -n 3
 bash scripts/dev/ruff-index.sh training/scripts/prepare_moespeech.py training/tests/test_prepare_moespeech.py
 ```
 
-- [ ] **Step 6: 使い方を文書化する**
+- [x] **Step 6: 使い方を文書化する**
 
 `docs/Japanese Model/training-strategy.md` のフェーズ1に、実際のコマンドと各ステージの所要時間の目安を追記する。**推測の数値を書かない** — 実行して測るまでは「未計測」と書く。
 
-- [ ] **Step 7: コミット**
+- [x] **Step 7: コミット**
 
 ```bash
 git add -A
@@ -960,12 +995,12 @@ and only produces the real output once a pass completes."
 
 ## 完了の定義
 
-- [ ] `uv run pytest tests/ training/tests/ -q -n 3` が全件通る
-- [ ] 変更した全ファイルで `bash scripts/dev/ruff-index.sh` が通る
-- [ ] 各タスクの変異確認を実行し、期待したテストが落ちることを確認した
-- [ ] Task 6 の2つの変異が**別々の**テストを落とす
-- [ ] スクリプトがどのステージで中断されても、再実行で続きから進む
-- [ ] 転写フィルタの閾値が Task 4 の実測に基づき、その根拠がコードに書かれている
+- [x] `uv run pytest tests/ training/tests/ -q -n 3` が全件通る
+- [x] 変更した全ファイルで `bash scripts/dev/ruff-index.sh` が通る
+- [x] 各タスクの変異確認を実行し、期待したテストが落ちることを確認した
+- [x] Task 6 の2つの変異が**別々の**テストを落とす
+- [x] スクリプトがどのステージで中断されても、再実行で続きから進む
+- [x] 転写フィルタの閾値が Task 4 の実測に基づき、その根拠がコードに書かれている
 
 ## この計画が終わっても残ること
 
