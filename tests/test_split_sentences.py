@@ -171,9 +171,9 @@ def ja_tokenizer():
     import sentencepiece as spm
     import torch
 
-    path = Path(__file__).resolve().parent / "fixtures" / "ja_tokenizer.model"
+    path = Path(__file__).resolve().parents[1] / "training" / "tokenizers" / "japanese_8000.model"
     if not path.exists():
-        pytest.skip("tests/fixtures/ja_tokenizer.model missing (checkout is broken)")
+        pytest.skip("training/tokenizers/japanese_8000.model missing (checkout is broken)")
     sp = spm.SentencePieceProcessor(model_file=str(path))
 
     class _Tok:

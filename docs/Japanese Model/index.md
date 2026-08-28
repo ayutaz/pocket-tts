@@ -22,7 +22,8 @@ Pocket TTS の日本語モデルを作るための調査記録と方針をまと
 | 段 | 状態 |
 |---|---|
 | 推論側・評価側の欠陥5件 | **対応済み**（[設計](specs/2026-08-27-japanese-text-frontend-design.md) / [計画](plans/2026-08-27-japanese-text-frontend.md)） |
-| 日本語トークナイザ（8000語彙） | **学習済み**。ただし `data/ja/` は `.gitignore` されているので**リポジトリには入っていません** |
+| 日本語トークナイザ（8000語彙） | **学習済み・リポジトリ同梱**（`training/tokenizers/japanese_8000.model`） |
+| フェーズ1の検証用設定 | **あり**（`training/configs/finetune_language_ja_phase1.yaml`、15k step・約$10） |
 | MoeSpeech マニフェスト構築 | **実装済み・未実行**（[設計](specs/2026-08-28-moespeech-manifest-design.md) / [計画](plans/2026-08-28-moespeech-manifest.md)） |
 | フェーズ1の検証ラン | **未実行** |
 

@@ -13,7 +13,8 @@ import pytest
 from pocket_tts.utils.config import load_config
 from pocket_tts.utils.text_normalization import TextRules
 
-CONFIGS = Path(__file__).resolve().parents[1] / "pocket_tts" / "config"
+REPO = Path(__file__).resolve().parents[1]
+CONFIGS = REPO / "pocket_tts" / "config"
 
 
 def test_the_defaults_are_todays_english_behaviour():
@@ -85,6 +86,35 @@ def test_the_japanese_config_keeps_the_ascii_boundaries():
 def test_the_japanese_config_matches_its_tokenizer():
     """pocket_tts/conditioners/text.py asserts n_bins == vocab size exactly.
     The Japanese corpus has 4,092 distinct characters, so the released
-    n_bins: 4000 cannot be used -- sentencepiece cannot even fit it."""
+    n_bins: 4000 cannot be used -- sentencepiece cannot even fit it.
+
+    Read off the tokenizer rather than compared to a constant. This test carried
+    the name it has now while asserting `n_bins == 8000` and never opening the
+    file, so it agreed with itself no matter what the config pointed at.
+    """
+    import sentencepiece as spm
+
     config = load_config(CONFIGS / "japanese_24l.yaml")
-    assert config.flow_lm.lookup_table.n_bins == 8000
+    n_bins = config.flow_lm.lookup_table.n_bins
+    tokenizer = REPO / config.flow_lm.lookup_table.tokenizer_path
+    assert tokenizer.exists(), f"config names {tokenizer}, which is not here"
+    assert spm.SentencePieceProcessor(model_file=str(tokenizer)).get_piece_size() == n_bins
+    assert n_bins > 4092, "one vocabulary slot per character is the floor at coverage 1.0"
+
+
+def test_the_japanese_config_names_a_tokenizer_a_fresh_clone_has():
+    """Asked of git, not of the filesystem: `data/ja/` is gitignored, so a path
+    under it answers `exists()` on the machine that trained the tokenizer and
+    nowhere else. This config is what an end user runs, so the file it names has
+    to arrive with the checkout."""
+    import subprocess
+
+    named = load_config(CONFIGS / "japanese_24l.yaml").flow_lm.lookup_table.tokenizer_path
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "--", named],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=False,  # the return code IS the assertion
+    )
+    assert tracked.returncode == 0, f"git does not track {named}: {tracked.stderr.strip()}"

@@ -19,7 +19,7 @@
 #   # that stops at probe.json; read it, then re-run with the two cutoffs
 model_config: pocket_tts/config/english_2026-04_24l.yaml
 model_overrides:
-  flow_lm.lookup_table.tokenizer_path: data/ja/tokenizer.model
+  flow_lm.lookup_table.tokenizer_path: training/tokenizers/japanese_8000.model
   # Measured on 1.4M deduplicated GOL + MoeSpeech utterances: 4092 distinct
   # characters after normalization. sentencepiece spends one vocabulary slot per
   # character at character_coverage 1.0 and fails outright below that count, so

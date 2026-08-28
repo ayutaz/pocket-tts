@@ -19,11 +19,13 @@ flow_lm:
     dim: 1024
     n_bins: 8000
     tokenizer: sentencepiece
-    # Local training artifact, gitignored -- not resolved by load_config, so
-    # this only works once data/ja/tokenizer.model exists after training.
+    # Committed, so a fresh clone has it -- it used to name data/ja/, which is
+    # gitignored and therefore existed only on the machine that trained it.
+    # Relative to the repo root: load_config does not resolve this, so running
+    # from elsewhere needs an absolute path.
     # Replaced with an hf:// URL at publication, like every released config's
     # tokenizer_path (see pocket_tts/config/italian_24l.yaml).
-    tokenizer_path: data/ja/tokenizer.model
+    tokenizer_path: training/tokenizers/japanese_8000.model
   #weights_path: partial.safetensors
 
 mimi:

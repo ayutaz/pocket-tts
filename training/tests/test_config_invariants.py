@@ -5,6 +5,7 @@ before the quality transition, a batch size a quarter of the floor it needs,
 and a teacher path pointing at an architecture the distill step cannot load.
 """
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -200,3 +201,47 @@ def test_the_two_japanese_configs_agree_on_everything_that_is_japanese():
         b.reset_text_embedding,
     )
     assert a.optim.lr == b.optim.lr
+
+
+REPO = CONFIGS.parents[1]
+
+
+@pytest.mark.parametrize("path", JAPANESE_CONFIGS, ids=lambda p: p.name)
+def test_japanese_configs_name_a_tokenizer_a_fresh_clone_has(path: Path):
+    """The training run reads this file at startup, after the eight-stage data
+    preparation has already succeeded. Naming a path that only exists on the
+    machine the tokenizer was trained on turns hours of preparation on a rented
+    box into a FileNotFoundError.
+
+    Asked of git rather than of the filesystem, and the difference is the whole
+    test: `data/ja/tokenizer.model` exists on the machine that trained it and on
+    no other, so `Path.exists()` answers yes here and yes in no clone. Being
+    tracked is the property a rented instance actually depends on.
+    """
+    named = load_args(path).model_overrides["flow_lm.lookup_table.tokenizer_path"]
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "--", named],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=False,  # the return code IS the assertion
+    )
+    assert tracked.returncode == 0, (
+        f"{path.name} names {named}, which git does not track -- a fresh clone "
+        f"would not have it ({tracked.stderr.strip()})"
+    )
+
+
+@pytest.mark.parametrize("path", JAPANESE_CONFIGS, ids=lambda p: p.name)
+def test_the_tokenizer_holds_exactly_the_vocabulary_the_config_claims(path: Path):
+    """n_bins sizes the text embedding. Larger than the tokenizer and the extra
+    rows never receive a gradient; smaller and a real piece indexes past the end.
+    The config has said "must equal the tokenizer's vocab size exactly" since it
+    was written, and nothing checked it."""
+    import sentencepiece as spm
+
+    args = load_args(path)
+    sp = spm.SentencePieceProcessor(
+        model_file=str(REPO / args.model_overrides["flow_lm.lookup_table.tokenizer_path"])
+    )
+    assert sp.get_piece_size() == args.model_overrides["flow_lm.lookup_table.n_bins"]

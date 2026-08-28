@@ -565,18 +565,23 @@ HF キャッシュ: zip と同じ            ≈ 30 GB
 !!! tip "早期トリップワイヤ"
     チェコ語は 2k step で WER 29.5%（PR #254、既に言語として成立と読める水準）でした。日本語は指標が異なるため同じ数字を目標にはできませんが、**2〜3k step（約25分・$1〜2）で「日本語らしい音韻」すら出ないならパイプラインのバグ**と判断してよいのは変わりません。これは指標ではなく耳で聞いた判断なので、CER に差し替えても成立します。ここで止めれば損失は $2 です。
 
-!!! danger "GPU を借りる前に — `data/ja/` はリポジトリに入っていません"
-    `.gitignore:95` の `/data*/` がディレクトリごと除外していて、`git ls-files data/ja/` は
-    空を返します。新しいインスタンスに clone しただけでは `tokenizer.model` も `corpus.txt` も
-    `gol_metadata.csv` も `moe20_metadata.csv` もありません。**前処理8段を全部通し切ったあと、
-    学習開始で `SentencePieceTokenizer.__init__` がファイル無しで落ちます。**
+!!! success "トークナイザはリポジトリに入っています"
+    以前ここには「`data/ja/` が丸ごと gitignore されているので、新規クローンにトークナイザが
+    無く、**前処理8段を全部通し切ったあとに学習開始で落ちる**」と書いていました。解決済みです。
 
-    上のフェーズ0は「実施済み」と書かれていますが、それはこの開発機の話です。
-    `data/ja/tokenizer.model` をインスタンスへ転送し、語彙数が 8000 であることを確かめてから
-    GPU を借りてください。作り直す場合は gated repo 2つ
-    （`midralab/gol-dataset-2k-ljspeech`、`ayousanz/moe-speech-20speakers-ljspeech`）から
-    metadata.csv を取ったうえで、`finetune_language_ja.yaml` 冒頭のコマンド列をその順に
-    実行します。
+    `training/tokenizers/japanese_8000.model`（118 KB）を追跡対象にし、日本語の設定2つが
+    そこを指しています。クローンした時点で学習に必要なものは揃っています。
+
+    2つのテストが固定しています。**片方はファイルシステムではなく git に訊きます** ——
+    `Path.exists()` はトークナイザを作った機械では真になるので、「新規クローンが持っているか」
+    という肝心の問いに答えられません（実際、最初にそう書いて**テストが通ってしまいました**）。
+    もう片方は `n_bins` がトークナイザの語彙数と厳密に一致することを見ます。設定には
+    「厳密に一致させる必要がある」と最初から書いてありましたが、誰も検査していませんでした。
+
+    **gated データセット2つ（`midralab/gol-dataset-2k-ljspeech`、
+    `ayousanz/moe-speech-20speakers-ljspeech`）が要るのは、トークナイザを作り直すときだけ**に
+    なりました。手順と根拠は `training/tokenizers/README.md` にあります。
+
 
 !!! success "step 数とサンプル頻度は検証用の設定で解決済みです"
     以前ここには「`max_steps` が 250000 なので書き換えてから起動」「`sample_freq` が 10000 では
