@@ -764,6 +764,13 @@ def split_by_speaker(entries: list[dict], valid_hours: float) -> tuple[list, lis
     for speaker in eligible:
         if taken >= target:
             break
+        # Never the last one. Holding out every speaker leaves nothing to train
+        # on, and nothing downstream notices: the manifests are written, stage 8
+        # aligns them, and the failure arrives as a training run whose training
+        # set is empty. Seen on a real single-speaker run, where --valid-hours
+        # 0.05 held out all 35 utterances.
+        if len(held_out) + 1 >= len(by_speaker):
+            break
         held_out.add(speaker)
         taken += seconds[speaker]
 
@@ -774,6 +781,16 @@ def split_by_speaker(entries: list[dict], valid_hours: float) -> tuple[list, lis
     # much of the corpus that is is a number the operator has no other way to
     # see. It is only alarming when the valid set also came up short, which is
     # the warning below; here it is one info line about the corpus's shape.
+    if entries and not valid:
+        # One eligible speaker, or one speaker at all: there is no split that
+        # holds a voice out and still has something to train on. Refusing is the
+        # only honest answer -- the corpus, or --hours, is too small.
+        raise typer.BadParameter(
+            f"no valid split is possible: {len(by_speaker)} speaker(s), of which "
+            f"{sum(1 for r in by_speaker.values() if len(r) > 1)} have more than one "
+            "utterance. Holding any of them out would leave nothing to train on. "
+            "Raise --hours so more speakers are selected."
+        )
     singletons = sum(1 for rows in by_speaker.values() if len(rows) == 1)
     logger.info(
         f"held out {len(held_out)} speakers ({taken / 3600:.2f}h, {len(valid)} utterances) "

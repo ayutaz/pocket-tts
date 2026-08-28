@@ -416,6 +416,13 @@ uv run python -m training.scripts.prepare_moespeech --hours 124 --out data/ja \
     発話が1つしかない話者は held-out 対象から外れます（1発話では声をクローンして別の発話を
     合成する評価ができない）。捨てはせず train に入り、その人数はログに1行出ます。
 
+    **最後の1人は絶対に held-out しません。** 全話者を held-out すると train が空になり、
+    しかも誰も気づきません — マニフェストは書かれ、ステージ8はそれをアライメントし、
+    失敗は「学習データの無い学習ラン」として遠くで表面化します。実際に1話者のコーパスで
+    `--valid-hours 0.05` を指定したところ、35発話すべてが valid に入りました。
+    いまは train に最低1人を残し、それでも valid が空になる場合（話者が1人しかいない等）は
+    **`--hours` を上げるよう促して停止します**。
+
 ステージ6は書くだけでなく**消します**。選定から外れた話者の `entries/<speaker>.jsonl` と、そこに
 書かれていた `audio/` の wav を消し、`--target-sec` を伸ばして必要ファイル数が減ったときも余った
 `<speaker>_NNN.wav` を消します。`audio/` は 124h・44.1 kHz で数十 GB あり、preemptible

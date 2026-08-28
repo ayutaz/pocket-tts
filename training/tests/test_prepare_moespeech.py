@@ -2601,23 +2601,35 @@ def test_a_narrower_selection_leaves_the_speakers_it_dropped_out(tmp_path, monke
     it mid-run costs the run.
     """
     p = _pipeline(tmp_path, monkeypatch)
+    # Three, so narrowing can drop one and still leave a split: holding out the
+    # only remaining speaker would leave nothing to train on, which split_by_speaker
+    # now refuses outright.
+    p.speakers.append("sora")
     p.run(**CUTOFFS)
-    assert {e["speaker"] for e in _jsonl(p.out / "utterances.jsonl")} == {"aoi", "kaede"}
+    assert {e["speaker"] for e in _jsonl(p.out / "utterances.jsonl")} == {"aoi", "kaede", "sora"}
     _age(p.out)
 
     (p.out / "characters.json").unlink()
-    p.run(**CUTOFFS, hours=0.001)  # 0.06 minutes: one of the two 0.1-minute speakers
+    p.run(**CUTOFFS, hours=0.0025)  # 0.15 minutes: two of the three 0.1-minute speakers
 
     chosen = json.loads((p.out / "characters.json").read_text(encoding="utf-8"))
-    assert [c["name"] for c in chosen["characters"]] == ["aoi"], chosen
-    assert {e["speaker"] for e in _jsonl(p.out / "utterances.jsonl")} == {"aoi"}
+    assert [c["name"] for c in chosen["characters"]] == ["aoi", "kaede"], chosen
+    assert {e["speaker"] for e in _jsonl(p.out / "utterances.jsonl")} == {"aoi", "kaede"}
     manifests = _jsonl(p.out / "train.jsonl") + _jsonl(p.out / "valid.jsonl")
-    assert {e["speaker"] for e in manifests} == {"aoi"}, manifests
+    assert {e["speaker"] for e in manifests} == {"aoi", "kaede"}, manifests
     # The retention table is read in hours, so it may not go on counting a
     # speaker this run will not train on either.
-    assert json.loads((p.out / "probe.json").read_text(encoding="utf-8"))["count"] == 5
-    assert sorted(f.name for f in (p.out / "entries").glob("*.jsonl")) == ["aoi.jsonl"]
-    assert sorted(w.name for w in (p.out / "audio").glob("*.wav")) == ["aoi.wav", "aoi_001.wav"]
+    assert json.loads((p.out / "probe.json").read_text(encoding="utf-8"))["count"] == 10
+    assert sorted(f.name for f in (p.out / "entries").glob("*.jsonl")) == [
+        "aoi.jsonl",
+        "kaede.jsonl",
+    ]
+    assert sorted(w.name for w in (p.out / "audio").glob("*.wav")) == [
+        "aoi.wav",
+        "aoi_001.wav",
+        "kaede.wav",
+        "kaede_001.wav",
+    ]
 
 
 def test_new_cutoffs_rebuild_the_selection_they_decided(tmp_path, monkeypatch):
@@ -2793,3 +2805,31 @@ def test_an_annotation_whose_wav_is_missing_is_reported_under_its_own_name(tmp_p
 
     stats = probe_utterances(tmp_path, names=["spk"])
     assert (stats["count"], stats["no_audio"], stats["unreadable"]) == (1, 1, 1), stats
+
+
+def test_the_split_never_holds_out_every_speaker(tmp_path):
+    """Asking for more valid hours than the corpus holds empties the training
+    set. Observed on a real one-speaker run: --valid-hours 0.05 over a single
+    speaker put all 35 utterances in valid and none in train, and nothing said
+    so -- the manifests were written, stage 8 aligned them, and the failure
+    would have surfaced as a training run with nothing to train on.
+
+    The loop tests `taken >= target` before adding, so it always takes at least
+    one speaker; with only one speaker to take, that one is the whole corpus.
+    """
+    from training.scripts.prepare_moespeech import split_by_speaker
+
+    entries = [{"speaker": "only", "duration": 60.0} for _ in range(4)]
+    with pytest.raises(typer.BadParameter, match="valid"):
+        split_by_speaker(entries, valid_hours=1.0)
+
+
+def test_the_split_holds_out_what_it_can_when_the_corpus_is_merely_small(tmp_path):
+    """The guard above must not fire on a corpus that simply has less to spare:
+    two speakers and an impossible target still leaves one to train on."""
+    from training.scripts.prepare_moespeech import split_by_speaker
+
+    entries = [{"speaker": f"s{i}", "duration": 60.0} for i in range(2) for _ in range(3)]
+    train, valid = split_by_speaker(entries, valid_hours=100.0)
+    assert train and valid
+    assert {e["speaker"] for e in train} & {e["speaker"] for e in valid} == set()
