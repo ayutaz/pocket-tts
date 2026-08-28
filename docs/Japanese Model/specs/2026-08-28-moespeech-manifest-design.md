@@ -353,11 +353,28 @@ fd6ca23b_000.20250706221645.bak.json    ← バックアップ（wav なし）
 
 212秒の音声に 152秒。**音声1時間あたり約2,580秒**（この機械: 24コア、`torch 2.13.0+cpu`）。
 
-| | 124時間の所要 |
-|---|---|
-| **この機械（CPU）** | **約89時間 ≒ 3.7日** |
-| 1×GPU（`training-strategy.md` の 2,640h で 8〜15 GPU-h から比例） | **約0.4〜0.7 GPU-h ≒ 1時間未満・$2 程度** |
+| | 音声1時間あたり | 124時間の所要 |
+|---|---|---|
+| CPU（24コア） | 2,590秒 | **約89時間 ≒ 3.7日** |
+| **GPU（RTX 4070 Ti SUPER, 16 GB）** | **27.8秒** | **約57分** |
 
-**これが「前処理も vast.ai 上で」という当初の判断の根拠を、数字で裏づけている。**
-手元にあるのは CUDA 無しの PyTorch（`2.13.0+cpu`）で、GPU は使えない。
-ディスクは 3.4 TB 空いており足りるが、律速はアライナである。
+**93倍**である。`training-strategy.md` が GPU について見積もっていた「2,640h で 8〜15 GPU-h」
+（124h なら 0.4〜0.7 GPU-h）とも一致する。
+
+!!! warning "最初「この機械に GPU は無い」と書いたが、誤りだった"
+    `torch.cuda.is_available()` が False だったので GPU 非搭載と判断したが、実際には
+    **RTX 4070 Ti SUPER が載っていた**。入っていた PyTorch が CPU ビルド（`2.13.0+cpu`）
+    だっただけである。Windows の PyPI 既定は CPU 版なので、`torch>=2.5.0` という
+    `pyproject.toml` の指定だけではこうなる。
+
+    ```bash
+    uv pip install --index-url https://download.pytorch.org/whl/cu126         "torch==2.13.0+cu126" "torchaudio==2.11.0+cu126"
+    ```
+
+    **`uv run` は毎回ロックから同期し直すので、この CUDA ビルドを CPU 版に戻します。**
+    アライメントを走らせる間は `.venv/Scripts/python.exe` を直接呼ぶこと。
+    `prepare_data.align` はサブプロセスを `sys.executable` で起動するので、
+    親をそれで起動すれば子も CUDA 版を使う。
+
+    教訓として: `torch.cuda.is_available()` が False であることは「GPU が無い」の証拠ではない。
+    `nvidia-smi` が答える。
