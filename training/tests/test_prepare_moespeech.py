@@ -331,7 +331,15 @@ def test_a_marker_without_its_directory_is_not_trusted(tmp_path, monkeypatch):
     assert sorted(p.name for p in out.iterdir()) == ["a.wav", "b.wav", "c.wav"]
 
 
-def _annotation(tmp_path, name, whisper, parakeet, duration=5.0, mos=3.5):
+def _annotation(tmp_path, name, whisper, parakeet, duration=5.0, mos=3.5, wav=True):
+    """One clip's annotation, with the audio it describes beside it by default.
+
+    The scan drops an annotation whose wav is not there, because MoeSpeech ships
+    a dated .bak.json twin of every clip and only the audio tells the two apart.
+    So a fixture that wants to be *kept* has to have one. It is 50 ms of tone --
+    nothing at this stage reads the audio, only whether it exists -- and
+    `wav=False` is how a fixture asks to be the twin.
+    """
     p = tmp_path / f"{name}.json"
     p.write_text(
         json.dumps(
@@ -345,6 +353,8 @@ def _annotation(tmp_path, name, whisper, parakeet, duration=5.0, mos=3.5):
         ),
         encoding="utf-8",
     )
+    if wav:
+        _wav(p.with_suffix(".wav"), 0.05, 440.0)
     return p
 
 
@@ -2735,3 +2745,51 @@ def test_a_kill_between_the_two_manifests_writes_both_again(tmp_path, monkeypatc
 
     assert len(p.calls["split_by_speaker"]) == 2, "the surviving half was taken for the whole"
     assert _tree(p.out) == uninterrupted
+
+
+def test_a_backup_annotation_is_not_counted_as_a_second_clip(tmp_path):
+    """The layout MoeSpeech actually ships, confirmed by unpacking fd6ca23b.zip:
+    every clip carries a dated backup of its annotation beside it --
+    `fd6ca23b_000.json` next to `fd6ca23b_000.20250706221645.bak.json` -- and
+    rglob("*.json") finds both. Counted as clips, a speaker's corpus doubles:
+    probe.json reports 248 where 124 exist and its retention table promises
+    twice what any cutoff can deliver. The backups then fail to join, because
+    `fd6ca23b_000.20250706221645.bak.wav` is not a file anybody ever wrote, and
+    the operator reads "124 of 248 clips could not be joined" about a corpus
+    that was never 248.
+
+    An annotation whose audio is not there is not a training example, whatever
+    its name, so the audio is what decides.
+    """
+    from training.scripts.prepare_moespeech import probe_utterances
+
+    clips = tmp_path / "spk" / "wav"
+    clips.mkdir(parents=True)
+    for i in range(3):
+        _annotation(clips, f"fd6ca23b_{i:03d}", "こんにちは", "こんにちは")
+        _wav(clips / f"fd6ca23b_{i:03d}.wav", 1.0, 440.0)
+        # The backup: same content, dated name, and no wav of its own.
+        _annotation(
+            clips, f"fd6ca23b_{i:03d}.20250706221645.bak", "こんにちは", "こんにちは", wav=False
+        )
+
+    stats = probe_utterances(tmp_path, names=["spk"])
+    assert stats["count"] == 3, stats
+    assert stats["no_audio"] == 3, stats
+
+
+def test_an_annotation_whose_wav_is_missing_is_reported_under_its_own_name(tmp_path):
+    """Told apart from an unreadable file and from one missing a field, because
+    "the manifest is smaller than the table said" has different causes and only
+    the counts distinguish them."""
+    from training.scripts.prepare_moespeech import probe_utterances
+
+    clips = tmp_path / "spk" / "wav"
+    clips.mkdir(parents=True)
+    _annotation(clips, "has_audio", "あ", "あ")
+    _wav(clips / "has_audio.wav", 1.0, 440.0)
+    _annotation(clips, "no_audio", "あ", "あ", wav=False)
+    (clips / "unreadable.json").write_text("{not json", encoding="utf-8")
+
+    stats = probe_utterances(tmp_path, names=["spk"])
+    assert (stats["count"], stats["no_audio"], stats["unreadable"]) == (1, 1, 1), stats

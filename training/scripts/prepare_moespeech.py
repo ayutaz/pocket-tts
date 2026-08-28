@@ -306,6 +306,17 @@ def _scan_annotations(
             skipped["blank"] += 1
             logger.debug(f"{path}: nothing left of the transcript after normalization")
             continue
+        # The audio decides, not the name. MoeSpeech ships a dated backup of
+        # every annotation beside it -- fd6ca23b_000.json next to
+        # fd6ca23b_000.20250706221645.bak.json -- and rglob finds both, so a
+        # speaker's corpus looks twice its size and the retention table promises
+        # twice what any cutoff can deliver. The backups carry no wav of their
+        # own, which is also the honest general rule: an annotation whose audio
+        # is not there is not a training example, whatever it is called.
+        if not row["wav"].exists():
+            skipped["no_audio"] += 1
+            logger.debug(f"{path}: no {row['wav'].name} beside it")
+            continue
         yield row
 
 
@@ -448,19 +459,34 @@ def probe_utterances(root: Path, names: list[str] | None = None) -> dict:
     """
     skipped: Counter = Counter()
     rows = [(r["duration"], r["cer"], r["mos"]) for r in _scan_annotations(root, skipped, names)]
-    unreadable, incomplete, blank = (skipped["unreadable"], skipped["incomplete"], skipped["blank"])
-    dropped = unreadable + incomplete + blank
+    unreadable, incomplete, blank, no_audio = (
+        skipped["unreadable"],
+        skipped["incomplete"],
+        skipped["blank"],
+        skipped["no_audio"],
+    )
+    dropped = unreadable + incomplete + blank + no_audio
     if dropped:
         logger.warning(
             f"skipped {dropped} of {len(rows) + dropped} json files: {unreadable} unreadable, "
             f"{incomplete} not usable as an annotation, {blank} with nothing left of the "
-            f"transcript after normalization"
+            f"transcript after normalization, {no_audio} with no wav beside them"
+        )
+    if no_audio and no_audio >= len(rows):
+        # Every real clip has a dated .bak.json twin, so about half of what
+        # rglob finds is expected to land here. Many more than that means the
+        # wavs are somewhere this does not look, and the whole run is about to
+        # measure an empty corpus.
+        logger.warning(
+            f"{no_audio} annotations have no wav against {len(rows)} that do -- if this is not "
+            f"the .bak.json twin of every clip, the audio is not where this expects it"
         )
     return {
         "count": len(rows),
         "unreadable": unreadable,
         "incomplete": incomplete,
         "blank": blank,
+        "no_audio": no_audio,
         "hours": sum(d for d, _, _ in rows) / 3600,
         "duration": _distribution([d for d, _, _ in rows]),
         "cer": _distribution([c for _, c, _ in rows]),
