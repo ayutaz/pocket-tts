@@ -62,19 +62,39 @@ optim:
 # point on the next resume.
 run_dir: runs/finetune_language_ja_phase1
 
-# 16 x 4 = 64 rows per optimizer step, the same effective batch production uses
-# through batch_size 64 alone. Split this way it fits a 24 GB card, which is
-# what this phase is meant to be rented on. Below 64 the acoustic-quality
-# transition arrives late or not at all, so a cheaper split would validate
-# nothing.
-batch_size: 16
-grad_accum_steps: 4
+# 8 x 8 = 64 rows per optimizer step, the same effective batch production uses
+# through batch_size 64 alone. Below 64 the acoustic-quality transition arrives
+# late or not at all, so a cheaper split would validate nothing -- but HOW the
+# 64 is split turns out to matter enormously.
+#
+# Measured on a 16 GB RTX 4070 Ti SUPER: 16 x 4 ran at 0.022 it/s, which is 193
+# hours for this run. The same 64 rows as 8 x 8 ran at 0.302 it/s -- 13.8 hours,
+# fourteen times faster. At 16 the card sat at 15.3 of 16.4 GB and thrashed;
+# Windows cannot use PyTorch's expandable_segments allocator (it says so at
+# startup), so fragmentation there is not recoverable.
+#
+# On a 24 GB card 16 x 4 is likely the better split, and on an 80 GB one a
+# single batch of 64. Measure it rather than assuming: the product is what the
+# training cares about, and the factors are what the card cares about.
+batch_size: 8
+grad_accum_steps: 8
 
 # 15k, not production's 250k. The README puts the WER plateau at about 15k;
 # everything after it buys acoustic quality, which is not what this run is
 # asking about. train.py takes a config path and nothing else -- there is no
 # --max-steps -- so this number is the only thing that stops the run.
 max_steps: 15000
+
+# torch.compile needs Triton, which has no official Windows build, so this run
+# dies at the first batch with TritonMissing unless compile is off. It costs
+# about 24% throughput on one GPU (args.py:98) -- on a Linux box, set this back
+# to true. It changes speed, not what the run validates.
+#
+# The other Windows requirement is PYTHONUTF8=1 in the environment: torch's
+# inductor reads its kernel templates without naming an encoding, so on a
+# Japanese Windows the cp932 default makes `import torch._inductor` itself
+# raise UnicodeDecodeError before any of this code runs.
+compile: false
 
 stats_ema_steps: 1000
 ema_decay: 0.999
