@@ -43,9 +43,15 @@ def _emissions(rows: list[str]) -> tuple[torch.Tensor, torch.Tensor]:
     return logits.log_softmax(-1), T
 
 
-def _spans(row: str, tokens: list[int], word_of: list[int]):
+def _spans_and_scores(row: str, tokens: list[int], word_of: list[int]):
+    """Both halves of what the aligner returns, for a batch of one."""
     emissions, T = _emissions([row])
-    return batched_word_spans(emissions, T, [tokens], [word_of], BLANK)[0]
+    return batched_word_spans(emissions, T, [tokens], [word_of], BLANK)
+
+
+def _spans(row: str, tokens: list[int], word_of: list[int]):
+    spans, _ = _spans_and_scores(row, tokens, word_of)
+    return spans[0]
 
 
 def test_each_word_claims_the_frame_that_emits_it():
@@ -99,16 +105,16 @@ def test_an_items_alignment_does_not_depend_on_what_it_is_batched_with():
     into its alignment, its spans shift and only a longer neighbour reveals it.
     """
     short, long = "a__b", "a__b__c_"
-    alone = batched_word_spans(*_emissions([short]), [[1, 2]], [[0, 1]], BLANK)[0]
-    batched = batched_word_spans(
+    alone, _ = batched_word_spans(*_emissions([short]), [[1, 2]], [[0, 1]], BLANK)
+    batched, _ = batched_word_spans(
         *_emissions([short, long]), [[1, 2], [1, 2, 3]], [[0, 1], [0, 1, 2]], BLANK
-    )[0]
-    assert batched == alone
+    )
+    assert batched[0] == alone[0]
 
 
 def test_an_unalignable_item_does_not_take_its_batch_down_with_it():
     """One bad transcript in a shard must cost that utterance, not the shard."""
-    results = batched_word_spans(
+    results, _ = batched_word_spans(
         *_emissions(["a", "a__b"]), [[1, 2, 3], [1, 2]], [[0, 1, 2], [0, 1]], BLANK
     )
     assert results[0] is None
@@ -130,6 +136,36 @@ def test_a_span_marks_where_a_sound_peaks_not_how_long_it_lasts():
     assert _spans("aaa___bbb", [1, 2], [0, 1]) == [(2, 2), (8, 8)]
     # A word of several tokens still runs peak-to-peak, not onset-to-offset.
     assert _spans("aaabbb", [1, 2], [0, 0]) == [(2, 5)]
+
+
+# -- how well the audio supports the text -------------------------------------
+
+
+def test_a_matching_transcript_scores_higher_than_a_wrong_one():
+    """The signal GOL needs. Its transcripts come from one ASR pass and there is
+    no second one to disagree with, so the only evidence that text matches audio
+    is how well the audio supports it -- which is exactly what the trellis
+    already computes and throws away."""
+    _, scores = _spans_and_scores("aaa___bbb", [1, 2], [0, 1])
+    _, wrong = _spans_and_scores("aaa___bbb", [2, 1], [0, 1])
+    assert scores[0][0] > wrong[0][0], (scores, wrong)
+
+
+def test_the_score_comes_with_what_it_has_to_be_normalized_by():
+    """Raw log-prob scales with both frame count and token count, and which
+    normalization the distribution supports is not knowable before measuring it.
+    So the row carries the raw score and both denominators."""
+    _, scores = _spans_and_scores("aaa___bbb", [1, 2], [0, 1])
+    score, frames, tokens = scores[0]
+    assert frames == 9 and tokens == 2, (frames, tokens)
+    assert score < 0, score
+
+
+def test_an_unalignable_utterance_has_no_score():
+    """None, not a sentinel number: a score that looks like a very bad
+    alignment would be filtered as one, and this is a different thing."""
+    spans, scores = _spans_and_scores("ab", [1, 2, 1, 2, 1], [0, 1, 2, 3, 4])
+    assert spans[0] is None and scores[0] is None
 
 
 # -- handing the spans back to the words they belong to ------------------------

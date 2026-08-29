@@ -1,8 +1,13 @@
 """Add word-level timestamps to a (speech, text) jsonl manifest by forced alignment.
 
-Writes the same jsonl with an extra "words" field:
+Writes the same jsonl with an extra "words" field, plus the alignment's own
+score and the two counts it scales with:
     {"path": ..., "duration": ..., "transcript": ...,
+     "score": -41.2, "frames": 149, "tokens": 23,
      "words": [{"word": "hello", "start": 0.31, "end": 0.52}, ...]}
+
+"score" is the log-probability of the best alignment path -- how well the audio
+supports the transcript. It is left raw and undivided; see batched_word_spans.
 
 --segmenter japanese splits with MeCab/UniDic instead of on whitespace and adds
 a "kana" field per word holding the hiragana reading that was aligned, since
@@ -62,11 +67,23 @@ def batched_word_spans(
     token_lists: list[list[int]],
     word_of_lists: list[list[int]],
     blank: int,
-) -> list[list[tuple[int, int]] | None]:
+) -> tuple[list[list[tuple[int, int]] | None], list[tuple[float, int, int] | None]]:
     """Viterbi CTC alignment for a whole batch: one time-loop over Tmax.
 
     Returns, per item, per-token (start_frame, end_frame) spans grouped into
-    words by word_of, or None when the item is unalignable.
+    words by word_of, or None when the item is unalignable; and alongside them,
+    per item, `(score, frames, tokens)` or None for the same items.
+
+    `score` is the log-probability of the best alignment path -- how well the
+    audio supports the text -- which the trellis has already computed and which
+    the check below reads only to decide whether the item is alignable at all.
+    Handing it back costs nothing and gives a corpus with a single ASR pass the
+    direct measure that a mutual-CER filter over two passes only approximates.
+
+    It is raw, and it comes with both of its denominators: the log-probability
+    grows with the number of frames it sums over and with the number of tokens
+    the path has to consume, and which of those the distribution wants dividing
+    out is not knowable before the distribution has been looked at.
     """
     device = emissions.device
     B, Tmax, _ = emissions.shape
@@ -92,6 +109,7 @@ def batched_word_spans(
         trellis[t + 1] = torch.where((t < T).view(B, 1), new, prev)
 
     results: list[list[tuple[int, int]] | None] = []
+    scores: list[tuple[float, int, int] | None] = []
     trellis_cpu = trellis.permute(1, 0, 2).cpu()  # [B, Tmax+1, Nmax+1]
     blank_cpu = blank_em.cpu()
     tok_em_cpu = tok_em.cpu()
@@ -99,6 +117,10 @@ def batched_word_spans(
         n, t_end = int(N[b]), int(T[b])
         if n == 0 or t_end < n or trellis_cpu[b, t_end, n].item() == neg:
             results.append(None)
+            # None rather than a very negative number: a sentinel would sort
+            # among the worst alignments and be filtered as one, and "no
+            # alignment exists" is a different fact from "this one is poor".
+            scores.append(None)
             continue
         tr = trellis_cpu[b]
         frames = [0] * n
@@ -119,7 +141,8 @@ def batched_word_spans(
             spans[w_idx] = (min(s, f), max(e, f))
         n_words = max(word_of_lists[b], default=-1) + 1
         results.append([spans.get(i) for i in range(n_words)])
-    return results
+        scores.append((trellis_cpu[b, t_end, n].item(), t_end, n))
+    return results, scores
 
 
 def case_fold_for(vocab: dict) -> Callable[[str], str]:
@@ -546,7 +569,7 @@ def main(
                 T = torch.tensor(
                     [ctc_model._get_feat_extract_output_lengths(n) for n in lens], device=device_t
                 )
-                spans_batch = batched_word_spans(
+                spans_batch, scores_batch = batched_word_spans(
                     emissions, T, [u[5] for u in chunk], [u[6] for u in chunk], blank
                 )
                 for (
@@ -558,10 +581,16 @@ def main(
                     _,
                     _,
                     heads,
-                ), spans, t_frames, n_samples in zip(chunk, spans_batch, T.tolist(), lens):
+                ), spans, score, t_frames, n_samples in zip(
+                    chunk, spans_batch, scores_batch, T.tolist(), lens
+                ):
                     if spans is None:
                         skip(entry, ValueError("alignment failed"))
                         continue
+                    # Written before "words" so a `head` of the manifest shows
+                    # them without scrolling past the word list. Raw, with both
+                    # denominators: see batched_word_spans.
+                    entry["score"], entry["frames"], entry["tokens"] = score
                     sec_per_frame = (n_samples / sr) / t_frames
                     timed = _timed_words(words, norm, spans, sec_per_frame, keep_reading)
                     entry["words"] = _merge_phrases(timed, heads) if merge_heads else timed
