@@ -19,14 +19,21 @@ import typer
 
 from training.scripts.prepare_gol import (
     _speaker_key,
+    filter_by_score,
     gol_utterances,
     merge_entries,
+    probe_scores,
     probe_speakers,
     select_games,
     select_speakers,
     split_across_corpora,
 )
-from training.scripts.prepare_moespeech import concatenate, split_by_speaker, write_manifest
+from training.scripts.prepare_moespeech import (
+    _read_jsonl,
+    concatenate,
+    split_by_speaker,
+    write_manifest,
+)
 
 
 def _metadata(tmp_path, rows, text: str = "あ"):
@@ -1241,3 +1248,349 @@ def test_the_two_manifests_together_hold_every_merged_row(tmp_path):
     # The transcripts stay Japanese on a machine whose default encoding is
     # cp932, and unescaped, so the manifest can be read with `head`.
     assert "あ" in (tmp_path / "valid.jsonl").read_text(encoding="utf-8")
+
+
+def _aligned(tmp_path, rows, name="aligned.jsonl"):
+    """A stand-in for what `align_data.py` writes: the manifest it was handed,
+    with the alignment's own score and both of that score's denominators added.
+
+    A row is `(score, frames, tokens)`, optionally followed by that clip's
+    duration. Any of the three may be None, which leaves that key off the row
+    entirely -- which is what a real aligned manifest never holds, and what
+    this stage therefore has to treat as something other than a bad alignment.
+
+    Written with `write_manifest`, the function that writes the real ones, so
+    what is read back here is the format and not a test's idea of it.
+    """
+    entries = []
+    for i, row in enumerate(rows):
+        entry = {
+            "id": f"g:s/{i:04d}",
+            "speaker": "g:s",
+            "path": (Path(tmp_path) / "audio" / f"{i:04d}.wav").as_posix(),
+            "start": 0.0,
+            "duration": row[3] if len(row) > 3 else 1.0,
+            "transcript": "あいう",
+        }
+        for key, value in zip(("score", "frames", "tokens"), row[:3]):
+            if value is not None:
+                entry[key] = value
+        entry["words"] = [{"word": "あいう", "start": 0.0, "end": 0.5}]
+        entries.append(entry)
+    path = Path(tmp_path) / name
+    write_manifest(entries, path)
+    return path
+
+
+# The four rows the three normalizations disagree about, written down once
+# because several tests below need that disagreement and building it is fiddly.
+# The raw score, the per-frame score and the per-token score rank these four in
+# three different orders, so the better half under any one of them is a
+# different pair from the better half under either other:
+#
+#         raw   frames  tokens  per_frame  per_token  seconds
+#   r1  -10.0        5       2      -2.00      -5.00      4.0
+#   r2  -20.0       40       1      -0.50     -20.00      1.0
+#   r3  -30.0       30      20      -1.00      -1.50      8.0
+#   r4  -40.0       10      16      -4.00      -2.50      2.0
+#
+# Best two by raw: r1 and r2. By per_frame: r2 and r3. By per_token: r3 and r4.
+# Frames and tokens move independently of each other and of the score, which is
+# the thing a batch of one cannot show: the aligner scores per utterance but
+# runs a batch at a time, and three wrong denominators once survived a suite
+# whose fixtures could not tell an item's own frames from the batch's padding.
+DISAGREEING = [(-10.0, 5, 2, 4.0), (-20.0, 40, 1, 1.0), (-30.0, 30, 20, 8.0), (-40.0, 10, 16, 2.0)]
+
+
+def _score_row(stats, normalization, quantile):
+    """The single retention row for this normalization at this quantile.
+
+    Unpacked rather than indexed, so a table that listed a pair twice would
+    fail here instead of quietly reporting the first of two rows that an
+    operator would then read as the only one. The same discipline as `_row`.
+    """
+    (row,) = [
+        r
+        for r in stats["retention"]
+        if (r["normalization"], r["quantile"]) == (normalization, quantile)
+    ]
+    return row
+
+
+def test_the_probe_reports_all_three_normalizations(tmp_path):
+    """Raw log-prob scales with both frames and tokens, and which one the
+    distribution supports is not knowable before measuring it. Reporting one
+    would be choosing it.
+
+    These two rows are deliberately the trivial fixture: they are proportional
+    in all three normalizations, so nothing here can tell the three apart. That
+    is all this test claims -- that three are reported. That they are three
+    different measurements is the next test's job, and it needs a fixture this
+    one would pass without.
+    """
+    stats = probe_scores(_aligned(tmp_path, [(-100.0, 200, 10), (-50.0, 100, 5)]))
+    assert {"raw", "per_frame", "per_token"} <= set(stats)
+
+
+def test_each_normalization_divides_by_its_own_denominator(tmp_path):
+    """Three measurements, not one reported three times.
+
+    The largest row differs under each: r1 by raw, r2 by per_frame, r3 by
+    per_token -- so a distribution copied from one key into another lands a
+    value that belongs to a different clip. The six numbers asserted here are
+    all distinct, which is what makes swapping any two keys visible.
+    """
+    stats = probe_scores(_aligned(tmp_path, DISAGREEING))
+
+    assert (stats["raw"]["min"], stats["raw"]["max"]) == (-40.0, -10.0)
+    assert (stats["per_frame"]["min"], stats["per_frame"]["max"]) == (-4.0, -0.5)
+    assert (stats["per_token"]["min"], stats["per_token"]["max"]) == (-20.0, -1.5)
+    assert stats["raw"]["median"] == pytest.approx(-25.0)
+    assert stats["per_frame"]["median"] == pytest.approx(-1.5)
+    assert stats["per_token"]["median"] == pytest.approx(-3.75)
+
+
+def test_the_probe_counts_the_corpus_it_measured(tmp_path):
+    """The hours are the question this stage is asked -- the README's floor is
+    100 of them -- and clips are not hours: three clips here, ninety seconds."""
+    rows = [(-10.0, 5, 2, 60.0), (-20.0, 40, 1, 20.0), (-30.0, 30, 20, 10.0)]
+    stats = probe_scores(_aligned(tmp_path, rows))
+    assert stats["count"] == 3
+    assert stats["hours"] == pytest.approx(90.0 / 3600)
+
+
+def test_the_probe_does_not_measure_a_row_it_could_not_score(tmp_path):
+    """A row with no score is not a badly aligned row; it is a row this stage
+    cannot say anything about. Folding it into the distribution as a very bad
+    score, or as a zero, would move the percentiles a cutoff is read off.
+
+    Both would show here: -inf would take the minimum, 0.0 would take the
+    maximum, and either would make the count three.
+    """
+    rows = [(-10.0, 4, 3), (-60.0, 20, 8), (None, None, None)]
+    stats = probe_scores(_aligned(tmp_path, rows))
+
+    assert (stats["count"], stats["unscored"]) == (2, 1)
+    assert (stats["raw"]["min"], stats["raw"]["max"]) == (-60.0, -10.0)
+
+
+def test_the_retention_table_names_a_cutoff_for_each_normalization(tmp_path):
+    """A retention table over one normalization is that normalization chosen.
+    The cutoffs are quantiles of the corpus's own scores rather than a written
+    grid, because a log-probability has no scale known in advance -- the way
+    CER and speechMOS did on the corpus this stage replaces.
+    """
+    stats = probe_scores(_aligned(tmp_path, DISAGREEING))
+    assert {r["normalization"] for r in stats["retention"]} == {"raw", "per_frame", "per_token"}
+    assert _score_row(stats, "raw", 0)["min_score"] == -40.0
+    assert _score_row(stats, "per_frame", 0)["min_score"] == -4.0
+    assert _score_row(stats, "per_token", 0)["min_score"] == -20.0
+
+
+def test_the_hours_a_cutoff_leaves_depend_on_which_normalization_it_is(tmp_path):
+    """The column that tells the three tables apart is the hours, not the count.
+
+    A quantile cutoff keeps the same number of clips whichever normalization it
+    is taken over -- two of these four, in all three rows below. Which two
+    differs, and so the audio does: five seconds, nine, or ten out of the same
+    fifteen. An operator comparing the three tables on `kept` would see three
+    identical tables and conclude the normalization did not matter.
+    """
+    stats = probe_scores(_aligned(tmp_path, DISAGREEING))
+    raw, per_frame, per_token = (
+        _score_row(stats, n, 50) for n in ("raw", "per_frame", "per_token")
+    )
+
+    assert (raw["kept"], per_frame["kept"], per_token["kept"]) == (2, 2, 2)
+    assert raw["hours"] == pytest.approx(5.0 / 3600)
+    assert per_frame["hours"] == pytest.approx(9.0 / 3600)
+    assert per_token["hours"] == pytest.approx(10.0 / 3600)
+
+
+def test_the_table_reports_the_hours_a_cutoff_costs_and_not_only_the_clips(tmp_path):
+    """Dropping a quarter of the clips is not dropping a quarter of the audio,
+    and here the gap points the expensive way: the worst-scoring clips are the
+    longest, so a cutoff that looks like it costs 25% of the corpus costs 40%
+    of it. The MoeSpeech table reports hours beside counts for the same reason,
+    and the target this pipeline is given is in hours.
+
+    The four clips are 40, 30, 20 and 10 seconds, worst-scoring first.
+    """
+    # The tokens run the other way from the frames, so per_token ranks these
+    # four almost in reverse and a table built on the wrong denominator keeps a
+    # different three of them. Proportional tokens would have made this fixture
+    # pass under either normalization, which is the coincidence that hides a
+    # wrong denominator.
+    rows = [
+        (-80.0, 20, 40, 40.0),  # per_frame -4.0, per_token -2.0
+        (-33.0, 11, 3, 30.0),  # per_frame -3.0, per_token -11.0
+        (-54.0, 27, 6, 20.0),  # per_frame -2.0, per_token -9.0
+        (-14.0, 14, 2, 10.0),  # per_frame -1.0, per_token -7.0
+    ]
+    row = _score_row(probe_scores(_aligned(tmp_path, rows)), "per_frame", 25)
+
+    assert (row["kept"], row["fraction"]) == (3, 0.75)
+    assert row["hours"] == pytest.approx(60.0 / 3600)
+    assert row["hours_fraction"] == pytest.approx(0.6)
+
+
+def test_a_manifest_with_nothing_to_measure_offers_no_cutoffs(tmp_path):
+    """The aligner is the longest stage in the pipeline and the instance it
+    runs on is preemptible, so an aligned manifest with no rows in it yet is an
+    ordinary state to find rather than a corrupt one.
+
+    A cutoff here is a quantile of the corpus's own scores, so with no scores
+    there is no cutoff to offer -- and an empty table is the only honest answer.
+    A table of rows saying a threshold of 0.0 keeps 0 clips would read as a
+    measurement of a corpus that scored badly.
+    """
+    stats = probe_scores(_aligned(tmp_path, []))
+
+    assert (stats["count"], stats["unscored"], stats["hours"]) == (0, 0, 0.0)
+    assert stats["retention"] == []
+    assert stats["per_frame"]["median"] is None
+
+
+def test_no_default_threshold(tmp_path):
+    """The corpus has never been measured. A number written here now would
+    afterwards be indistinguishable from a measured one -- which is the failure
+    ruling R1 of the MoeSpeech plan existed to prevent, and which the speechMOS
+    measurement later vindicated: `--min-mos 3.0` was the plausible default
+    there, and the corpus's median turned out to be 2.281, so it would have cut
+    124.4 hours to 16.2 and written a manifest that looked entirely normal.
+
+    Nothing may be written before the refusal either. A run that refused after
+    leaving an output behind would be skipped by the next one, which is how
+    every stage in this script decides it has already run.
+    """
+    aligned = _aligned(tmp_path, [(-10.0, 10, 5)])
+    with pytest.raises(typer.BadParameter):
+        filter_by_score(aligned, tmp_path / "kept.jsonl", min_score_per_frame=None)
+    assert not (tmp_path / "kept.jsonl").exists()
+
+
+def test_a_better_alignment_is_the_one_that_survives(tmp_path):
+    """The score is a log-probability, so less negative is better and the
+    threshold is a floor. Reversed, this filter keeps exactly the clips it
+    exists to throw away, and the manifest is the same size either way."""
+    rows = [(-5.0, 10, 3), (-90.0, 9, 4)]  # per_frame -0.5 and -10.0
+    out = tmp_path / "kept.jsonl"
+
+    assert filter_by_score(_aligned(tmp_path, rows), out, min_score_per_frame=-1.0) == 1
+    assert [r["id"] for r in _read_jsonl(out)] == ["g:s/0000"]
+
+
+def test_the_filter_compares_per_frame_and_not_raw_or_per_token(tmp_path):
+    """One threshold, three answers, so the denominator cannot hide.
+
+    At -1.75 the per-frame filter keeps r2 and r3; the same number against the
+    per-token score keeps only r3, and against the raw score keeps nothing at
+    all -- a raw log-probability over a whole utterance is nowhere near -1.75.
+    A fixture whose frames and tokens were proportional would give one answer
+    three times.
+    """
+    out = tmp_path / "kept.jsonl"
+    kept = filter_by_score(_aligned(tmp_path, DISAGREEING), out, min_score_per_frame=-1.75)
+
+    assert kept == 2
+    assert [r["id"] for r in _read_jsonl(out)] == ["g:s/0001", "g:s/0002"]
+
+
+def test_the_table_promises_the_count_the_filter_delivers(tmp_path):
+    """An operator reads a cutoff off the retention table and hands that number
+    straight to the filter. If the table compares inclusively and the filter
+    does not, the corpus arrives short of what was chosen and nothing says so.
+
+    Five rows put the 25th percentile exactly on the second-smallest score
+    rather than between two of them, which is the only place the two
+    comparisons can disagree -- and it is where an operator lands, because
+    every cutoff this table offers is one of the corpus's own values.
+    """
+    rows = [
+        (-50.0, 10, 3),  # per_frame -5.0
+        (-28.0, 7, 8),  # per_frame -4.0, and the 25th percentile of the five
+        (-39.0, 13, 5),  # per_frame -3.0
+        (-18.0, 9, 12),  # per_frame -2.0
+        (-11.0, 11, 2),  # per_frame -1.0
+    ]
+    aligned = _aligned(tmp_path, rows)
+    row = _score_row(probe_scores(aligned), "per_frame", 25)
+
+    assert row["min_score"] == -4.0, "the cutoff has to be a value the corpus actually holds"
+    assert row["kept"] == 4, "a floor is a floor, not a strict inequality"
+    assert filter_by_score(aligned, tmp_path / "kept.jsonl", row["min_score"]) == row["kept"]
+
+
+def test_a_row_without_a_score_is_kept_and_counted(tmp_path, caplog):
+    """align_data emits no score for an utterance it could not align, and those
+    are already absent from the aligned manifest. A row that somehow has none is
+    a different problem and must not be silently filtered as a bad alignment.
+
+    Dropping it is the plausible reading -- `row.get("score", -inf)` is one
+    character of carelessness -- and it is wrong in the expensive direction:
+    the alignment has already been paid for, and a manifest quietly missing
+    rows nothing ever explained is what this whole stage exists to avoid. So it
+    goes through, and it is said out loud.
+    """
+    rows = [(-10.0, 10, 5), (-99.0, 9, 3), (None, None, None)]
+    out = tmp_path / "kept.jsonl"
+
+    with caplog.at_level(logging.WARNING, logger="prepare_gol"):
+        kept = filter_by_score(_aligned(tmp_path, rows), out, min_score_per_frame=-2.0)
+
+    assert kept == 2
+    assert [r["id"] for r in _read_jsonl(out)] == ["g:s/0000", "g:s/0002"]
+    assert any("no score" in r.getMessage() for r in caplog.records), caplog.text
+
+
+def test_a_row_with_a_score_but_no_denominator_is_kept_too(tmp_path):
+    """The score is what the filter reads, but frames is what it divides by,
+    and that division is where a row missing half of what it needs turns into
+    an exception in the middle of a stage that has already cost GPU-hours.
+
+    Both rows carry the same -10.0, so a filter falling back to the raw score
+    would drop the second one against a per-frame threshold.
+    """
+    rows = [(-10.0, 10, 4), (-10.0, None, 4)]
+    out = tmp_path / "kept.jsonl"
+
+    assert filter_by_score(_aligned(tmp_path, rows), out, min_score_per_frame=-2.0) == 2
+    assert [r["id"] for r in _read_jsonl(out)] == ["g:s/0000", "g:s/0001"]
+
+
+def test_the_filter_changes_nothing_but_which_rows_are_present(tmp_path):
+    """The rows go through byte for byte. The aligned manifest is the largest
+    file this pipeline writes and every field in it belongs to a later stage --
+    the word timestamps the loader cuts on above all -- so this stage rewriting
+    them is only a chance to change one. `ensure_ascii` left at its default is
+    the concrete way that happens: the file stays valid JSON and stops being
+    readable with `head`, which is how anyone here checks a manifest at all.
+    """
+    aligned = _aligned(tmp_path, DISAGREEING)
+    lines = aligned.read_bytes().splitlines(keepends=True)
+    out = tmp_path / "kept.jsonl"
+
+    filter_by_score(aligned, out, min_score_per_frame=-1.75)
+
+    assert out.read_bytes() == lines[1] + lines[2]
+
+
+def test_a_kill_mid_filter_leaves_nothing_under_the_finished_name(tmp_path, monkeypatch):
+    """A manifest a preemption cut short is still valid JSONL -- every line
+    parses and every path exists -- so nothing downstream can tell it from a
+    finished one, and the re-run finds it sitting there and skips the stage. So
+    the lines land beside the name and are renamed in only once they are there.
+    """
+    from training.scripts import prepare_gol as m
+
+    def killed(src, dst):
+        raise KeyboardInterrupt
+
+    aligned = _aligned(tmp_path, DISAGREEING)
+    out = tmp_path / "kept.jsonl"
+    monkeypatch.setattr(m.os, "replace", killed)
+
+    with pytest.raises(KeyboardInterrupt):
+        m.filter_by_score(aligned, out, min_score_per_frame=-1.75)
+
+    assert not out.exists(), "the kill left something under the finished name"

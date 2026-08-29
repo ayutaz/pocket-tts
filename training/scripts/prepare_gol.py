@@ -14,6 +14,7 @@ preemptible, so being killed and re-run must always be safe.
 """
 
 import csv
+import json
 import logging
 import os
 import shutil
@@ -37,7 +38,12 @@ from pocket_tts.utils.text_normalization import normalize_japanese
 # writer; and split_by_speaker because holding speakers out of the two corpora
 # separately is the one thing the merge below exists to prevent. write_manifest
 # itself is main's, at the point where the split is written out.
-from training.scripts.prepare_moespeech import _distribution, _read_jsonl, split_by_speaker
+from training.scripts.prepare_moespeech import (
+    _distribution,
+    _percentile,
+    _read_jsonl,
+    split_by_speaker,
+)
 
 logger = logging.getLogger("prepare_gol")
 
@@ -53,6 +59,14 @@ SECONDS_FLOORS = (0, 60, 300, 600, 1800, 3600, 7200)
 # speaker; see `split_across_corpora` for what that cost and why this is a hard
 # floor rather than a target.
 MIN_VALID_SPEAKERS = 20
+# The cutoffs the score retention table is reported over, and the
+# normalizations it is reported under. Quantiles rather than absolute scores
+# because an alignment log-probability has no scale known before the corpus is
+# measured; see `_score_retention`. All three normalizations, because which one
+# the distribution supports is the question this stage exists to ask and not
+# one it may answer; see `probe_scores`.
+SCORE_QUANTILES = (0, 1, 5, 10, 25, 50, 75, 90)
+NORMALIZATIONS = ("raw", "per_frame", "per_token")
 
 
 def select_games(metadata_tsv: Path, hours: float) -> list[dict]:
@@ -653,3 +667,246 @@ def split_across_corpora(
             "speaker is what phase 1 held out, and it could not say when to stop."
         )
     return train, valid
+
+
+def _scored(row: dict) -> tuple[float, int, int] | None:
+    """One aligned row's `(score, frames, tokens)`, or None if it carries no
+    score this stage can read.
+
+    Both denominators have to be there and neither may be zero, because both of
+    them are divided by. `align_data` emits all three together for every
+    utterance it aligns and writes nothing at all for the ones it cannot, so on
+    a manifest that came from it this never returns None -- which is exactly
+    why the caller must not treat None as a bad alignment. It is a row from
+    somewhere else, and the callers say so out loud instead of quietly filing
+    it under the thing this stage throws away.
+    """
+    score, frames, tokens = row.get("score"), row.get("frames"), row.get("tokens")
+    if score is None or not frames or not tokens:
+        return None
+    return score, frames, tokens
+
+
+def _normalized(score: float, frames: int, tokens: int) -> dict[str, float]:
+    """The same alignment score under all three normalizations.
+
+    The raw value is a log-probability summed along the best path, so it grows
+    with the number of frames the path runs over and with the number of tokens
+    it has to consume. Dividing by either is defensible and they are not the
+    same ordering -- a slow speaker and a fast one with the same text differ in
+    frames and not in tokens -- so all three are carried until the corpus has
+    been looked at. See `probe_scores`.
+    """
+    return {"raw": score, "per_frame": score / frames, "per_token": score / tokens}
+
+
+def _score_retention(rows: list[tuple[float, int, int, float]]) -> list[dict]:
+    """How much of the corpus each candidate cutoff would leave, under each of
+    the three normalizations.
+
+    The cutoffs are quantiles of the corpus's own scores rather than a written
+    grid, which is the one real difference from `_retention` on the MoeSpeech
+    side. CER lives in [0, 1] and speechMOS in [1, 5], so a grid of absolute
+    values could be written there before any measurement. An alignment
+    log-probability has no scale known in advance: it depends on the acoustic
+    model, on the language, and on how long the utterances happen to be, and
+    any absolute grid written here would be a guess wearing the clothes of a
+    measurement. A quantile cannot be one -- `min_score` is a number this
+    corpus actually holds.
+
+    That does make `kept` nearly the same in every row at a given quantile, by
+    construction. The column that tells the three normalizations apart is
+    `hours`: they keep the same *number* of clips and a different *set* of
+    them. Hours are reported both absolutely and as a fraction because the two
+    answer opposite questions -- what is left against the 100-hour floor the
+    README cites, and what this cut costs relative to what there was -- and
+    because the two diverge here in the expensive direction. A raw cutoff
+    drops long clips first, since a long clip sums more negative log-prob, so
+    it costs far more hours than it costs clips.
+
+    An empty corpus gets an empty table. There is no cutoff to offer when
+    there is nothing to read one off, and a table of zeros would read as a
+    measurement of a corpus that scored badly rather than of one that is not
+    there yet.
+    """
+    if not rows:
+        return []
+    total_seconds = sum(d for _, _, _, d in rows)
+    table = []
+    for normalization in NORMALIZATIONS:
+        values = [(_normalized(s, f, t)[normalization], d) for s, f, t, d in rows]
+        ordered = sorted(v for v, _ in values)
+        for quantile in SCORE_QUANTILES:
+            cutoff = _percentile(ordered, quantile)
+            kept = [d for v, d in values if v >= cutoff]
+            table.append(
+                {
+                    "normalization": normalization,
+                    "quantile": quantile,
+                    "min_score": cutoff,
+                    "kept": len(kept),
+                    "fraction": len(kept) / len(rows),
+                    "hours": sum(kept) / 3600,
+                    "hours_fraction": sum(kept) / total_seconds if total_seconds else 0.0,
+                }
+            )
+    return table
+
+
+def probe_scores(aligned_jsonl: Path) -> dict:
+    """Measure the alignment scores in `aligned_jsonl`. Decide nothing.
+
+    This is the stage that replaces MoeSpeech's quality filter, and it is a
+    better measurement than the one it replaces. There, two independent ASR
+    passes were compared against each other and their mutual CER stood in for
+    quality -- an indirect proxy, since it measures where two systems disagreed
+    rather than whether either was right. GOL ships one transcription, so that
+    proxy does not exist; what does exist is the aligner's own log-probability,
+    which measures how well the audio supports the text directly.
+
+    Three normalizations are reported and none is chosen. The raw score scales
+    with both frames and tokens, and which of those the distribution wants
+    divided out is a question about this corpus that nobody has asked yet.
+    Reporting one would be answering it. `align_data` carries `frames` and
+    `tokens` on every row precisely so that the answer can wait until here, and
+    `filter_by_score` below takes its threshold as a required argument so that
+    it can wait past here too.
+
+    The reason that discipline is worth this much apparatus is on the record.
+    On MoeSpeech, `--min-mos 3.0` was the obvious default -- it is the middle
+    of a five-point scale and it looks like a modest demand. The corpus was
+    then measured and its median speechMOS turned out to be 2.281, so that
+    default would have cut 124.4 hours to 16.2: seven eighths of the corpus
+    discarded, below the 100-hour floor the project's own README cites, by a
+    run whose manifest looked entirely normal.
+
+    A row that carries no score is counted under `unscored` and left out of the
+    distributions rather than folded in as a very bad one. It is not a badly
+    aligned utterance -- those never reach an aligned manifest at all -- and
+    scoring it as one would move the percentiles that a cutoff is read off.
+
+    Only the four numbers each row is measured on are retained, not the row.
+    An aligned manifest is the largest file this pipeline writes -- every
+    utterance carries a timestamp per word -- and a thousand hours of it does
+    not need to be in memory at once to have its median taken.
+    """
+    rows: list[tuple[float, int, int, float]] = []
+    unscored = 0
+    with open(aligned_jsonl, encoding="utf-8") as f:
+        for line in f:
+            row = json.loads(line)
+            got = _scored(row)
+            if got is None:
+                unscored += 1
+                continue
+            rows.append((*got, row.get("duration", 0.0)))
+    if unscored:
+        logger.warning(
+            f"{unscored} of {len(rows) + unscored} rows carry no score and were not measured; "
+            "align_data writes one for every utterance it aligns, so these came from "
+            "somewhere else and the table below does not describe them"
+        )
+
+    # One pass per normalization rather than one list of all three, which
+    # would hold three floats and a dict per utterance at once. Each still goes
+    # through `_normalized`, so there is one definition of what per-frame
+    # means and not a second one here to drift from it.
+    def measured(normalization: str) -> list[float]:
+        return [_normalized(s, f, t)[normalization] for s, f, t, _ in rows]
+
+    return {
+        "count": len(rows),
+        "unscored": unscored,
+        "hours": sum(d for _, _, _, d in rows) / 3600,
+        "raw": _distribution(measured("raw")),
+        "per_frame": _distribution(measured("per_frame")),
+        "per_token": _distribution(measured("per_token")),
+        "retention": _score_retention(rows),
+    }
+
+
+def filter_by_score(aligned: Path, out: Path, min_score_per_frame: float | None) -> int:
+    """Write the rows of `aligned` whose per-frame score clears the floor, and
+    say how many that was.
+
+    There is no default and asking for one raises. The threshold is a property
+    of this corpus, it is read off `probe_scores`'s retention table, and a
+    number written here now would afterwards be indistinguishable from a
+    measured one. See that function for what the plausible-looking default did
+    on the corpus before this one.
+
+    The floor is inclusive, matching the retention table exactly, so the count
+    an operator read there is the count they get.
+
+    A row with no score goes through and is counted. `align_data` drops the
+    utterances it could not align before they reach this file, so a row without
+    one did not come from it; filtering it out here would file a different
+    problem under "bad alignment", and it is the expensive direction to get
+    wrong, since the alignment has already been paid for and nothing
+    downstream would ever say the rows were missing.
+
+    This runs after alignment rather than before it (ruling G7), which is a
+    real change from the MoeSpeech stage order and follows from where the score
+    comes from: it does not exist until the aligner has run. So the aligner
+    runs over utterances this then discards. That is still far cheaper than the
+    second ASR pass the mutual-CER filter needed, by about an order of
+    magnitude.
+
+    Rows are copied through as the bytes they arrived as, rather than parsed
+    and written back. Every field in an aligned row belongs to a later stage --
+    the per-word timestamps the DataLoader cuts on above all -- so re-encoding
+    them here is nothing but an opportunity to change one; `ensure_ascii` left
+    at its default is the concrete way that happens, and it leaves a file that
+    is still valid JSON and no longer readable with `head`. Binary mode is also
+    the one way this machine's cp932 default cannot reach the transcripts.
+
+    `write_manifest` is not used for the same reason: it takes a list, and this
+    is the one file in the pipeline that should never be in memory whole.
+
+    The lines land beside the name and are renamed in once they are all there.
+    A manifest a preemption cut short is still valid JSONL -- every line parses
+    and every path exists -- so nothing downstream can tell it from a finished
+    one, and the re-run that finds it skips this stage.
+    """
+    if min_score_per_frame is None:
+        raise typer.BadParameter(
+            "filter_by_score has no default threshold and needs one. The scale of an "
+            "alignment log-probability is a property of this corpus and it has not been "
+            "measured: run probe_scores, read a cutoff off its retention table -- which "
+            "reports what each one costs in hours and not only in clips -- and pass that. "
+            "The corpus before this one is why: --min-mos 3.0 was the plausible default "
+            "there and the measured median was 2.281, which would have cut 124.4 hours to "
+            "16.2 and written a manifest that looked entirely normal."
+        )
+    aligned, out = Path(aligned), Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    partial = out.with_name(f"{out.name}.partial")
+    kept = unscored = total = 0
+    kept_seconds = total_seconds = 0.0
+    with open(aligned, "rb") as fin, open(partial, "wb") as fout:
+        for line in fin:
+            row = json.loads(line)
+            total += 1
+            duration = row.get("duration", 0.0)
+            total_seconds += duration
+            got = _scored(row)
+            if got is None:
+                unscored += 1
+            elif got[0] / got[1] < min_score_per_frame:
+                continue
+            fout.write(line)
+            kept += 1
+            kept_seconds += duration
+    if unscored:
+        logger.warning(
+            f"{unscored} of {total} rows carry no score to filter on and were kept; "
+            "align_data writes one for every utterance it aligns and drops the ones it "
+            "cannot, so these came from somewhere else, and discarding them here would "
+            "record a different problem as a bad alignment"
+        )
+    logger.info(
+        f"kept {kept} of {total} utterances at min_score_per_frame={min_score_per_frame}: "
+        f"{kept_seconds / 3600:.1f} of {total_seconds / 3600:.1f} hours"
+    )
+    os.replace(partial, out)
+    return kept
