@@ -661,7 +661,11 @@ def concatenate(utterances: list[dict], out_wav: Path, target_sec: float) -> lis
                 "id": u["id"],
                 "speaker": u["speaker"],
                 "transcript": u["transcript"],
-                "path": str(_joined_path(out_wav, written)),
+                # posix separators, not str(): a manifest written on Windows is
+                # read on Linux, where a backslash is part of the filename
+                # rather than a separator. Windows accepts forward slashes, so
+                # this spelling is the portable one in both directions.
+                "path": _joined_path(out_wav, written).as_posix(),
                 # Six decimals for both, for two reasons that meet at the
                 # same rounding. `start` is a key rather than a display:
                 # align_data resumes on (path, start), so two clips whose

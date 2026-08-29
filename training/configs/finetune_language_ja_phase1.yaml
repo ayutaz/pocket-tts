@@ -12,11 +12,15 @@
 #
 # Prepare the inputs first (see docs/Japanese Model/training-strategy.md phase 1):
 #   uv sync --group japanese
-#   # data/ja/ is gitignored -- copy tokenizer.model onto the instance, or rebuild
-#   # it with the prepare_ja_text + train_tokenizer commands in
-#   # finetune_language_ja.yaml's header
-#   uv run python -m training.scripts.prepare_moespeech --hours 124 --out data/ja
-#   # that stops at probe.json; read it, then re-run with the two cutoffs
+#   uv run python -m training.scripts.prepare_moespeech --hours 124 --out data/ja \
+#       --max-cer 0.2 --min-mos 0.0
+#
+# The tokenizer ships with the repo, so nothing has to be copied onto the box.
+# The two cutoffs are given up front because this corpus has now been measured:
+# without them the run stops at probe.json and asks, which is what should happen
+# for a corpus nobody has looked at. These come from that measurement --
+# speechMOS has a median of 2.281 here, so any min-mos at all costs most of the
+# corpus, and 0.2 CER keeps 87.1 of the 124.4 hours. See the design doc.
 model_config: pocket_tts/config/english_2026-04_24l.yaml
 model_overrides:
   flow_lm.lookup_table.tokenizer_path: training/tokenizers/japanese_8000.model
@@ -62,22 +66,23 @@ optim:
 # point on the next resume.
 run_dir: runs/finetune_language_ja_phase1
 
-# 8 x 8 = 64 rows per optimizer step, the same effective batch production uses
+# 16 x 4 = 64 rows per optimizer step, the same effective batch production uses
 # through batch_size 64 alone. Below 64 the acoustic-quality transition arrives
 # late or not at all, so a cheaper split would validate nothing -- but HOW the
-# 64 is split turns out to matter enormously.
+# 64 is split matters more than it looks, and only to the card.
 #
-# Measured on a 16 GB RTX 4070 Ti SUPER: 16 x 4 ran at 0.022 it/s, which is 193
-# hours for this run. The same 64 rows as 8 x 8 ran at 0.302 it/s -- 13.8 hours,
-# fourteen times faster. At 16 the card sat at 15.3 of 16.4 GB and thrashed;
-# Windows cannot use PyTorch's expandable_segments allocator (it says so at
-# startup), so fragmentation there is not recoverable.
+# Measured on a 16 GB RTX 4070 Ti SUPER: 16 x 4 ran at 0.022 it/s, and the same
+# 64 rows as 8 x 8 ran at 0.302 -- fourteen times faster, 193 hours against 13.8.
+# At 16 that card sat at 15.3 of 16.4 GB and thrashed. On 24 GB and up 16 x 4
+# should be the better split, which is why it is the default here; if throughput
+# decays step over step rather than holding steady, that is this problem and
+# 8 x 8 is the first thing to try.
 #
 # On a 24 GB card 16 x 4 is likely the better split, and on an 80 GB one a
 # single batch of 64. Measure it rather than assuming: the product is what the
 # training cares about, and the factors are what the card cares about.
-batch_size: 8
-grad_accum_steps: 8
+batch_size: 16
+grad_accum_steps: 4
 
 # 15k, not production's 250k. The README puts the WER plateau at about 15k;
 # everything after it buys acoustic quality, which is not what this run is
@@ -85,16 +90,17 @@ grad_accum_steps: 8
 # --max-steps -- so this number is the only thing that stops the run.
 max_steps: 15000
 
-# torch.compile needs Triton, which has no official Windows build, so this run
-# dies at the first batch with TritonMissing unless compile is off. It costs
-# about 24% throughput on one GPU (args.py:98) -- on a Linux box, set this back
-# to true. It changes speed, not what the run validates.
+# +24% throughput on one GPU for a ~9 minute warmup (args.py:98), which this
+# run is long enough to pay back.
 #
-# The other Windows requirement is PYTHONUTF8=1 in the environment: torch's
-# inductor reads its kernel templates without naming an encoding, so on a
-# Japanese Windows the cp932 default makes `import torch._inductor` itself
-# raise UnicodeDecodeError before any of this code runs.
-compile: false
+# On Windows set this to false: torch.compile needs Triton and there is no
+# official Windows build, so the first batch dies with TritonMissing. Windows
+# also needs PYTHONUTF8=1 in the environment -- torch's inductor reads its
+# kernel templates without naming an encoding, so on a Japanese Windows the
+# cp932 default makes `import torch._inductor` itself raise UnicodeDecodeError
+# before any of this code runs. Neither applies on the rented Linux box this
+# config is aimed at.
+compile: true
 
 stats_ema_steps: 1000
 ema_decay: 0.999

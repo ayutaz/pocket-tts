@@ -1471,7 +1471,7 @@ def test_a_concatenated_entry_carries_what_the_manifest_needs(tmp_path):
         "id": "clip_0001",
         "speaker": "ずんだもん",
         "transcript": "こんにちは",
-        "path": str(tmp_path / "joined.wav"),
+        "path": (tmp_path / "joined.wav").as_posix(),
         "start": 0.0,
         "duration": 1.25,
     }
@@ -2833,3 +2833,23 @@ def test_the_split_holds_out_what_it_can_when_the_corpus_is_merely_small(tmp_pat
     train, valid = split_by_speaker(entries, valid_hours=100.0)
     assert train and valid
     assert {e["speaker"] for e in train} & {e["speaker"] for e in valid} == set()
+
+
+def test_the_manifest_path_reads_on_the_machine_that_did_not_write_it(tmp_path):
+    """A manifest written on Windows must be readable on Linux.
+
+    `str(Path(...))` gives backslash-separated paths on Windows, and Linux reads
+    that as one filename containing backslashes rather than as a path -- so the
+    aligned manifests this pipeline produces could not be moved to the rented
+    box they exist to feed. Observed for real: the 124-hour run's manifests
+    were unusable off this machine, which is why the corpus has to be rebuilt
+    on the instance rather than uploaded.
+
+    Forward slashes are accepted by Windows too, so posix separators are simply
+    the portable spelling.
+    """
+    from training.scripts.prepare_moespeech import concatenate
+
+    out = concatenate(_clips(tmp_path, 1.0, [440.0, 880.0]), tmp_path / "joined.wav", 60.0)
+    for entry in out:
+        assert "\\" not in entry["path"], entry["path"]
