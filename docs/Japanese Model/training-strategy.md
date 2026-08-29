@@ -104,7 +104,7 @@
 |---|---|
 | ダウンロード | 472 GB（MoeSpeech 152 + GOL 320）。HF egress 無料、100 MB/s で約80分 |
 | ディスク | 素のまま約1 TB。**前処理は変換しません**（`concatenate()` は 44.1 kHz のまま書き、リサンプルは dataloader が読み込み時に行う）ので、この形のまま持つ前提で見積もってください。mp3/opus 化すれば 80〜150 GB に落とせますが、それをする段はまだ実装されていません。永続ボリューム $0.05〜0.10/GB/月。フェーズ1（124h）の実数は下の「ディスク」参照 |
-| CPU 前処理 | 展開・連結・マニフェスト化。**全て単一プロセスです**（`prepare_moespeech.py` に並列化は入っていません）。コアを増やしても速くなりません。効くのはシングルコア性能とディスクのスループットだけです。数時間というのは**単一スレッド前提の未計測の当て推量**です |
+| CPU 前処理 | 展開・連結・マニフェスト化。**全て単一プロセスです**（`prepare_moespeech.py` に並列化は入っていません）。コアを増やしても速くなりません。効くのはシングルコア性能とディスクのスループットだけです。実測は 124.4 時間ぶんで**合計34分**（DL 16 + 展開 8 + 実測 5 + 選定と連結 5）。アライメントは別で、GPU 2時間30分・CPU 89時間です |
 | 強制アライメント | 2,640h で **8〜15 GPU-h**（$20〜60） |
 | トークナイザ学習 | CPU 数分 |
 
@@ -437,14 +437,14 @@ uv run python -m training.scripts.prepare_moespeech --hours 124 --out data/ja \
 
 | # | ステージ | 出力（`--out` 以下） | 再実行でスキップする条件 | 所要時間 |
 |---|---|---|---|---|
-| 1 | キャラ選定 | `characters.json` | ファイルが在る（`--hours` が違っても選び直さず、警告して再利用する） | 未計測 |
-| 2 | ダウンロード | `zips/<name>.zip` | zip が在る（`.partial` は無視する） | 未計測 |
-| 3 | 展開 | `extracted/<name>/`・`extracted/<name>.complete` | `extracted/<name>.complete` **と** `extracted/<name>/` の**両方**が在る（マーカーだけ在ってディレクトリが消えていれば展開し直す。ディレクトリだけ在ってマーカーが無ければ中断とみなし、消してから展開し直す）（`test_a_marker_without_its_directory_is_not_trusted`） | 未計測 |
-| 4 | probe | `probe.json` | 在り、かつ**選定話者の** `extracted/<name>.complete` と `characters.json` のどれよりも新しい | 未計測 |
-| 5 | 発話選定 | `utterances.jsonl`・`cutoffs.json` | 在り、かつ**上と同じ入力 + `cutoffs.json`** のどれよりも新しい（`cutoffs.json` は前回と違う対のときだけ書き直すので、同じ対なら更新時刻は動きません） | 未計測 |
-| 6 | 連結 | `audio/<speaker>.wav`・`entries/<speaker>.jsonl` | その話者の `entries/<speaker>.jsonl` が在り、`utterances.jsonl` より新しい | 未計測 |
-| 7 | マニフェスト | `train.jsonl`・`valid.jsonl` | 両方が在り、`utterances.jsonl` と `entries/*.jsonl` のどれよりも新しい | 未計測 |
-| 8 | アライメント | `train_aligned.jsonl`・`valid_aligned.jsonl`・`*_aligned.jsonl.shards`（`align()` が使った分割数の記録。valid 側は常に `1`） | 出力が元のマニフェストより新しい（古ければ `.partial`・`.shard*` ごと捨てて張り直す。中断時の `.partial` は `align()` の `--resume` が拾う） | 未計測 |
+| 1 | キャラ選定 | `characters.json` | ファイルが在る（`--hours` が違っても選び直さず、警告して再利用する） | 数秒（`info.csv` 12.5 KB だけ） |
+| 2 | ダウンロード | `zips/<name>.zip` | zip が在る（`.partial` は無視する） | **16分**（28 zip・30 GB、31 MB/s） |
+| 3 | 展開 | `extracted/<name>/`・`extracted/<name>.complete` | `extracted/<name>.complete` **と** `extracted/<name>/` の**両方**が在る（マーカーだけ在ってディレクトリが消えていれば展開し直す。ディレクトリだけ在ってマーカーが無ければ中断とみなし、消してから展開し直す）（`test_a_marker_without_its_directory_is_not_trusted`） | **8分**（28話者） |
+| 4 | probe | `probe.json` | 在り、かつ**選定話者の** `extracted/<name>.complete` と `characters.json` のどれよりも新しい | **5分**（JSON 149,224個、うち 74,612回の CER） |
+| 5 | 発話選定 | `utterances.jsonl`・`cutoffs.json` | 在り、かつ**上と同じ入力 + `cutoffs.json`** のどれよりも新しい（`cutoffs.json` は前回と違う対のときだけ書き直すので、同じ対なら更新時刻は動きません） | 1分未満 |
+| 6 | 連結 | `audio/<speaker>.wav`・`entries/<speaker>.jsonl` | その話者の `entries/<speaker>.jsonl` が在り、`utterances.jsonl` より新しい | **4分**（音声 87時間ぶんの読み書き） |
+| 7 | マニフェスト | `train.jsonl`・`valid.jsonl` | 両方が在り、`utterances.jsonl` と `entries/*.jsonl` のどれよりも新しい | 数秒 |
+| 8 | アライメント | `train_aligned.jsonl`・`valid_aligned.jsonl`・`*_aligned.jsonl.shards`（`align()` が使った分割数の記録。valid 側は常に `1`） | 出力が元のマニフェストより新しい（古ければ `.partial`・`.shard*` ごと捨てて張り直す。中断時の `.partial` は `align()` の `--resume` が拾う） | **2時間30分**（85.5時間ぶん、RTX 4070 Ti SUPER） |
 
 !!! note "`--valid-hours 1.0` でも valid は1時間になりません"
     ステージ7は**話者を丸ごと** held-out します（発話単位で割ると同じ声が両側に立ち、
@@ -627,7 +627,7 @@ HF キャッシュ: zip と同じ            ≈ 30 GB
 | 工程 | コスト |
 |---|---|
 | DL（30 GB、ディスクには60 GB 書かれる） | 約5分 |
-| 展開・同一キャラ連結（44.1 kHz のまま）・マニフェスト化 | **単一プロセスで1〜2時間（未計測の当て推量）**。下の注を読んでからインスタンスを選んでください |
+| 展開・同一キャラ連結（44.1 kHz のまま）・マニフェスト化 | **実測 34分**（124.4時間ぶん、単一プロセス）。下の注を読んでからインスタンスを選んでください |
 | 強制アライメント（123h） | 約1 GPU-h / $2〜4 |
 | finetune 15k step（24層のまま、蒸留なし） | 1×H100 で 2.2h / $4〜9 |
 | **合計** | **$10前後・半日** |
@@ -641,7 +641,7 @@ HF キャッシュ: zip と同じ            ≈ 30 GB
     （`--align-shards`）。したがって**コア数を増やしても CPU 段は速くなりません**。
     効くのはシングルコア性能とディスクのスループットだけです。
     **上の「1〜2時間」は実測ではなく単一スレッド前提の当て推量**で、vast.ai では
-    まだ一度も計測していません（前掲の「所要時間は全て未計測です」と同じ扱いです）。
+    124.4 時間ぶんを一度計測しました（前掲の実測表を参照）。ただし測ったのは RTX 4070 Ti SUPER の Windows 機で、借りた箱の数字ではありません。
 
 **判定できること** — トークナイザ、アライメント、`" ".join` 修正、`n_bins` 一致、日本語として意味が取れるか、EOS で停止するか、CER（`--text-normalizer basic`）。
 
