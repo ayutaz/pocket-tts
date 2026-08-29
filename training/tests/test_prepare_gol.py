@@ -7,23 +7,38 @@ ASR pass, so the mutual-CER filter that carried MoeSpeech has no counterpart.
 
 import csv
 import io
+import logging
 import shutil
 import tarfile
 from pathlib import Path
 
 import pytest
 
-from training.scripts.prepare_gol import probe_speakers, select_games, select_speakers
+from training.scripts.prepare_gol import (
+    gol_utterances,
+    probe_speakers,
+    select_games,
+    select_speakers,
+)
+from training.scripts.prepare_moespeech import concatenate
 
 
 def _metadata(tmp_path, rows, text: str = "あ"):
-    """A stand-in for GOL's metadata.tsv: game_id, speaker, text, path, duration."""
+    """A stand-in for GOL's metadata.tsv: game_id, speaker, text, path, duration.
+
+    A row is `(game, speaker, duration)`, optionally followed by the wav's file
+    name and then by that row's own text. The stages that only read the
+    metadata need neither -- every clip may as well be called x.wav -- and the
+    stage that goes to the audio needs both.
+    """
     p = tmp_path / "metadata.tsv"
     with open(p, "w", encoding="utf-8", newline="") as f:
         w = csv.writer(f, delimiter="\t")
         w.writerow(["game_id", "speaker", "text", "file_path", "duration"])
-        for g, s, d in rows:
-            w.writerow([g, s, text, f"{g}/{s}/x.wav", d])
+        for row in rows:
+            g, s, d = row[:3]
+            name = row[3] if len(row) > 3 else "x.wav"
+            w.writerow([g, s, row[4] if len(row) > 4 else text, f"{g}/{s}/{name}", d])
     return p
 
 
@@ -661,3 +676,308 @@ def test_a_game_that_matched_nothing_measures_an_empty_corpus(tmp_path):
     assert all(r["kept"] == 0 and r["speaker_fraction"] == 0.0 for r in stats["retention"])
     assert stats["minutes_per_speaker"]["median"] is None
     assert select_speakers(md, ["typo"], min_utterances=2, min_seconds=0.0) == []
+
+
+def _wav(path, seconds=1.0, hz=440.0, sr=48000):
+    """A pure tone at GOL's own 48 kHz, which nothing here converts (G6)."""
+    import numpy as np
+    import sphn
+
+    t = np.linspace(0, seconds, int(seconds * sr), endpoint=False)
+    sphn.write_wav(str(path), (0.5 * np.sin(2 * np.pi * hz * t)).astype(np.float32), sr)
+    return path
+
+
+def _at(directory, name="x.wav", seconds=1.0, hz=440.0):
+    """One clip, at whatever depth the caller names."""
+    directory.mkdir(parents=True, exist_ok=True)
+    return _wav(directory / name, seconds, hz)
+
+
+def _clip(root, game, speaker, name="x.wav", seconds=1.0, hz=440.0):
+    """One clip where extract_game leaves it: `<root>/<game>/<game>/<speaker>/`.
+
+    The tar carries its own game directory at the top and is unpacked into one,
+    so the tree is double-nested (G2).
+    """
+    return _at(root / game / game / speaker, name, seconds, hz)
+
+
+def test_an_utterance_carries_what_concatenate_needs(tmp_path):
+    """`concatenate` is reused unmodified, so this asserts through it rather
+    than against a list of key names: a dict carrying the right keys over the
+    wrong values joins nothing, and the keys it reads are the whole interface.
+
+    Two clips, so the second entry's offset says the first one's audio was
+    actually laid down -- through a single clip `start` is 0.0 whatever the
+    function was handed.
+    """
+    md = _metadata(tmp_path, [("game", "spk", 1.5, "x.wav"), ("game", "spk", 1.5, "y.wav")])
+    root = tmp_path / "extracted"
+    _clip(root, "game", "spk", "x.wav", 1.5, 440.0)
+    _clip(root, "game", "spk", "y.wav", 1.5, 660.0)
+
+    us = list(gol_utterances(md, root, ["game:spk"], ["game"]))
+    entries = concatenate(us, tmp_path / "joined.wav", target_sec=120.0)
+    assert [e["id"] for e in entries] == [u["id"] for u in us]
+    assert {e["speaker"] for e in entries} == {"game:spk"}
+    assert [e["start"] for e in entries] == [0.0, 1.5]
+
+
+def test_the_duration_is_the_one_the_corpus_claims(tmp_path):
+    """`concatenate` measures every offset off the samples it lays down and
+    uses this number for one thing only: to report how far the corpus's own
+    metadata is from its audio. Measuring the wav here instead would hand it
+    two copies of the same measurement, and that signal -- "this corpus's
+    durations cannot be trusted elsewhere" -- would read as a clean corpus
+    however wrong the metadata was.
+
+    So the row claims five seconds over one second of audio, and the claim is
+    what comes out. A fixture whose column agreed with its audio could not tell
+    the two apart, and the column is in seconds besides: the same unit
+    confusion already cost a test on the game selection above.
+    """
+    md = _metadata(tmp_path, [("game", "spk", 5.0)])
+    root = tmp_path / "extracted"
+    _clip(root, "game", "spk", "x.wav", seconds=1.0)
+
+    (u,) = list(gol_utterances(md, root, ["game:spk"], ["game"]))
+    assert u["duration"] == 5.0
+
+
+def test_the_speaker_is_the_composite_key_so_two_games_are_two_voices(tmp_path):
+    """Ruling G9, asserted through the consequence rather than the string.
+
+    3,522 of GOL's 19,349 speaker ids appear in more than one game and hold 61%
+    of the corpus. `concatenate`'s cross-speaker guard compares the label, so a
+    bare id shared by two games passes that guard and two voices land in one
+    joined file -- and the loader then takes one side of a cut in it as the
+    voice prompt for the other. Raising here is what says the composite key
+    reached the guard at all.
+
+    The game ids and the speaker id are textually different, so a key built the
+    wrong way round, or out of one half, is not the key built out of both.
+    """
+    md = _metadata(tmp_path, [("alpha", "voice", 1.0), ("beta", "voice", 1.0)])
+    root = tmp_path / "extracted"
+    _clip(root, "alpha", "voice")
+    _clip(root, "beta", "voice")
+
+    both = list(gol_utterances(md, root, ["alpha:voice", "beta:voice"], ["alpha", "beta"]))
+    assert sorted(u["speaker"] for u in both) == ["alpha:voice", "beta:voice"]
+    with pytest.raises(ValueError, match="one speaker at a time"):
+        concatenate(both, tmp_path / "joined.wav", target_sec=120.0)
+
+    (one,) = list(gol_utterances(md, root, ["alpha:voice"], ["alpha", "beta"]))
+    assert one["speaker"] == "alpha:voice"
+
+
+def test_the_transcript_is_normalized(tmp_path):
+    """The manifest transcript, the tokenizer corpus and a user's inference
+    input have to be one distribution, exactly as on the MoeSpeech path; a
+    mismatch raises nothing and shows up only as a model that never quite
+    becomes intelligible.
+
+    The text folds on two axes at once -- fullwidth latin to ASCII and an
+    ideographic space to a collapsed one -- and neither is what the row says,
+    so a transcript passed through untouched is a different string.
+    """
+    md = _metadata(tmp_path, [("game", "spk", 1.0)], text="ＡＢＣ　です")
+    root = tmp_path / "extracted"
+    _clip(root, "game", "spk")
+
+    (u,) = list(gol_utterances(md, root, ["game:spk"], ["game"]))
+    assert u["transcript"] == "ABC です"
+
+
+def test_a_row_whose_text_normalizes_away_is_not_a_training_example(tmp_path):
+    """1,055 of GOL's 7.4M rows carry an empty text column, and normalization
+    empties others: an ideographic space is text until NFKC folds it to a space
+    and the collapse strips it. A clip with no text left trains the model on
+    speech it is given no reason for, and align_data has nothing to segment.
+
+    One row survives beside it, so a function that yielded both -- or neither --
+    is distinguishable from one that drops only the blank. The blank row's text
+    is not empty as written, so a check made before normalization keeps it.
+    """
+    md = _metadata(
+        tmp_path,
+        [("game", "spk", 1.0, "blank.wav", "　"), ("game", "spk", 1.0, "kept.wav", "こんにちは")],
+    )
+    root = tmp_path / "extracted"
+    _clip(root, "game", "spk", "blank.wav")
+    _clip(root, "game", "spk", "kept.wav")
+
+    us = list(gol_utterances(md, root, ["game:spk"], ["game"]))
+    assert [(u["transcript"], u["wav"].name) for u in us] == [("こんにちは", "kept.wav")]
+
+
+def test_an_utterance_whose_wav_is_missing_is_dropped(tmp_path):
+    """metadata.tsv describes all 7,405,094 files; the tars actually taken hold
+    a subset, and an interrupted extraction holds less than that. A row without
+    its audio is not a training example -- `concatenate` would skip it, but only
+    after the manifest had already promised it.
+
+    One row of the two is on disk, so dropping everything is as visibly wrong
+    as dropping nothing.
+    """
+    md = _metadata(tmp_path, [("game", "spk", 1.0, "here.wav"), ("game", "spk", 1.0, "gone.wav")])
+    root = tmp_path / "extracted"
+    _clip(root, "game", "spk", "here.wav")
+
+    us = list(gol_utterances(md, root, ["game:spk"], ["game"]))
+    assert [u["wav"].name for u in us] == ["here.wav"]
+
+
+def test_the_clip_is_found_wherever_the_tar_put_it(tmp_path):
+    """Ruling G2: what `extract_game` leaves is `<root>/<game>/<game>/<speaker>/`
+    because the tar carries its own game directory at the top, and MoeSpeech
+    already cost this project a round of debugging by having its clips one
+    directory below where the code assumed. So nothing here derives a depth:
+    one clip sits where the real tars put it and another one directory further
+    down, and both are found.
+
+    The whole path is asserted and not the file name: a pass that joined the
+    stated path onto the extract root and never looked would name a wav that is
+    not there, and every name in it would still be right.
+    """
+    md = _metadata(tmp_path, [("game", "spk", 1.0, "flat.wav"), ("game", "spk", 1.0, "deeper.wav")])
+    root = tmp_path / "extracted"
+    flat = _clip(root, "game", "spk", "flat.wav")
+    deeper = _at(root / "game" / "game" / "disc2" / "spk", "deeper.wav")
+
+    us = list(gol_utterances(md, root, ["game:spk"], ["game"]))
+    assert [u["wav"] for u in us] == [flat, deeper]
+
+
+def test_the_speaker_never_comes_from_the_directory_name(tmp_path):
+    """Ruling G2 again, and the trap MoeSpeech's `read_annotation` documents:
+    take the speaker from `path.parent.name` and a corpus that packs its clips
+    one level down labels every character `wav`. `concatenate` then sees one
+    speaker where there are two and joins them, the split holds out a label
+    rather than a character, and none of it raises.
+
+    metadata.tsv states the speaker in its own column, so the tree decides only
+    where the audio is. The directory here is named nothing like the speaker.
+    """
+    md = _metadata(tmp_path, [("game", "spk", 1.0)])
+    root = tmp_path / "extracted"
+    _at(root / "game" / "game" / "not-the-speaker", "x.wav")
+
+    (u,) = list(gol_utterances(md, root, ["game:spk"], ["game"]))
+    assert u["speaker"] == "game:spk"
+
+
+def test_two_speakers_sharing_a_file_name_keep_their_own_audio(tmp_path):
+    """Visual novels number a character's lines from one, so the same file name
+    under two speakers of one game is the ordinary case rather than an odd one.
+
+    Matched on the file name alone both rows get whichever clip was found
+    first: one speaker's transcript over the other's voice, in a manifest that
+    parses and offsets that are all inside real files. Nothing downstream can
+    detect that, so it is asserted here on the paths themselves.
+    """
+    md = _metadata(tmp_path, [("game", "ann", 1.0, "0001.wav"), ("game", "bob", 1.0, "0001.wav")])
+    root = tmp_path / "extracted"
+    _clip(root, "game", "ann", "0001.wav", hz=440.0)
+    _clip(root, "game", "bob", "0001.wav", hz=880.0)
+
+    us = list(gol_utterances(md, root, ["game:ann", "game:bob"], ["game"]))
+    assert [(u["speaker"], u["wav"]) for u in us] == [
+        ("game:ann", root / "game" / "game" / "ann" / "0001.wav"),
+        ("game:bob", root / "game" / "game" / "bob" / "0001.wav"),
+    ]
+
+
+def test_only_the_games_this_run_took_are_read(tmp_path, caplog):
+    """The extract root accumulates across runs: it is where a larger run's
+    games were unpacked, and asking for fewer hours afterwards has to mean
+    fewer games or the flag does nothing at all.
+
+    Both games are on disk and both speakers are offered, so the game bound is
+    the only thing that can separate them.
+
+    What is reported is asserted beside what is yielded, because dropping a row
+    for the right reason and dropping it for the wrong one look identical from
+    outside: a game outside `game_ids` has no clips indexed either, so its rows
+    fall out of the audio lookup whatever this bound does -- and are then
+    counted as audio the extraction is missing. On the real metadata that is
+    6.7 million of 7.4 million rows, a warning that reads like a failed run
+    over a run that took exactly what it was asked for.
+    """
+    md = _metadata(tmp_path, [("kept", "spk", 1.0), ("older", "spk", 1.0)])
+    root = tmp_path / "extracted"
+    _clip(root, "kept", "spk")
+    _clip(root, "older", "spk")
+
+    with caplog.at_level(logging.WARNING, logger="prepare_gol"):
+        us = list(gol_utterances(md, root, ["kept:spk", "older:spk"], ["kept"]))
+    assert [u["speaker"] for u in us] == ["kept:spk"]
+    assert [r.message for r in caplog.records] == []
+
+
+def test_a_speaker_the_floors_rejected_is_not_read(tmp_path):
+    """A GOL tar is a whole work and its median 35 speakers come along with it,
+    most of them below `select_speakers`'s floors. Those floors are the entire
+    point of the stage before this one, so a speaker on disk but not in the
+    selection is not an utterance.
+
+    Both speakers are in the taken game and both have their audio, so the
+    speaker bound is the only thing that can separate them.
+    """
+    md = _metadata(tmp_path, [("game", "lead", 1.0), ("game", "extra", 1.0)])
+    root = tmp_path / "extracted"
+    _clip(root, "game", "lead")
+    _clip(root, "game", "extra")
+
+    us = list(gol_utterances(md, root, ["game:lead"], ["game"]))
+    assert [u["speaker"] for u in us] == ["game:lead"]
+
+
+def test_utterances_come_out_in_metadata_order(tmp_path):
+    """`concatenate` lays clips down in the order it is handed them and writes
+    a manifest of offsets into the files it builds, so a re-run after a
+    preemption has to hand them over in that same order or every offset
+    describes different audio -- and nothing downstream can tell.
+
+    metadata.tsv's own order is that order, and it is not the filesystem's:
+    `b.wav` is written first here and sorts second, so a pass that returned
+    whatever `rglob` found, or that sorted by path, comes out the other way
+    round.
+    """
+    md = _metadata(tmp_path, [("game", "spk", 1.0, "b.wav"), ("game", "spk", 1.0, "a.wav")])
+    root = tmp_path / "extracted"
+    _clip(root, "game", "spk", "b.wav")
+    _clip(root, "game", "spk", "a.wav")
+
+    us = list(gol_utterances(md, root, ["game:spk"], ["game"]))
+    assert [u["wav"].name for u in us] == ["b.wav", "a.wav"]
+
+
+def test_the_id_names_the_clip_in_the_whole_corpus(tmp_path):
+    """The manifest entry `concatenate` builds names the joined file, never the
+    clip that went into it, so `id` is the only way back from a suspect row to
+    the wav it came from. A bare file stem is not that: 596 games number their
+    lines the same way and `0001` names one clip in each of them.
+    """
+    md = _metadata(tmp_path, [("alpha", "spk", 1.0, "0001.wav"), ("beta", "spk", 1.0, "0001.wav")])
+    root = tmp_path / "extracted"
+    _clip(root, "alpha", "spk", "0001.wav")
+    _clip(root, "beta", "spk", "0001.wav")
+
+    us = list(gol_utterances(md, root, ["alpha:spk", "beta:spk"], ["alpha", "beta"]))
+    assert [u["id"] for u in us] == ["alpha/spk/0001", "beta/spk/0001"]
+
+
+def test_a_game_that_was_never_extracted_costs_only_its_own_rows(tmp_path):
+    """A run killed between tars leaves exactly this, and it is the ordinary
+    state of the extract root rather than a corrupt one. The game that is there
+    has to still produce its utterances, instead of the pass ending on the one
+    that is not.
+    """
+    md = _metadata(tmp_path, [("here", "spk", 1.0), ("never", "spk", 1.0)])
+    root = tmp_path / "extracted"
+    _clip(root, "here", "spk")
+
+    us = list(gol_utterances(md, root, ["here:spk", "never:spk"], ["here", "never"]))
+    assert [u["speaker"] for u in us] == ["here:spk"]

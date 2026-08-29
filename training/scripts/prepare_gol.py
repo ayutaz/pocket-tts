@@ -19,9 +19,14 @@ import os
 import shutil
 import tarfile
 from collections import Counter, defaultdict
-from pathlib import Path
+from collections.abc import Iterator
+from pathlib import Path, PurePosixPath
 
 from huggingface_hub import hf_hub_download
+
+# The same normalization the MoeSpeech path applies, so the two corpora reach
+# the tokenizer and the loader as one distribution rather than two.
+from pocket_tts.utils.text_normalization import normalize_japanese
 
 # _distribution rather than a second copy of it: these two scripts are one
 # pipeline in two files, the survey in docs/ prints their percentiles in the
@@ -363,3 +368,144 @@ def probe_speakers(metadata_tsv: Path, game_ids: list[str]) -> dict:
         "minutes_per_speaker": _distribution([s / 60 for _, s in rows]),
         "retention": _speaker_retention(rows),
     }
+
+
+def _clip_index(extract_root: Path, game_ids: list[str]) -> dict[tuple[str, str], list[Path]]:
+    """Every wav of the games taken, keyed by the game and the file's own name.
+
+    The metadata states each clip's path, and the obvious thing would be to
+    join that onto the extract root and stat it. What that path is relative to
+    is the trap: `extract_game` unpacks a tar that carries its own `<game_id>/`
+    at the top into a directory of the same name, so a clip metadata.tsv calls
+    `<game>/<speaker>/x.wav` is at `<root>/<game>/<game>/<speaker>/x.wav`
+    (ruling G2). MoeSpeech cost this project a debugging round on exactly that
+    kind of assumption, so no depth is assumed here at all: the tree is scanned
+    with `rglob` and matched on the one component the metadata and the
+    filesystem cannot disagree about, which is the file's own name.
+
+    Names collide, though. Visual novels number a character's lines from one,
+    so `0001.wav` under two speakers of one game is ordinary rather than odd,
+    and a name-only match would hand both rows whichever clip was found first
+    -- one speaker's transcript over the other's voice, in a manifest that
+    parses, with every offset inside a real file and nothing downstream able to
+    tell. So the value is every clip of that name, and the caller narrows a
+    list of more than one by the rest of the path the metadata states. Kept
+    sorted, so that narrowing starts from a stated order rather than from
+    whatever `rglob` happened to return.
+
+    Bounded to `game_ids`, which bounds both the work and the memory: the
+    extract root accumulates across runs, and the 700,000 paths of a
+    1,000-hour run fit in memory where a walk per row would be 700,000 walks.
+    A game not on disk yet contributes nothing rather than raising -- a run
+    killed between tars leaves exactly that, and it is the ordinary state of
+    the extract root rather than a corrupt one.
+    """
+    index: defaultdict[tuple[str, str], list[Path]] = defaultdict(list)
+    for game in sorted(set(game_ids)):
+        for wav in sorted((Path(extract_root) / game).rglob("*.wav")):
+            index[(game, wav.name)].append(wav)
+    return index
+
+
+def gol_utterances(
+    metadata_tsv: Path, extract_root: Path, speakers: list[str], game_ids: list[str]
+) -> Iterator[dict]:
+    """The utterances of `speakers`, shaped the way `concatenate` reads them.
+
+    This is the last stage before the joining and does none of it. GOL's median
+    clip is 4.55 seconds against MoeSpeech's 5.46, and the loader keeps a
+    second of audio on either side of the cut it makes, so an unjoined clip
+    leaves under three seconds of target audio -- concatenation matters more
+    here than it did there. But `prepare_moespeech.concatenate` already does
+    it, is already tested, and already refuses a mixed-speaker list, so what
+    this yields is its input: `id`, `speaker`, `wav`, `duration` and
+    `transcript`, which are exactly the keys it reads. Grouping by speaker
+    before that call is the caller's job (ruling G4); this yields across all of
+    them.
+
+    A speaker is a `_speaker_key`, so `speakers` holds `<game_id>:<speaker>`
+    exactly as `select_speakers` returned it, and it is read from
+    metadata.tsv's own column rather than from any directory name -- see
+    `_clip_index` for where the audio comes from, and `read_annotation` in the
+    MoeSpeech script for what taking a speaker off a path costs.
+
+    A row has to clear both bounds. `game_ids` is what a smaller re-run means
+    against an extract root that still holds a larger one's games, and
+    `speakers` carries `select_speakers`'s floors, which are the whole point of
+    the stage before this one: a GOL tar is a whole work and its median 35
+    speakers come along with it, most of them below any floor worth setting.
+
+    The transcript is normalized with the same function `align_data.py` applies
+    under --segmenter japanese and `prepare_ja_text.py` fits the tokenizer
+    through. Those three strings have to be one distribution or the run
+    degrades with nothing reporting why. A row left with no text is dropped --
+    1,055 of GOL's rows are empty as written and normalization empties more --
+    and dropped after normalizing rather than before, since a text of one
+    ideographic space is not empty until NFKC has folded it to a space.
+
+    A row whose wav is not on disk is dropped as well. metadata.tsv describes
+    all 7,405,094 files while the tars actually taken hold a subset, so this is
+    the normal case for the corpus at large and the sign of an interrupted
+    extraction inside the games taken. `concatenate` would skip such a clip
+    anyway, but only after this had already promised it.
+
+    Order is metadata.tsv's, which is a file's order and so the same on every
+    re-run. That matters past tidiness: `concatenate` lays clips down in the
+    order it is handed them and writes offsets into the files it builds, so a
+    resumed run that reordered them would produce a manifest describing audio
+    that is no longer where it says. Nothing sorts here, because 7.4 million
+    rows do not fit in memory to be sorted; they are streamed, and only the
+    clip paths of the games taken are held.
+    """
+    wanted_games = set(game_ids)
+    wanted_speakers = set(speakers)
+    clips = _clip_index(extract_root, game_ids)
+    missing = blank = 0
+    with open(metadata_tsv, encoding="utf-8", newline="") as f:
+        for row in csv.DictReader(f, delimiter="\t"):
+            game = row["game_id"]
+            if game not in wanted_games:
+                continue
+            speaker = _speaker_key(game, row["speaker"])
+            if speaker not in wanted_speakers:
+                continue
+            stated = PurePosixPath(row["file_path"])
+            found = clips.get((game, stated.name), [])
+            if len(found) > 1:
+                # Narrowed by the speaker directory the metadata itself names,
+                # which is a lookup against the corpus's own claim about where
+                # it put the file and not a speaker read off a path. Two clips
+                # of one name under one speaker of one game would take two
+                # directories of that name at different depths, which is not a
+                # tree a tar can hold.
+                tail = "/" + "/".join(stated.parts[-2:])
+                found = [p for p in found if p.as_posix().endswith(tail)]
+            if not found:
+                missing += 1
+                logger.debug(f"{row['file_path']}: no such wav under {Path(extract_root) / game}")
+                continue
+            transcript = normalize_japanese(row["text"])
+            if not transcript:
+                blank += 1
+                logger.debug(f"{row['file_path']}: nothing left of the text after normalization")
+                continue
+            yield {
+                # The corpus's own path for the clip with the extension off,
+                # rather than the bare stem: the entry `concatenate` builds
+                # names the joined file and never this one, so this is the only
+                # way back from a suspect manifest row to the audio it came
+                # from, and 596 games number their lines the same way.
+                "id": stated.with_suffix("").as_posix(),
+                "speaker": speaker,
+                "wav": found[0],
+                "duration": float(row["duration"]),  # the column is seconds
+                "transcript": transcript,
+            }
+    if missing or blank:
+        # Once, at the end, rather than per row: there can be hundreds of
+        # thousands of these, and the number that matters is how many clips the
+        # manifest is short of what the selection promised.
+        logger.warning(
+            f"{missing} rows name a wav that is not under {extract_root} and {blank} have no "
+            "text left after normalization; neither is in the manifest"
+        )
