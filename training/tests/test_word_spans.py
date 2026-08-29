@@ -113,12 +113,19 @@ def test_an_items_alignment_does_not_depend_on_what_it_is_batched_with():
 
 
 def test_an_unalignable_item_does_not_take_its_batch_down_with_it():
-    """One bad transcript in a shard must cost that utterance, not the shard."""
-    results, _ = batched_word_spans(
+    """One bad transcript in a shard must cost that utterance, not the shard.
+
+    Both halves drop it, and both keep their place: a scores list that skipped
+    the missing item instead of holding a None for it would be one shorter than
+    the spans list, and every item after it in the batch would be written out
+    carrying its neighbour's score.
+    """
+    results, scores = batched_word_spans(
         *_emissions(["a", "a__b"]), [[1, 2, 3], [1, 2]], [[0, 1, 2], [0, 1]], BLANK
     )
     assert results[0] is None
     assert results[1] == [(0, 0), (3, 3)]
+    assert scores[0] is None and scores[1] is not None
 
 
 def test_a_span_marks_where_a_sound_peaks_not_how_long_it_lasts():
@@ -166,6 +173,41 @@ def test_an_unalignable_utterance_has_no_score():
     alignment would be filtered as one, and this is a different thing."""
     spans, scores = _spans_and_scores("ab", [1, 2, 1, 2, 1], [0, 1, 2, 3, 4])
     assert spans[0] is None and scores[0] is None
+
+
+def test_the_denominators_are_the_items_own_not_the_batchs():
+    """A score can only be compared against another one if the counts written
+    beside it describe the same utterance.
+
+    The trellis runs to the longest item in the batch and as wide as the most
+    tokens in it, so Tmax and Nmax sit right next to this item's t_end and n --
+    and in a batch of one all four are the same number, which hides the swap.
+    align_data.py length-sorts and chunks, so in a real run they are almost
+    never equal. A chunk-wide denominator would give every row in the chunk a
+    divisor it did not earn: the score would then rank utterances by a quantity
+    that is not about them, and the manifest would look entirely plausible.
+    """
+    short, long = "aaa___bbb", "aaa___bbb___ccc_"
+    _, alone_s = batched_word_spans(*_emissions([short]), [[1, 2]], [[0, 1]], BLANK)
+    _, alone_l = batched_word_spans(*_emissions([long]), [[1, 2, 3]], [[0, 1, 2]], BLANK)
+    _, both = batched_word_spans(
+        *_emissions([short, long]), [[1, 2], [1, 2, 3]], [[0, 1], [0, 1, 2]], BLANK
+    )
+    assert both[0] == alone_s[0], (both, alone_s)
+    assert both[1] == alone_l[0], (both, alone_l)
+
+
+def test_a_transcript_with_a_tail_the_audio_never_says_scores_worse():
+    """The score is the probability of the whole path, not of the best prefix.
+
+    A single ASR pass inventing a few words at the end of an utterance is the
+    exact failure this number exists to catch. A score that stopped at the last
+    token the audio actually supports would rate that utterance as highly as the
+    clean one it was hallucinated onto, and the filter would keep both.
+    """
+    _, good = _spans_and_scores("aaa___bbb", [1, 2], [0, 1])
+    _, tail = _spans_and_scores("aaa___bbb", [1, 2, 3, 3, 3], [0, 1, 2, 3, 4])
+    assert tail[0][0] < good[0][0] - 10, (good, tail)
 
 
 # -- handing the spans back to the words they belong to ------------------------
