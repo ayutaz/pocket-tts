@@ -109,10 +109,16 @@ def select_games(metadata_tsv: Path, hours: float) -> list[dict]:
     whole and the speakers come along with it. Filtering speakers is a later
     stage's job, on data already on disk.
 
-    Largest-first for the same reason as there, only more so: a tar averages
-    11 GB, and 1,000 hours is 18 of them taken this way -- 200 GB and 2,451
-    speakers. Ties break on game_id so that an interrupted run asks for the
-    same tars when it resumes.
+    Largest-first for the same reason as there, only more so: 1,000 hours is 18
+    tars taken this way, and 2,451 speakers. Ties break on game_id so that an
+    interrupted run asks for the same tars when it resumes.
+
+    Those 18 are **660 GB**, not the 198 that 18 times the 11 GB median would
+    suggest. The median is the wrong statistic for a largest-first selection --
+    the tars this picks average about 37 GB. The corpus is 7,019 GB over 10,654
+    hours, so 0.66 GB per hour is the number to size a disk by, and `main`'s
+    docstring carries what the peak becomes once the cache, the tars, the
+    extracted tree and the joined audio all exist at once.
 
     Accumulation streams: 596 games and 19,349 speakers fit in memory, the
     7.4 million rows do not.
@@ -1232,7 +1238,7 @@ def main(
     recorded nowhere, so changing one re-runs nothing. Delete that stage's
     artifact to redo it under a new value; deleting is the only way to say so,
     and it is deliberate, since the alternative is a stage that quietly redoes
-    200 GB of work. Deleting one is enough: what was built out of it is rebuilt
+    660 GB of work. Deleting one is enough: what was built out of it is rebuilt
     with it, so removing `utterances.jsonl` alone carries through `entries/`,
     `audio/`, both manifests, both alignments and both filtered manifests.
 
