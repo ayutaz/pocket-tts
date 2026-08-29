@@ -743,6 +743,21 @@ def _wav(path, seconds=1.0, hz=440.0, sr=48000):
     return path
 
 
+def _dominant_hz(path):
+    """The frequency the audio at `path` actually carries.
+
+    Which file a manifest row names is not what a training run hears; the audio
+    inside it is. A clip taken from the wrong place is a real file at a real
+    offset, so the one assertion it cannot pass is one made on the samples.
+    """
+    import numpy as np
+    import sphn
+
+    wav, sr = sphn.read(str(path))
+    spectrum = np.abs(np.fft.rfft(wav.mean(axis=0)))
+    return round(float(np.fft.rfftfreq(wav.shape[-1], 1 / sr)[int(spectrum.argmax())]))
+
+
 def _at(directory, name="x.wav", seconds=1.0, hz=440.0):
     """One clip, at whatever depth the caller names."""
     directory.mkdir(parents=True, exist_ok=True)
@@ -974,6 +989,37 @@ def test_a_clip_that_is_not_where_the_metadata_says_is_missing_rather_than_their
     _clip(root, "game", "bob", "0001.wav")
 
     assert list(gol_utterances(md, root, ["game:ann"], ["game"])) == []
+
+
+def test_a_clip_two_paths_could_answer_is_dropped_rather_than_guessed_at(tmp_path):
+    """The narrowing above matches the last two components of the stated path,
+    and a game shipped on two discs unpacks both under its own directory: the
+    tree above holds `<game>/<speaker>/0001.wav` and
+    `<game>/disc2/<speaker>/0001.wav`, the metadata names one of them, and both
+    of them end in `/<speaker>/0001.wav`. Taking the first of what is left picks
+    `disc2/`, which sorts before the speaker directory -- one character's voice
+    under another row's transcript, and the third time this project has been
+    bitten by a corpus one directory deeper than the code assumed.
+
+    Matching the whole stated path instead is not the fix: ruling G2 is that
+    nothing here may assume a depth, and the test above has a clip the tar put
+    one level further down than the metadata says. So an answer this cannot
+    narrow to one clip is refused and counted, which is the same drop a clip
+    that never arrived gets. Short of a clip is a state this pipeline reports
+    and survives; wrong about one is not.
+
+    Asserted on the frequencies rather than on the paths: the path is not what
+    a training row carries. The unambiguous row is a third tone in the same
+    fixture, so dropping the corpus is as visibly wrong as dropping nothing.
+    """
+    md = _metadata(tmp_path, [("g", "spk", 1.0, "0001.wav"), ("g", "spk", 1.0, "0002.wav")])
+    root = tmp_path / "extracted"
+    _clip(root, "g", "spk", "0001.wav", hz=440.0)
+    _at(root / "g" / "g" / "disc2" / "spk", "0001.wav", hz=880.0)
+    _clip(root, "g", "spk", "0002.wav", hz=660.0)
+
+    us = list(gol_utterances(md, root, ["g:spk"], ["g"]))
+    assert [_dominant_hz(u["wav"]) for u in us] == [660]
 
 
 def test_only_the_games_this_run_took_are_read(tmp_path, caplog):

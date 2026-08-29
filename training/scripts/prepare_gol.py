@@ -490,9 +490,11 @@ def _clip_index(extract_root: Path, game_ids: list[str]) -> dict[tuple[str, str]
     -- one speaker's transcript over the other's voice, in a manifest that
     parses, with every offset inside a real file and nothing downstream able to
     tell. So the value is every clip of that name, and the caller narrows a
-    list of more than one by the rest of the path the metadata states. Kept
-    sorted, so that narrowing starts from a stated order rather than from
-    whatever `rglob` happened to return.
+    list of more than one by the rest of the path the metadata states -- and
+    drops the row when that still leaves more than one, since which of them is
+    this row's is then not a question the corpus answers. Kept sorted, so that
+    what a `--verbose` run says about such a row is the same list on every
+    re-run rather than whatever `rglob` happened to return.
 
     Bounded to `game_ids`, which bounds both the work and the memory: the
     extract root accumulates across runs, and the 700,000 paths of a
@@ -550,6 +552,12 @@ def gol_utterances(
     extraction inside the games taken. `concatenate` would skip such a clip
     anyway, but only after this had already promised it.
 
+    And so is a row the tree answers more than once, for the opposite reason:
+    there the audio is on disk and it is which of it belongs to this row that
+    the corpus does not say. Both are counted and reported apart, because they
+    mean different things about the tree -- one that a tar is short, the other
+    that it holds two clips this walk cannot tell between.
+
     Order is metadata.tsv's, which is a file's order and so the same on every
     re-run. That matters past tidiness: `concatenate` lays clips down in the
     order it is handed them and writes offsets into the files it builds, so a
@@ -561,7 +569,7 @@ def gol_utterances(
     wanted_games = set(game_ids)
     wanted_speakers = set(speakers)
     clips = _clip_index(extract_root, game_ids)
-    missing = blank = 0
+    missing = ambiguous = blank = 0
     with open(metadata_tsv, encoding="utf-8", newline="") as f:
         for row in csv.DictReader(f, delimiter="\t"):
             game = row["game_id"]
@@ -573,9 +581,7 @@ def gol_utterances(
             stated = PurePosixPath(row["file_path"])
             # Narrowed by the speaker directory the metadata itself names, which
             # is a lookup against the corpus's own claim about where it put the
-            # file and not a speaker read off a path. Two clips of one name
-            # under one speaker of one game would take two directories of that
-            # name at different depths, which is not a tree a tar can hold.
+            # file and not a speaker read off a path.
             #
             # Always, and not only when the name is ambiguous. A name that
             # happens to be unique within its game is otherwise taken wherever
@@ -584,12 +590,33 @@ def gol_utterances(
             # this row's transcript, in a manifest that parses, with every
             # offset inside a real file and nothing downstream able to see it.
             # The lookup costs the same either way, and what it turns a wrong
-            # clip into is one more of the `missing` this walk already counts.
+            # clip into is one more of the drops this walk already counts.
             tail = "/" + "/".join(stated.parts[-2:])
             found = [p for p in clips.get((game, stated.name), []) if p.as_posix().endswith(tail)]
             if not found:
                 missing += 1
                 logger.debug(f"{row['file_path']}: no such wav under {Path(extract_root) / game}")
+                continue
+            if len(found) > 1:
+                # Two paths under one game answer to the same stated tail, and
+                # matching the whole stated path instead is not the way out:
+                # ruling G2 is that no depth may be assumed, so the clip the
+                # metadata calls `<game>/<speaker>/x.wav` is legitimately at any
+                # depth. A work shipped on two discs unpacks `<game>/<speaker>/`
+                # and `<game>/disc2/<speaker>/` into one tree, both hold a
+                # `0001.wav`, and both end the way the metadata says.
+                #
+                # Taking the first of them would take `disc2/`, which sorts
+                # first; taking any of them is a guess at which character is
+                # speaking, made silently, in a row that parses. So the row is
+                # dropped and counted, exactly as a clip that never arrived is.
+                # Short of a clip is a state this walk reports and the pipeline
+                # survives -- wrong about one is neither.
+                ambiguous += 1
+                logger.debug(
+                    f"{row['file_path']}: {len(found)} wavs under {Path(extract_root) / game} "
+                    f"answer to it ({', '.join(p.as_posix() for p in found)}); none is taken"
+                )
                 continue
             transcript = normalize_japanese(row["text"])
             if not transcript:
@@ -608,13 +635,14 @@ def gol_utterances(
                 "duration": float(row["duration"]),  # the column is seconds
                 "transcript": transcript,
             }
-    if missing or blank:
+    if missing or ambiguous or blank:
         # Once, at the end, rather than per row: there can be hundreds of
         # thousands of these, and the number that matters is how many clips the
         # manifest is short of what the selection promised.
         logger.warning(
-            f"{missing} rows name a wav that is not under {extract_root} and {blank} have no "
-            "text left after normalization; neither is in the manifest"
+            f"{missing} rows name a wav that is not under {extract_root}, {ambiguous} name one "
+            f"the tree holds under more than one path, and {blank} have no text left after "
+            "normalization; none of the three is in the manifest"
         )
 
 
