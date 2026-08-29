@@ -22,17 +22,22 @@ from collections import Counter, defaultdict
 from collections.abc import Iterator
 from pathlib import Path, PurePosixPath
 
+import typer
 from huggingface_hub import hf_hub_download
 
 # The same normalization the MoeSpeech path applies, so the two corpora reach
 # the tokenizer and the loader as one distribution rather than two.
 from pocket_tts.utils.text_normalization import normalize_japanese
 
-# _distribution rather than a second copy of it: these two scripts are one
-# pipeline in two files, the survey in docs/ prints their percentiles in the
-# same table, and two definitions of "median" would eventually disagree in a
-# way nobody would think to check.
-from training.scripts.prepare_moespeech import _distribution
+# Borrowed rather than copied: these two scripts are one pipeline in two files.
+# _distribution because the survey in docs/ prints their percentiles in the same
+# table and two definitions of "median" would eventually disagree in a way
+# nobody would think to check; _read_jsonl because it is the other half of the
+# write_manifest that wrote those files and a second reader could drift from the
+# writer; and split_by_speaker because holding speakers out of the two corpora
+# separately is the one thing the merge below exists to prevent. write_manifest
+# itself is main's, at the point where the split is written out.
+from training.scripts.prepare_moespeech import _distribution, _read_jsonl, split_by_speaker
 
 logger = logging.getLogger("prepare_gol")
 
@@ -44,6 +49,10 @@ EXTRACT_MARKER = ".complete"  # beside the directory, not in it
 # number can reach the corpus without somebody having read the table first.
 UTTERANCE_FLOORS = (1, 2, 3, 5, 10, 20, 50, 100)
 SECONDS_FLOORS = (0, 60, 300, 600, 1800, 3600, 7200)
+# The smallest validation set that can say when to stop. Phase 1 held out one
+# speaker; see `split_across_corpora` for what that cost and why this is a hard
+# floor rather than a target.
+MIN_VALID_SPEAKERS = 20
 
 
 def select_games(metadata_tsv: Path, hours: float) -> list[dict]:
@@ -509,3 +518,138 @@ def gol_utterances(
             f"{missing} rows name a wav that is not under {extract_root} and {blank} have no "
             "text left after normalization; neither is in the manifest"
         )
+
+
+def merge_entries(dirs: list[Path]) -> list[dict]:
+    """Every corpus's offset rows as one list, which is the only shape the
+    split may be taken over.
+
+    This is the one point where GOL and MoeSpeech meet, and `split_by_speaker`
+    is why they have to. It holds out whole speakers, and which speakers it
+    holds out is a fact about the list it is handed. Split the two corpora
+    separately and there are two held-out sets, neither of which the other
+    corpus's training set knows anything about -- so a run trained on both
+    would have trained on every speaker the other one held out, and both
+    validation losses would be reporting voices the weights had already seen.
+    That is precisely the failure the split exists to prevent, reached by
+    splitting twice instead of once.
+
+    A directory is an `<out_dir>/entries`, one `.jsonl` per speaker, exactly as
+    stage 6 of either script leaves it: `write_manifest` wrote those files and
+    `_read_jsonl` reads them back, so nothing here parses a format of its own.
+    A `.partial` is not one of them -- `write_manifest` renames a file in only
+    once all its lines are there, so what a preemption leaves behind is a
+    speaker cut off in the middle, and the resumed run rewrites it under the
+    real name.
+
+    The file names are not read for anything. A speaker is the row's own
+    column: `<game_id>:<speaker>` on the GOL side (ruling G9) and a bare
+    character name on the MoeSpeech one. Taking it off the file name instead is
+    the mistake ruling G2 is about, and here it would be worse than a wrong
+    label, because a key holding a colon cannot be a Windows file name at all.
+
+    Those two label spaces cannot collide: a GOL key always holds a colon, and
+    a MoeSpeech name is a directory name out of a zip, which cannot hold one on
+    the machine that unpacked it. That is stated rather than relied on. A label
+    arriving from two corpora is refused, because everything downstream
+    compares labels and none of it can see a voice -- two characters under one
+    label go to the same side of the split as a single speaker, and the eval
+    protocol, which clones a voice from one utterance and synthesizes another,
+    would clone one of them and score the other against it.
+
+    A named directory that holds no rows is refused rather than contributing
+    nothing. Merging one corpus while the operator believes two are in is the
+    silent version of that same bug: the manifest parses, the alignment runs,
+    the training finishes, and the only sign is a speaker count nobody has a
+    second number to compare against.
+
+    Order is the order the corpora were named and, inside one, the file name's.
+    Nothing downstream depends on it -- every row names its own file and the
+    window inside it -- but a manifest that reorders itself between two runs
+    over the same corpus cannot be diffed against the last one, and this script
+    is re-run after every preemption.
+    """
+    merged: list[dict] = []
+    first_seen: dict[str, tuple[int, Path]] = {}
+    for position, directory in enumerate(dirs):
+        directory = Path(directory)
+        if not directory.is_dir():
+            raise typer.BadParameter(
+                f"{directory} is not a directory, so the corpus it names contributes nothing. "
+                "Merging the rest would build a manifest out of fewer corpora than were asked "
+                "for, and nothing after this could tell."
+            )
+        rows: list[dict] = []
+        for part in sorted(directory.glob("*.jsonl")):
+            rows += _read_jsonl(part)
+        if not rows:
+            raise typer.BadParameter(
+                f"{directory} holds no utterances. Either that corpus's run has not reached "
+                "its joining stage yet or it wrote them somewhere else; merging the rest "
+                "would look exactly like a run over one corpus that succeeded."
+            )
+        for row in rows:
+            was = first_seen.setdefault(row["speaker"], (position, directory))
+            if was[0] != position:
+                raise typer.BadParameter(
+                    f"speaker {row['speaker']!r} is in both {was[1]} and {directory}. Every "
+                    "guard from here down compares this label and none of them can see a "
+                    "voice, so two characters under one label would be held out together, "
+                    "trained together, and scored against each other."
+                )
+        merged += rows
+        logger.info(
+            f"{directory}: {len(rows)} utterances from "
+            f"{len({row['speaker'] for row in rows})} speakers"
+        )
+    return merged
+
+
+def split_across_corpora(
+    entries: list[dict], valid_hours: float, minimum: int = MIN_VALID_SPEAKERS
+) -> tuple[list[dict], list[dict]]:
+    """`split_by_speaker` over the merged corpora, and a refusal when what it
+    held out is too small to say when to stop.
+
+    The split itself is `prepare_moespeech.split_by_speaker` untouched. It
+    takes the speaker as an opaque label, so a `<game_id>:<speaker>` key and a
+    bare character name are the same kind of thing to it, and reusing it is
+    what makes one split over both corpora possible at all.
+
+    What is added is the count of voices held out. Phase 1 held out one. Its
+    validation loss bottomed at step 7,500 and had doubled by 15,000 while the
+    samples over that same stretch kept getting better, and both were true:
+    `train.py` takes the sample's voice prompt from a training batch, so the
+    samples showed a voice the model had seen and the valid set was the one
+    voice it had not. The model went on improving on the 27 voices it saw while
+    getting worse on the single one it did not, and one speaker cannot tell
+    that apart from noise. For a model whose whole point is cloning a voice it
+    has never heard, the unseen number is the one that decides when to stop, so
+    there have to be enough of them for it to mean something.
+
+    Refusing rather than warning, because a warning is what phase 1 had:
+    `split_by_speaker` already says out loud that it could not hold out the
+    hours it was asked for, and the run went its full 15,000 steps over one
+    voice regardless. This costs a stop before the aligner rather than a
+    40,000-step run whose stopping criterion never existed.
+
+    How many voices a `--valid-hours` buys is a property of the corpus and not
+    of that number. The split takes the smallest speakers first, so it is those
+    hours divided by the size of the smallest ones -- which the floors
+    `select_speakers` was given decide. At a 60-minute floor every speaker is
+    at least an hour and ten valid-hours is ten voices; with no floor, the
+    1,000-hour selection's smallest speakers are seconds long and the same ten
+    hours buy hundreds. Neither knob can be read without the other, so the
+    message names both.
+    """
+    train, valid = split_by_speaker(entries, valid_hours)
+    held_out = {entry["speaker"] for entry in valid}
+    if len(held_out) < minimum:
+        raise typer.BadParameter(
+            f"the valid split holds {len(held_out)} speaker(s) and needs at least {minimum}: "
+            f"{valid_hours}h bought that few because the smallest speakers in this corpus are "
+            "large. Raise --valid-hours, or lower the speaker floors so that smaller speakers "
+            "are selected; both change how many voices the same held-out hours buy. One "
+            "speaker is what phase 1 held out, and it could not say when to stop."
+        )
+    return train, valid

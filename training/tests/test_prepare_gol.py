@@ -7,20 +7,26 @@ ASR pass, so the mutual-CER filter that carried MoeSpeech has no counterpart.
 
 import csv
 import io
+import json
 import logging
 import shutil
 import tarfile
+from collections import Counter
 from pathlib import Path
 
 import pytest
+import typer
 
 from training.scripts.prepare_gol import (
+    _speaker_key,
     gol_utterances,
+    merge_entries,
     probe_speakers,
     select_games,
     select_speakers,
+    split_across_corpora,
 )
-from training.scripts.prepare_moespeech import concatenate
+from training.scripts.prepare_moespeech import concatenate, split_by_speaker, write_manifest
 
 
 def _metadata(tmp_path, rows, text: str = "あ"):
@@ -981,3 +987,257 @@ def test_a_game_that_was_never_extracted_costs_only_its_own_rows(tmp_path):
 
     us = list(gol_utterances(md, root, ["here:spk", "never:spk"], ["here", "never"]))
     assert [u["speaker"] for u in us] == ["here:spk"]
+
+
+def _entries(directory, rows):
+    """An `entries/` directory of the shape stage 6 of either script leaves.
+
+    `rows` maps a speaker to the durations of that speaker's clips, and one
+    file per speaker is written with `write_manifest`, which is the function
+    that writes the real ones -- so what is read back here is the format, not a
+    test's idea of it.
+
+    The files are numbered rather than named after the speaker they hold. A GOL
+    key holds a colon, which is not a legal Windows file name, and the speaker
+    is a column of every row in any case: never the name of the file the row
+    sits in.
+    """
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    for i, (speaker, durations) in enumerate(sorted(rows.items())):
+        write_manifest(
+            [
+                {
+                    "id": f"{speaker}/{j:04d}",
+                    "speaker": speaker,
+                    "path": (directory.parent / "audio" / f"{i:04d}.wav").as_posix(),
+                    "start": float(j),
+                    "duration": duration,
+                    "transcript": "あ",
+                }
+                for j, duration in enumerate(durations)
+            ],
+            directory / f"{i:04d}.jsonl",
+        )
+    return directory
+
+
+def test_the_two_corpora_are_split_as_one(tmp_path):
+    """A speaker held out of GOL but present in MoeSpeech would be in both
+    splits, and neither corpus's own split can see the other.
+
+    `split_by_speaker` takes the smallest speakers first, and "smallest" is a
+    fact about the list it is handed. Over the union below, all four GOL
+    speakers are smaller than every MoeSpeech one, so the half hour held out is
+    bought entirely out of GOL. Split the two corpora separately at the same
+    half hour and MoeSpeech would hold out アリス as well -- so アリス being
+    trained on is what tells one merged split from two separate ones, and the
+    other three MoeSpeech characters being there at all is what tells it from a
+    merge that quietly dropped a corpus.
+    """
+    gol = _entries(tmp_path / "gol" / "entries", {f"g1:{c}": [300.0, 300.0] for c in "abcd"})
+    moe = _entries(
+        tmp_path / "moe" / "entries",
+        {n: [3000.0, 3000.0] for n in ("アリス", "ボブ", "キャロル", "デイジー")},
+    )
+
+    # Through split_across_corpora because that is what stage 7 will call. Its
+    # own floor is what the two tests below are about; this one is about which
+    # speakers are held out, so it is turned down out of the way.
+    train, valid = split_across_corpora(merge_entries([gol, moe]), valid_hours=0.5, minimum=1)
+
+    held_out = {e["speaker"] for e in valid}
+    assert held_out == {"g1:a", "g1:b", "g1:c"}, held_out
+    trained = {e["speaker"] for e in train}
+    assert trained == {"g1:d", "アリス", "ボブ", "キャロル", "デイジー"}, trained
+
+
+def test_every_corpus_named_reaches_the_merge(tmp_path):
+    """The merge is where a corpus can vanish with nothing downstream noticing:
+    a manifest built out of one of the two parses, aligns and trains, and the
+    only sign is a speaker count nobody has a second number to compare against.
+
+    The rows are asserted by identity rather than by count, and their order is
+    asserted too: the corpora arrive in the order they were named and, inside
+    one, in the order of the file names. A merge that dropped a corpus, read
+    one twice, or gathered the rows through a set fails here.
+    """
+    gol = _entries(tmp_path / "gol" / "entries", {"g1:a": [10.0], "g2:b": [20.0, 30.0]})
+    moe = _entries(tmp_path / "moe" / "entries", {"アリス": [40.0]})
+
+    merged = merge_entries([gol, moe])
+
+    assert [e["id"] for e in merged] == ["g1:a/0000", "g2:b/0000", "g2:b/0001", "アリス/0000"]
+    assert [e["duration"] for e in merged] == [10.0, 20.0, 30.0, 40.0]
+    assert [e["id"] for e in merge_entries([moe, gol])] == [
+        "アリス/0000",
+        "g1:a/0000",
+        "g2:b/0000",
+        "g2:b/0001",
+    ]
+
+
+def test_a_corpus_that_names_no_rows_is_refused(tmp_path):
+    """Contributing nothing is the silent form of the bug above. An `entries`
+    directory that was never written -- a MoeSpeech run pointed at another
+    --out, or one that has not got that far -- would merge into exactly the
+    manifest a one-corpus run produces, and the run would report success over
+    it."""
+    gol = _entries(tmp_path / "gol" / "entries", {"g1:a": [10.0, 10.0]})
+    # The two cases are told apart in the message, because they are different
+    # mistakes: one --out is wrong, the other has not got this far yet.
+    with pytest.raises(typer.BadParameter, match="not a directory"):
+        merge_entries([gol, tmp_path / "moe" / "entries"])
+    empty = tmp_path / "empty" / "entries"
+    empty.mkdir(parents=True)
+    with pytest.raises(typer.BadParameter, match="no utterances"):
+        merge_entries([gol, empty])
+
+
+def test_the_speaker_is_the_rows_own_column_and_not_the_file_name(tmp_path):
+    """The same trap as ruling G2, one stage later. Here it is worse than a
+    wrong label: a GOL key holds a colon, so it cannot be a Windows file name
+    at all, and a merge that read the speaker off the file name would rename
+    every GOL speaker to whatever the writer had had to substitute."""
+    entries = tmp_path / "gol" / "entries"
+    entries.mkdir(parents=True)
+    write_manifest(
+        [{"id": "x", "speaker": "g1:主人公", "duration": 10.0}] * 2, entries / "decoy.jsonl"
+    )
+
+    assert {e["speaker"] for e in merge_entries([entries])} == {"g1:主人公"}
+
+
+def test_a_gol_key_can_never_be_mistaken_for_a_moespeech_name(tmp_path):
+    """Ruling G9. A GOL speaker is `<game_id>:<speaker>` and a MoeSpeech one is
+    a bare character name, so no key of one corpus can equal a key of the
+    other: the GOL side always holds a colon, and a MoeSpeech name is a
+    directory name out of a zip, which cannot hold one on the machine that
+    unpacked it. Both are opaque strings to `split_by_speaker`, which is why it
+    is reused untouched -- and why nothing else would notice if the two label
+    spaces ever did meet. Stated here rather than left to luck."""
+    assert ":" in _speaker_key("g1", "主人公")
+    gol = _entries(tmp_path / "gol" / "entries", {_speaker_key("g1", "主人公"): [10.0, 10.0]})
+    moe = _entries(tmp_path / "moe" / "entries", {"主人公": [10.0, 10.0]})
+
+    speakers = {e["speaker"] for e in merge_entries([gol, moe])}
+
+    assert speakers == {"g1:主人公", "主人公"}, "one corpus's key was taken for the other's"
+
+
+def test_a_label_that_turns_up_in_two_corpora_is_refused(tmp_path):
+    """Every guard from here down compares this label and none of them can see
+    a voice. Two characters sharing one label go to the same side of the split
+    as a single speaker, so the held-out count is wrong, and the eval protocol
+    -- clone a voice from one utterance, synthesize another -- would clone one
+    of them and score the other against it."""
+    a = _entries(tmp_path / "a" / "entries", {"アリス": [10.0, 10.0]})
+    b = _entries(tmp_path / "b" / "entries", {"アリス": [10.0, 10.0]})
+    with pytest.raises(typer.BadParameter, match="アリス"):
+        merge_entries([a, b])
+    # The same directory named twice is that collision with itself, and would
+    # otherwise put every one of its rows into the manifest two times over.
+    with pytest.raises(typer.BadParameter, match="アリス"):
+        merge_entries([a, a])
+
+
+def test_a_manifest_a_kill_left_half_written_is_not_merged(tmp_path):
+    """`write_manifest` lands its lines beside the name and renames the file in
+    only once they are all there, so a preemption leaves a `.partial` among the
+    finished ones. Its rows are a speaker cut off in the middle, and the run
+    that resumes rewrites them under the real name."""
+    gol = _entries(tmp_path / "gol" / "entries", {"g1:a": [10.0, 10.0]})
+    (gol / "0001.jsonl.partial").write_text(
+        '{"id": "g1:b/0000", "speaker": "g1:b", "duration": 10.0}\n', encoding="utf-8"
+    )
+
+    assert {e["speaker"] for e in merge_entries([gol])} == {"g1:a"}
+
+
+def test_the_valid_split_has_many_speakers(tmp_path):
+    """Phase 1's validation set was one speaker, and one speaker cannot say
+    when to stop -- its loss bottomed at 7,500 while the samples kept
+    improving, because the samples use a training voice and the valid set does
+    not. For a model whose point is voice cloning, the unseen number is the one
+    that matters, so there have to be enough of them to mean something.
+
+    Non-empty is asserted before the count and the utterances per speaker
+    after it: an empty valid set satisfies "no speaker is in both splits" and
+    "every valid speaker has more than one utterance" without holding anyone
+    out, and that is the pair of vacuous assertions phase 1 shipped.
+    """
+    gol = _entries(tmp_path / "gol" / "entries", {f"g1:s{i:03d}": [400.0] * 3 for i in range(60)})
+    moe = _entries(tmp_path / "moe" / "entries", {f"c{i:03d}": [1800.0] * 3 for i in range(10)})
+
+    train, valid = split_by_speaker(merge_entries([gol, moe]), valid_hours=10.0)
+
+    counts = Counter(e["speaker"] for e in valid)
+    assert counts, "nothing was held out; everything below is vacuous"
+    assert train, "nothing was left to train on"
+    assert len(counts) >= 20, counts
+    assert all(n > 1 for n in counts.values()), counts
+    assert set(counts) & {e["speaker"] for e in train} == set()
+
+
+def test_a_valid_split_of_too_few_speakers_is_refused(tmp_path):
+    """A warning is what phase 1 had. `split_by_speaker` already says out loud
+    that it could not hold out the hours it was asked for, and the run went on
+    for 15,000 steps over a validation set of one voice regardless, so the
+    count is checked where it can still stop the run."""
+    entries = [{"speaker": f"s{i:03d}", "duration": 3600.0} for i in range(25) for _ in range(2)]
+    with pytest.raises(typer.BadParameter, match="valid-hours"):
+        split_across_corpora(entries, valid_hours=1.0)
+
+    _, valid = split_across_corpora(entries, valid_hours=40.0)
+
+    assert len({e["speaker"] for e in valid}) == 20
+
+
+def test_how_many_speakers_the_valid_hours_buy_is_a_property_of_the_corpus(tmp_path):
+    """The split takes the smallest speakers first, so what a --valid-hours
+    buys is those hours divided by the size of the smallest speakers -- which
+    the speaker floors set. At a 60-minute floor every speaker is an hour and
+    ten valid-hours is ten voices, half of what M2a needs; the same ten hours
+    over a corpus with no floor buys hundreds. Neither knob can be read without
+    the other, which is why the refusal names both."""
+    hour_long = [{"speaker": f"s{i:03d}", "duration": 1800.0} for i in range(40) for _ in range(2)]
+
+    _, ten = split_by_speaker(hour_long, valid_hours=10.0)
+    assert len({e["speaker"] for e in ten}) == 10
+
+    with pytest.raises(typer.BadParameter):
+        split_across_corpora(hour_long, valid_hours=10.0)
+    _, twenty = split_across_corpora(hour_long, valid_hours=20.0)
+    assert len({e["speaker"] for e in twenty}) == 20
+
+
+def test_the_two_manifests_together_hold_every_merged_row(tmp_path):
+    """The stage end to end: merge both corpora, split the union, write the two
+    manifests the loader reads. Every row of both corpora is in exactly one of
+    them -- a row dropped between the merge and the manifests is training data
+    thrown away with nothing saying so, and a row in both is a valid utterance
+    that was trained on."""
+    gol = _entries(tmp_path / "gol" / "entries", {f"g1:s{i:03d}": [400.0] * 3 for i in range(60)})
+    moe = _entries(tmp_path / "moe" / "entries", {f"c{i:03d}": [1800.0] * 3 for i in range(10)})
+    merged = merge_entries([gol, moe])
+
+    train, valid = split_across_corpora(merged, valid_hours=10.0)
+    write_manifest(train, tmp_path / "train.jsonl")
+    write_manifest(valid, tmp_path / "valid.jsonl")
+
+    read = {
+        name: [
+            json.loads(line)
+            for line in (tmp_path / f"{name}.jsonl").read_text(encoding="utf-8").splitlines()
+        ]
+        for name in ("train", "valid")
+    }
+    assert read["train"] and read["valid"]
+    assert len({e["speaker"] for e in read["valid"]}) >= 20
+    ids = {name: [e["id"] for e in rows] for name, rows in read.items()}
+    assert sorted(ids["train"] + ids["valid"]) == sorted(e["id"] for e in merged)
+    assert set(ids["train"]) & set(ids["valid"]) == set()
+    assert {e["speaker"] for e in read["train"]} & {e["speaker"] for e in read["valid"]} == set()
+    # The transcripts stay Japanese on a machine whose default encoding is
+    # cp932, and unescaped, so the manifest can be read with `head`.
+    assert "あ" in (tmp_path / "valid.jsonl").read_text(encoding="utf-8")
