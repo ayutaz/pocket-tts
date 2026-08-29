@@ -428,7 +428,7 @@ def test_a_speaker_with_one_utterance_is_never_selected(tmp_path):
     them apart is how many pieces it arrives in.
     """
     md = _metadata(tmp_path, [("g", "solo", 600.0), ("g", "pair", 300.0), ("g", "pair", 300.0)])
-    assert select_speakers(md, ["g"], min_utterances=2, min_seconds=0.0) == ["pair"]
+    assert select_speakers(md, ["g"], min_utterances=2, min_seconds=0.0) == ["g:pair"]
 
 
 def test_the_retention_table_reports_what_each_floor_keeps(tmp_path):
@@ -447,7 +447,7 @@ def test_selection_is_bounded_to_the_games_that_were_taken(tmp_path):
     pipeline had to be corrected for."""
     rows = [("kept", "a", 60.0)] * 2 + [("dropped", "b", 60.0)] * 2
     md = _metadata(tmp_path, rows)
-    assert select_speakers(md, ["kept"], min_utterances=2, min_seconds=0.0) == ["a"]
+    assert select_speakers(md, ["kept"], min_utterances=2, min_seconds=0.0) == ["kept:a"]
 
 
 def _row(stats, min_utterances, min_seconds):
@@ -475,7 +475,7 @@ def test_the_floor_is_the_speakers_total_seconds_not_its_minutes(tmp_path):
     test in the MoeSpeech pipeline.
     """
     md = _metadata(tmp_path, [("g", "s", 20.0)] * 3)
-    assert select_speakers(md, ["g"], min_utterances=2, min_seconds=60.0) == ["s"]
+    assert select_speakers(md, ["g"], min_utterances=2, min_seconds=60.0) == ["g:s"]
     assert select_speakers(md, ["g"], min_utterances=2, min_seconds=61.0) == []
 
 
@@ -490,7 +490,7 @@ def test_a_speaker_has_to_clear_both_floors_and_not_either(tmp_path):
     """
     rows = [("g", "chatty", 5.0)] * 8 + [("g", "terse", 90.0)] * 2 + [("g", "good", 50.0)] * 4
     md = _metadata(tmp_path, rows)
-    assert select_speakers(md, ["g"], min_utterances=3, min_seconds=150.0) == ["good"]
+    assert select_speakers(md, ["g"], min_utterances=3, min_seconds=150.0) == ["g:good"]
 
 
 def test_the_table_promises_the_count_the_selection_delivers(tmp_path):
@@ -509,7 +509,7 @@ def test_the_table_promises_the_count_the_selection_delivers(tmp_path):
     row = _row(probe_speakers(md, ["g"]), min_utterances=3, min_seconds=3600)
     kept = select_speakers(md, ["g"], min_utterances=3, min_seconds=3600)
 
-    assert kept == ["on-the-floor", "over"], "a floor is a floor, not a strict inequality"
+    assert kept == ["g:on-the-floor", "g:over"], "a floor is a floor, not a strict inequality"
     assert row["kept"] == len(kept)
 
 
@@ -565,7 +565,8 @@ def test_speakers_come_out_in_a_stated_order(tmp_path):
     """
     rows = [("g", "sc", 60.0)] * 4 + [("g", "sa", 60.0)] * 3 + [("g", "sb", 60.0)] * 5
     md = _metadata(tmp_path, rows)
-    assert select_speakers(md, ["g"], min_utterances=2, min_seconds=0.0) == ["sa", "sb", "sc"]
+    keys = select_speakers(md, ["g"], min_utterances=2, min_seconds=0.0)
+    assert keys == ["g:sa", "g:sb", "g:sc"]
 
 
 def test_the_table_reports_the_audio_a_floor_keeps_and_not_only_the_speakers(tmp_path):
@@ -599,27 +600,54 @@ def test_the_probe_names_how_many_speakers_have_a_single_utterance(tmp_path):
     assert (stats["speakers"], stats["single_utterance_speakers"]) == (4, 2)
 
 
-def test_the_probe_says_whether_one_speaker_id_spans_two_games(tmp_path):
-    """The speaker column is taken as the identity, and two games sharing an id
-    is the one thing about that which would break quietly: `concatenate` treats
-    everything it joins as one voice, and the loader takes one side of a cut as
-    the voice prompt for the other, so two characters merged under a single id
-    teach the model that the prompt does not decide the voice. Nothing in the
-    dataset states whether GOL's ids are unique across games -- the tree nests
-    them under `<game_id>/`, which suggests not -- so this counts instead of
-    assuming, and the next task reads the count.
+def test_the_probe_counts_speaker_keys_apart_from_speaker_ids(tmp_path):
+    """The gap between the two is the whole of ruling G9: 30,193 keys against
+    19,349 ids on the real corpus, because 3,522 ids appear in more than one
+    game. An operator shown only one of the numbers would read the corpus as
+    having grown, or the survey as having been wrong.
 
-    Bounded to a single game the answer is necessarily zero, which is what
-    separates "spans two games" from "appears more than once".
+    Four keys, three ids and one id that spans -- four different numbers, so no
+    assertion here can be satisfied by the quantity next to it. Bounded to a
+    single game nothing spans anything, which is what separates "spans two
+    games" from "appears more than once".
     """
     rows = [("g1", "shared", 100.0)] * 2 + [("g2", "shared", 100.0)] * 3
     rows += [("g1", "own", 100.0)] * 4 + [("g2", "another", 100.0)] * 5
     md = _metadata(tmp_path, rows)
 
     both = probe_speakers(md, ["g1", "g2"])
-    assert (both["speakers"], both["utterances"]) == (3, 14)
-    assert both["speakers_in_more_than_one_game"] == 1
-    assert probe_speakers(md, ["g1"])["speakers_in_more_than_one_game"] == 0
+    assert (both["speakers"], both["speaker_ids"], both["utterances"]) == (4, 3, 14)
+    assert both["ids_spanning_games"] == 1
+
+    one = probe_speakers(md, ["g1"])
+    assert (one["speakers"], one["speaker_ids"], one["ids_spanning_games"]) == (2, 2, 0)
+
+
+def test_one_speaker_id_in_two_games_is_two_speakers(tmp_path):
+    """Ruling G9, pinned by its side effect. 3,522 of GOL's 19,349 ids appear
+    in more than one game and hold 61% of the audio; the widest spans 115 games
+    at 457 utterances of 1.8 seconds, which is the shape of a bucket for
+    unnamed characters rather than of a prolific actor with a role. An id that
+    *might* mean two people is enough: `concatenate`'s cross-speaker guard
+    compares the label, not the voice, so a merged label puts two voices in one
+    file and everything downstream reads that file as one speaker.
+
+    `aoi` has three utterances in one game and four in the other, and the two
+    counts differ so that a merged key is distinguishable from either half
+    rather than only from their sum. Merged, it is one speaker of seven
+    utterances and 700 seconds; kept apart it is two of three and four, 300 and
+    400 -- so each floor below finds nothing here and would find something
+    under a bare-id key.
+    """
+    rows = [("g1", "aoi", 100.0)] * 3 + [("g2", "aoi", 100.0)] * 4
+    md = _metadata(tmp_path, rows)
+
+    assert select_speakers(md, ["g1", "g2"], min_utterances=2, min_seconds=0.0) == [
+        "g1:aoi",
+        "g2:aoi",
+    ]
+    assert select_speakers(md, ["g1", "g2"], min_utterances=5, min_seconds=0.0) == []
+    assert select_speakers(md, ["g1", "g2"], min_utterances=2, min_seconds=500.0) == []
 
 
 def test_a_game_that_matched_nothing_measures_an_empty_corpus(tmp_path):

@@ -180,8 +180,41 @@ def extract_game(tar_path: Path, dest_root: Path) -> Path:
     return out
 
 
-def _speaker_totals(metadata_tsv: Path, game_ids: list[str]) -> dict[str, tuple[int, float, int]]:
-    """Every speaker of `game_ids`, with the utterances, seconds and games they hold.
+def _speaker_key(game_id: str, speaker: str) -> str:
+    """The identity everything downstream treats as one voice.
+
+    Ruling G9: the game is part of it. Measured over the whole metadata, 3,522
+    of the 19,349 speaker ids appear in more than one game and those ids hold
+    61% of the corpus; the widest spans 115 games at 457 utterances of 1.8
+    seconds. Five short lines per game is not a prolific actor with a role, it
+    is a bucket for unnamed characters or system lines -- and an id that
+    *might* mean two people is enough to defeat `concatenate`'s cross-speaker
+    guard, because that guard compares the label and not the voice. Two
+    characters merged under one label become one joined file, and the loader
+    takes one side of a cut in that file as the voice prompt for the other.
+
+    Keying them apart costs 748 hours of 10,654 (7%) at a two-utterance floor
+    and yields 2,819 speakers of an hour or more against 2,095 -- 35% more.
+    Speaker diversity is the axis the intermediate run exists to test, so the
+    safe option is also the better one.
+
+    A composite string rather than a tuple, because `concatenate` and
+    `split_by_speaker` are reused from prepare_moespeech and treat the speaker
+    as an opaque label; a string keeps them working untouched and keeps the
+    game readable in the manifest.
+    """
+    return f"{game_id}:{speaker}"
+
+
+def _speaker_totals(
+    metadata_tsv: Path, game_ids: list[str]
+) -> tuple[dict[str, tuple[int, float]], dict[str, int]]:
+    """Every speaker of `game_ids` with the utterances and seconds they hold,
+    and, beside it, how many games each bare id turned up in.
+
+    Keyed by `_speaker_key`, so one id used by two games is two speakers here.
+    The second return value is what says how often that happens; it is counted
+    over bare ids, since a composite key spans one game by construction.
 
     One scan feeding both the probe and the selection, for the reason
     `prepare_moespeech._scan_annotations` is shared the same way: the retention
@@ -197,8 +230,9 @@ def _speaker_totals(metadata_tsv: Path, game_ids: list[str]) -> dict[str, tuple[
     That it also names a directory is an artefact of how the tars are packed,
     and what `extract_game` leaves on disk is double-nested besides.
 
-    7.4 million rows do not fit in memory. 19,349 speakers do, so the file is
-    streamed and only the three totals are kept.
+    7.4 million rows do not fit in memory. The 19,349 ids and the 30,193 keys
+    they make between them do, so the file is streamed and only the totals
+    are kept.
     """
     wanted = set(game_ids)
     utterances: Counter[str] = Counter()
@@ -209,17 +243,21 @@ def _speaker_totals(metadata_tsv: Path, game_ids: list[str]) -> dict[str, tuple[
             game = row["game_id"]
             if game not in wanted:
                 continue
-            speaker = row["speaker"]
-            utterances[speaker] += 1
-            seconds[speaker] += float(row["duration"])  # the column is seconds
-            games[speaker].add(game)
-    return {s: (n, seconds[s], len(games[s])) for s, n in utterances.items()}
+            key = _speaker_key(game, row["speaker"])
+            utterances[key] += 1
+            seconds[key] += float(row["duration"])  # the column is seconds
+            games[row["speaker"]].add(game)  # the bare id, which is the thing that spans
+    totals = {key: (n, seconds[key]) for key, n in utterances.items()}
+    return totals, {speaker: len(g) for speaker, g in games.items()}
 
 
 def select_speakers(
     metadata_tsv: Path, game_ids: list[str], min_utterances: int, min_seconds: float
 ) -> list[str]:
     """The speakers worth keeping, out of the games this run took.
+
+    Each one is a `_speaker_key`, so what comes back is `<game_id>:<speaker>`
+    and one id shared by two games is two entries. See that function for why.
 
     Both floors are required rather than defaulted, for the same reason the
     MoeSpeech cutoffs are: the right values are a property of this corpus, they
@@ -230,7 +268,8 @@ def select_speakers(
     `min_utterances` rejects the speaker who cannot be evaluated at all -- the
     protocol clones a voice from one utterance and synthesizes another, so a
     speaker with a single clip has nothing to hold out and `concatenate` has
-    nothing to join it to; 3,922 of GOL's 19,349 are in exactly that state.
+    nothing to join it to; 3,922 of GOL's 19,349 ids are in exactly that
+    state, and keying them apart by game can only make more of them.
     `min_seconds` rejects the bit part, who has a dozen lines and forty seconds
     of voice inside them. Neither floor catches the other's case, and either
     one alone lets its own through.
@@ -244,28 +283,28 @@ def select_speakers(
     resumed run that held out a different set of speakers would make the
     validation loss incomparable across the kill.
     """
-    totals = _speaker_totals(metadata_tsv, game_ids)
+    totals, _spanning = _speaker_totals(metadata_tsv, game_ids)
     return sorted(
         speaker
-        for speaker, (utterances, seconds, _games) in totals.items()
+        for speaker, (utterances, seconds) in totals.items()
         if utterances >= min_utterances and seconds >= min_seconds
     )
 
 
-def _speaker_retention(totals: list[tuple[int, float, int]]) -> list[dict]:
+def _speaker_retention(totals: list[tuple[int, float]]) -> list[dict]:
     """How many speakers, and how much audio, each pair of floors would leave.
 
     Both columns are reported because on this corpus they answer opposite
-    questions about the same number. A one-hour floor keeps 2,095 of 19,349
-    speakers, which reads as throwing the corpus away, and 9,493 of 10,654
-    hours, which is keeping 89% of it. Either column on its own would be read
-    as a verdict on the other.
+    questions about the same number. A one-hour floor keeps 2,819 of the
+    30,193 speakers, which reads as throwing the corpus away, and 8,745 of
+    10,654 hours, which is keeping 82% of it. Either column on its own would
+    be read as a verdict on the other.
     """
-    total_seconds = sum(s for _, s, _ in totals)
+    total_seconds = sum(s for _, s in totals)
     table = []
     for min_utterances in UTTERANCE_FLOORS:
         for min_seconds in SECONDS_FLOORS:
-            kept = [s for n, s, _ in totals if n >= min_utterances and s >= min_seconds]
+            kept = [s for n, s in totals if n >= min_utterances and s >= min_seconds]
             table.append(
                 {
                     "min_utterances": min_utterances,
@@ -283,47 +322,44 @@ def probe_speakers(metadata_tsv: Path, game_ids: list[str]) -> dict:
     """Measure the speakers of `game_ids`. Decide nothing about any of them.
 
     This exists because 19,349 is a trap. The median speaker in the whole
-    corpus has 0.6 minutes of audio, 3,922 have a single utterance, and the
-    2,095 with an hour or more hold 89% of it. A held-out split designed
-    around the headline count would be designed around speakers that cannot be
-    evaluated and cannot be concatenated. So this reports the shape and applies
-    nothing: the floors come out of the table below, not out of this file.
+    corpus has 0.6 minutes of audio, 3,922 ids have a single utterance, and
+    once the ids are keyed apart by game the 2,819 speakers holding an hour or
+    more hold 82% of the audio. A held-out split designed around the headline
+    count would be designed around speakers that cannot be evaluated and
+    cannot be concatenated. So this reports the shape and applies nothing: the
+    floors come out of the table below, not out of this file.
 
     The distribution is per speaker and in minutes -- 0.6 is a number an
     operator can read, 0.01 hours is not -- and the medians are the point. The
     mean minutes per speaker on this corpus describes a speaker who does not
-    exist, because the same 2,095 that hold the audio also hold the mean.
+    exist, because the same few thousand that hold the audio hold the mean.
 
-    `speakers_in_more_than_one_game` measures rather than assumes the one thing
-    about speaker identity this pipeline cannot check for itself. The id is
-    taken from the metadata column and treated as the speaker; if two games
-    reuse an id, their two characters merge into one, and `concatenate` would
-    join them into a file the loader reads as a single voice -- taking one side
-    of a cut as the voice prompt for the other, and so teaching the model that
-    the prompt does not decide the voice. The tree nests speakers under
-    `<game_id>/`, which is a hint that ids may be game-local, and nothing in
-    the dataset settles it. It is cheap to count and expensive to be wrong
-    about, so it is counted and reported to the operator.
+    A speaker is a `_speaker_key`, so `speakers` counts `<game_id>:<speaker>`
+    pairs and not bare ids -- 30,193 against 19,349 on the real corpus. Both are
+    reported, with `ids_spanning_games` between them, because the gap is the
+    whole of ruling G9 and an operator reading only one of the two numbers
+    would think the corpus had grown or the survey had been wrong.
 
     Bounded to the same games as `select_speakers`, through the same scan, so
     that the table and the selection describe one corpus.
     """
-    totals = _speaker_totals(metadata_tsv, game_ids)
+    totals, games_per_id = _speaker_totals(metadata_tsv, game_ids)
     rows = list(totals.values())
-    spanning = sum(1 for _, _, games in rows if games > 1)
+    spanning = sum(1 for count in games_per_id.values() if count > 1)
     if spanning:
         logger.warning(
-            f"{spanning} of {len(rows)} speaker ids appear in more than one game -- if these "
-            f"are different characters sharing an id, joining their clips would put two voices "
-            f"in one file, and everything downstream reads such a file as one speaker"
+            f"{spanning} of {len(games_per_id)} speaker ids appear in more than one game; "
+            f"each game's use of an id is kept apart as <game_id>:<speaker>, so these "
+            f"{len(rows)} speakers are more than there are ids"
         )
     return {
         "speakers": len(rows),
-        "utterances": sum(n for n, _, _ in rows),
-        "hours": sum(s for _, s, _ in rows) / 3600,
-        "single_utterance_speakers": sum(1 for n, _, _ in rows if n == 1),
-        "speakers_in_more_than_one_game": spanning,
-        "utterances_per_speaker": _distribution([float(n) for n, _, _ in rows]),
-        "minutes_per_speaker": _distribution([s / 60 for _, s, _ in rows]),
+        "speaker_ids": len(games_per_id),
+        "ids_spanning_games": spanning,
+        "utterances": sum(n for n, _ in rows),
+        "hours": sum(s for _, s in rows) / 3600,
+        "single_utterance_speakers": sum(1 for n, _ in rows if n == 1),
+        "utterances_per_speaker": _distribution([float(n) for n, _ in rows]),
+        "minutes_per_speaker": _distribution([s / 60 for _, s in rows]),
         "retention": _speaker_retention(rows),
     }
