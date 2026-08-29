@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from training.scripts.prepare_gol import select_games
+from training.scripts.prepare_gol import probe_speakers, select_games, select_speakers
 
 
 def _metadata(tmp_path, rows, text: str = "あ"):
@@ -417,3 +417,219 @@ def test_a_marker_without_its_directory_is_not_trusted(tmp_path, monkeypatch):
 
     out = extract_game(t, root)
     assert sorted(p.name for p in out.rglob("*.wav")) == ["a.wav", "b.wav", "c.wav"]
+
+
+def test_a_speaker_with_one_utterance_is_never_selected(tmp_path):
+    """One utterance cannot be evaluated -- the protocol clones a voice from one
+    and synthesizes another -- and cannot be concatenated with itself either.
+    3,922 of GOL's 19,349 speakers are in this state.
+
+    Both speakers here hold the same ten minutes, so the only thing telling
+    them apart is how many pieces it arrives in.
+    """
+    md = _metadata(tmp_path, [("g", "solo", 600.0), ("g", "pair", 300.0), ("g", "pair", 300.0)])
+    assert select_speakers(md, ["g"], min_utterances=2, min_seconds=0.0) == ["pair"]
+
+
+def test_the_retention_table_reports_what_each_floor_keeps(tmp_path):
+    """The output that decides the next task's defaults. Measured on the real
+    metadata: a 1-hour floor keeps 2,095 of 19,349 speakers and 89% of the audio."""
+    rows = [("g", f"s{i}", 3600.0) for i in range(10)] + [("g", f"t{i}", 10.0) for i in range(90)]
+    md = _metadata(tmp_path, rows + rows)  # two utterances each
+    stats = probe_speakers(md, ["g"])
+    assert stats["speakers"] == 100
+    assert any(r["min_seconds"] == 3600 and r["kept"] == 10 for r in stats["retention"]), stats
+
+
+def test_selection_is_bounded_to_the_games_that_were_taken(tmp_path):
+    """The extract root accumulates. Asking for fewer games later has to mean
+    fewer speakers, or the flag does nothing -- the same failure the MoeSpeech
+    pipeline had to be corrected for."""
+    rows = [("kept", "a", 60.0)] * 2 + [("dropped", "b", 60.0)] * 2
+    md = _metadata(tmp_path, rows)
+    assert select_speakers(md, ["kept"], min_utterances=2, min_seconds=0.0) == ["a"]
+
+
+def _row(stats, min_utterances, min_seconds):
+    """The single retention row at these floors.
+
+    Unpacked rather than indexed, so a grid that listed a pair of floors
+    twice would fail here instead of quietly reporting the first of two
+    rows that an operator would then read as the only one.
+    """
+    (row,) = [
+        r
+        for r in stats["retention"]
+        if (r["min_utterances"], r["min_seconds"]) == (min_utterances, min_seconds)
+    ]
+    return row
+
+
+def test_the_floor_is_the_speakers_total_seconds_not_its_minutes(tmp_path):
+    """`min_seconds` and `duration` are both seconds; the distribution is
+    reported in minutes because 0.6 is a readable number and 0.01 hours is not.
+    Three clips of twenty seconds is one minute exactly, so an implementation
+    comparing the minutes against the seconds floor would drop this speaker --
+    and on the real corpus would drop very nearly everyone, a floor of an hour
+    having become a demand for sixty. The same unit confusion already cost a
+    test in the MoeSpeech pipeline.
+    """
+    md = _metadata(tmp_path, [("g", "s", 20.0)] * 3)
+    assert select_speakers(md, ["g"], min_utterances=2, min_seconds=60.0) == ["s"]
+    assert select_speakers(md, ["g"], min_utterances=2, min_seconds=61.0) == []
+
+
+def test_a_speaker_has_to_clear_both_floors_and_not_either(tmp_path):
+    """Each floor rejects something the other admits, which is why there are
+    two. `chatty` is a bit part: eight lines of five seconds, plenty of clips
+    and forty seconds of voice to clone from. `terse` has three minutes in two
+    clips, and two clips is a held-out speaker that can be evaluated exactly
+    once. Only `good` clears both.
+
+    Under `or` all three survive; under either floor by itself, two do.
+    """
+    rows = [("g", "chatty", 5.0)] * 8 + [("g", "terse", 90.0)] * 2 + [("g", "good", 50.0)] * 4
+    md = _metadata(tmp_path, rows)
+    assert select_speakers(md, ["g"], min_utterances=3, min_seconds=150.0) == ["good"]
+
+
+def test_the_table_promises_the_count_the_selection_delivers(tmp_path):
+    """An operator reads a row off the retention table and hands those two
+    numbers straight to the selection. If the table compares inclusively and
+    the selection does not, the corpus arrives short of what was chosen and
+    nothing anywhere says so. `on-the-floor` sits exactly on both grid values,
+    which is the only place the two can disagree.
+    """
+    rows = [("g", "on-the-floor", 600.0)] * 6  # 3,600 s exactly, in six clips
+    rows += [("g", "thin", 1000.0)] * 3  # clears the utterances, not the seconds
+    rows += [("g", "over", 500.0)] * 9
+    rows += [("g", "once", 45.0)]
+    md = _metadata(tmp_path, rows)
+
+    row = _row(probe_speakers(md, ["g"]), min_utterances=3, min_seconds=3600)
+    kept = select_speakers(md, ["g"], min_utterances=3, min_seconds=3600)
+
+    assert kept == ["on-the-floor", "over"], "a floor is a floor, not a strict inequality"
+    assert row["kept"] == len(kept)
+
+
+def test_the_probe_counts_speakers_apart_from_their_utterances(tmp_path):
+    """Three quantities that a corpus of 19,349 speakers and 7,405,094
+    utterances keeps inviting the confusion between. All three differ in the
+    fixture: three speakers, thirteen utterances, one hour."""
+    rows = [("g", "a", 100.0)] * 7 + [("g", "b", 200.0)] * 4 + [("g", "c", 1050.0)] * 2
+    stats = probe_speakers(_metadata(tmp_path, rows), ["g"])
+    assert (stats["speakers"], stats["utterances"]) == (3, 13)
+    assert stats["hours"] == pytest.approx(1.0)
+
+
+def test_the_distribution_is_per_speaker_minutes_and_reports_the_median(tmp_path):
+    """The number this whole task turns on is a median: 0.6 minutes per speaker,
+    against a mean dragged far above it by the 2,095 speakers holding 89% of
+    the audio. Report the mean and GOL looks like a corpus of half-hour
+    speakers, which is a corpus that does not exist. The fixture is that shape
+    in miniature, and its median in minutes (0.3) is not its median in seconds
+    (18).
+    """
+    rows = [("g", "a", 6.0)] + [("g", "b", 9.0)] * 2 + [("g", "c", 1500.0)] * 4
+    stats = probe_speakers(_metadata(tmp_path, rows), ["g"])
+
+    minutes = stats["minutes_per_speaker"]
+    assert minutes["median"] == pytest.approx(0.3)
+    assert minutes["mean"] == pytest.approx((0.1 + 0.3 + 100.0) / 3)
+    assert minutes["max"] == pytest.approx(100.0)
+    # A second distribution, over a different quantity of the same speakers.
+    assert stats["utterances_per_speaker"]["median"] == pytest.approx(2)
+
+
+def test_the_probe_measures_only_the_games_that_were_taken(tmp_path):
+    """The table and the selection have to describe one corpus, or the numbers
+    a floor is chosen from are about a corpus this run does not hold. Measured
+    over the whole file instead, every row would be about 596 games while the
+    run had eighteen tars on disk."""
+    rows = [("kept", "a", 100.0)] * 3
+    rows += [("dropped", "b", 100.0)] * 5 + [("dropped", "c", 100.0)] * 7
+    stats = probe_speakers(_metadata(tmp_path, rows), ["kept"])
+    assert (stats["speakers"], stats["utterances"]) == (1, 3)
+
+
+def test_speakers_come_out_in_a_stated_order(tmp_path):
+    """`speakers.json` is written out of this list and read back on the re-run
+    after a preemption, and the held-out split is taken off it. Left in whatever
+    order the metadata happened to be read in -- or in count order -- a resumed
+    run holds out a different set of speakers than the run before it, and the
+    validation loss stops being comparable across the kill.
+
+    The fixture's file order, its utterance-count order and its alphabetical
+    order are three different orders, so only one of them passes here.
+    """
+    rows = [("g", "sc", 60.0)] * 4 + [("g", "sa", 60.0)] * 3 + [("g", "sb", 60.0)] * 5
+    md = _metadata(tmp_path, rows)
+    assert select_speakers(md, ["g"], min_utterances=2, min_seconds=0.0) == ["sa", "sb", "sc"]
+
+
+def test_the_table_reports_the_audio_a_floor_keeps_and_not_only_the_speakers(tmp_path):
+    """The row the next task takes its defaults off reads two ways at once: on
+    the real metadata a one-hour floor keeps 11% of the speakers and 89% of the
+    audio. A table of speaker counts alone would make that floor look like it
+    threw the corpus away, which is exactly backwards. The two fractions here
+    are 5% and 97%, so no assertion can take one for the other.
+    """
+    rows = [("g", "big", 3600.0)] * 2
+    rows += [("g", f"t{i}", 5.0) for i in range(20) for _ in range(2)]
+    stats = probe_speakers(_metadata(tmp_path, rows), ["g"])
+
+    row = _row(stats, min_utterances=2, min_seconds=3600)
+    assert row["kept"] == 1
+    assert row["hours"] == pytest.approx(2.0)
+    assert row["speaker_fraction"] == pytest.approx(1 / 21)
+    assert row["hours_fraction"] == pytest.approx(7200 / 7400)
+
+
+def test_the_probe_names_how_many_speakers_have_a_single_utterance(tmp_path):
+    """3,922 of GOL's 19,349, and the reason the headline speaker count cannot
+    be designed around: they are corpus size that is not usable size.
+
+    `solo` holds more audio than anyone else in the fixture, so what is counted
+    here is the utterance count and not "speakers with little audio".
+    """
+    rows = [("g", "solo", 900.0), ("g", "alone", 60.0)]
+    rows += [("g", "pair", 30.0)] * 2 + [("g", "trio", 30.0)] * 3
+    stats = probe_speakers(_metadata(tmp_path, rows), ["g"])
+    assert (stats["speakers"], stats["single_utterance_speakers"]) == (4, 2)
+
+
+def test_the_probe_says_whether_one_speaker_id_spans_two_games(tmp_path):
+    """The speaker column is taken as the identity, and two games sharing an id
+    is the one thing about that which would break quietly: `concatenate` treats
+    everything it joins as one voice, and the loader takes one side of a cut as
+    the voice prompt for the other, so two characters merged under a single id
+    teach the model that the prompt does not decide the voice. Nothing in the
+    dataset states whether GOL's ids are unique across games -- the tree nests
+    them under `<game_id>/`, which suggests not -- so this counts instead of
+    assuming, and the next task reads the count.
+
+    Bounded to a single game the answer is necessarily zero, which is what
+    separates "spans two games" from "appears more than once".
+    """
+    rows = [("g1", "shared", 100.0)] * 2 + [("g2", "shared", 100.0)] * 3
+    rows += [("g1", "own", 100.0)] * 4 + [("g2", "another", 100.0)] * 5
+    md = _metadata(tmp_path, rows)
+
+    both = probe_speakers(md, ["g1", "g2"])
+    assert (both["speakers"], both["utterances"]) == (3, 14)
+    assert both["speakers_in_more_than_one_game"] == 1
+    assert probe_speakers(md, ["g1"])["speakers_in_more_than_one_game"] == 0
+
+
+def test_a_game_that_matched_nothing_measures_an_empty_corpus(tmp_path):
+    """A mistyped game id is the likeliest way to get here, and the probe is the
+    first thing that runs over the selection. Reporting zero rather than
+    dividing by an empty corpus keeps the failure where an operator can read it,
+    instead of ending the run in a ZeroDivisionError four stages early."""
+    md = _metadata(tmp_path, [("g", "a", 60.0)] * 2)
+    stats = probe_speakers(md, ["typo"])
+    assert (stats["speakers"], stats["utterances"], stats["hours"]) == (0, 0, 0.0)
+    assert all(r["kept"] == 0 and r["speaker_fraction"] == 0.0 for r in stats["retention"])
+    assert stats["minutes_per_speaker"]["median"] is None
+    assert select_speakers(md, ["typo"], min_utterances=2, min_seconds=0.0) == []
