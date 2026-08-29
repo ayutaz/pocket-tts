@@ -6,18 +6,24 @@ ASR pass, so the mutual-CER filter that carried MoeSpeech has no counterpart.
 """
 
 import csv
+import inspect
 import io
 import json
 import logging
+import os
 import shutil
 import tarfile
-from collections import Counter
+import time
+from collections import Counter, defaultdict
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import typer
 
 from training.scripts.prepare_gol import (
+    EXTRACT_MARKER,
+    MIN_VALID_SPEAKERS,
     _speaker_key,
     filter_by_score,
     gol_utterances,
@@ -1594,3 +1600,910 @@ def test_a_kill_mid_filter_leaves_nothing_under_the_finished_name(tmp_path, monk
         m.filter_by_score(aligned, out, min_score_per_frame=-1.75)
 
     assert not out.exists(), "the kill left something under the finished name"
+
+
+# ---------------------------------------------------------------------------
+# The nine stages as one command.
+#
+# Everything below runs `main`. Only what would reach the network or the GPU is
+# faked -- the hub fetch, the two download/extract stages and the aligner -- so
+# a recording says that main wired the real functions together in the real
+# order rather than that it called mocks in one, and the manifests it leaves
+# behind can be read for what the wiring decided.
+
+# A speaker is two clips of half a second, which the fake aligner then scores
+# one of well and one of badly. Half a second because there are fifty of them:
+# main holds `split_across_corpora`'s twenty-speaker floor, so a corpus small
+# enough to be cheap is a corpus this command refuses.
+CLIP_SEC = 0.5
+CORPUS = {
+    "g-big": [f"s{i:02d}" for i in range(13)],
+    "g-small": [f"s{i:02d}" for i in range(13, 25)],
+}
+# g-big is 13.6s of audio and g-small 12.0s, so this takes both and a smaller
+# number takes only the first. Expressed in hours because --hours is.
+HOURS = 0.005
+# The floors that reject `solo` (one utterance) and `quiet` (0.1s in total) and
+# nobody else. Both are needed: neither catches the other's speaker.
+FLOORS = {"min_utterances": 2, "min_seconds": 0.3}
+# 21.5 seconds, which buys 22 of the 25 one-second speakers -- two more than the
+# floor, so a test that means "the floor was applied" has to say so itself
+# rather than reading it off a split that only just cleared it.
+VALID_HOURS = 21.5 / 3600
+# Half a second of clip and 0.75s of target, so each speaker's two clips land in
+# two files: the second offset restarts at zero in a file of its own, which a
+# single-file speaker could not show.
+TARGET_SEC = 0.75
+# What the fake aligner scores a row, and the cutoff between them. Ten frames
+# apiece, so per-frame the two are -0.1 and -0.9 and the cutoff sits between.
+GOOD_SCORE, BAD_SCORE = -1.0, -9.0
+ALIGN_FRAMES, ALIGN_TOKENS = 10, 3
+CUTOFF = {"min_score_per_frame": -0.5}
+KANA_ALIGNER = "vumichien/wav2vec2-large-xlsr-japanese-hiragana"
+
+
+def _corpus_rows():
+    """Every row of the fake metadata.tsv, in the order the file holds them."""
+    rows = []
+    for game, speakers in CORPUS.items():
+        for speaker in speakers:
+            rows += [
+                (game, speaker, CLIP_SEC, "a.wav", "こんにちは"),
+                (game, speaker, CLIP_SEC, "b.wav", "こんにちは"),
+            ]
+    # One utterance, so `min_utterances` rejects them and `min_seconds` does not.
+    rows.append(("g-big", "solo", CLIP_SEC, "a.wav", "こんにちは"))
+    # A tenth of a second in two clips, so `min_seconds` rejects them and
+    # `min_utterances` does not. Neither floor alone keeps both of these out.
+    rows += [
+        ("g-big", "quiet", 0.05, "a.wav", "こんにちは"),
+        ("g-big", "quiet", 0.05, "b.wav", "こんにちは"),
+    ]
+    return rows
+
+
+def _unpack_game(dest_root, game, skip=()):
+    """One game's clips where `extract_game` leaves them, marker and all.
+
+    Double-nested, because the tar carries its own `<game_id>/` at the top and
+    is unpacked into a directory of the same name (G2). A fake that flattened
+    that would let a `main` reading the speaker off the last directory pass.
+
+    `skip` names `(game, speaker)` pairs whose clips are left out while the
+    marker is written anyway, which is the one thing a caller cannot tell from
+    the outside: metadata.tsv describes clips the tars on disk may not hold, so
+    a game a kill cut short looks exactly like a game the corpus is short of.
+    """
+    for game_id, speaker, seconds, name, _text in _corpus_rows():
+        if game_id != game or (game_id, speaker) in skip:
+            continue
+        _at(dest_root / game / game / speaker, name, seconds, hz=440.0)
+    (dest_root / f"{game}{EXTRACT_MARKER}").write_text("", encoding="utf-8")
+    return dest_root / game
+
+
+def _recording(calls, name, func):
+    """`func`, with every call to it written down under `name`."""
+
+    def wrapper(*args, **kwargs):
+        calls[name].append((args, kwargs))
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+def _tree(root):
+    """Every file under `root`, by relative path, with its bytes."""
+    return {
+        str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()
+    }
+
+
+def _age(*roots, seconds=60.0):
+    """Push everything under `roots` back in time by `seconds`.
+
+    Whether an artifact was built before or after its inputs is what every skip
+    in `main` turns on, and two runs of this fixture are milliseconds apart
+    while the clock a timestamp comes from is coarser than that (about 15 ms on
+    Windows). A tie reads as up to date -- deliberately, or nothing would ever
+    be skipped -- so a test that means "this was built by an earlier run" has to
+    say so rather than race the clock.
+
+    Every root gets the same timestamp, and the plural is why: two calls a
+    microsecond apart leave the second tree newer than the first, so ageing the
+    two corpora one after the other makes the MoeSpeech entries newer than the
+    manifests built out of them and rebuilds everything below the split. That
+    reads exactly like the artifact under test having been rebuilt for the
+    reason the test is about.
+    """
+    past = time.time() - seconds
+    for root in roots:
+        for path in sorted(Path(root).rglob("*")):
+            os.utime(path, (past, past))
+
+
+def _pipeline(tmp_path, monkeypatch):
+    """`main` with everything off this machine replaced by a recording fake.
+
+    The fakes for `download_games`, `extract_game` and `align` each reproduce
+    the one behaviour of their real counterpart this script leans on: doing
+    nothing when their output is already there. Those three decide for
+    themselves what to skip -- their own tests prove they do -- so a fake that
+    recorded the call instead of the work would report a re-run as redoing
+    everything when it redid nothing. Every other stage runs for real.
+
+    The aligner's fake is the one that has to do more than skip. Stage 9 reads
+    the score `align_data` writes on each row, and there is no score until the
+    aligner has run (G7), so a fake that wrote an empty file would leave the two
+    stages after it with nothing to measure or to cut on.
+    """
+    from training.scripts import prepare_data
+    from training.scripts import prepare_gol as m
+
+    calls = defaultdict(list)
+    cache = tmp_path / "hub"
+    cache.mkdir()
+    out_dir = tmp_path / "gol"
+    # The MoeSpeech run this one merges with, as stage 6 of that script leaves
+    # it. Ten minutes a clip, so those two are the largest speakers in the union
+    # and the split never reaches them: what is held out is GOL's, which is what
+    # the assertions below can then be specific about.
+    moe_dir = tmp_path / "moe"
+    _entries(moe_dir / "entries", {"アリス": [600.0, 600.0], "ボブ": [600.0, 600.0]})
+    # The audio those offsets name. Nothing here reads it -- the aligner is
+    # faked -- but the manifests this run writes name it, and a test that walks
+    # them has to be able to tell "the split named a file that is not there"
+    # from "the fixture never wrote one".
+    for i in range(2):
+        _at(moe_dir / "audio", f"{i:04d}.wav", CLIP_SEC)
+
+    def fake_fetch(repo_id, filename, **kw):
+        calls["metadata.tsv"].append((repo_id, filename, kw.get("repo_type")))
+        _metadata(cache, _corpus_rows())
+        return str(cache / filename)
+
+    # Two recordings apiece, and they say different things. `*_called` is that
+    # main reached the stage at all, `download`/`extract` that the stage found
+    # work to do. Only the pair pins the contract: main calls both on every run
+    # and they decide for themselves what to skip, so a count of the work alone
+    # would be satisfied by a main() that stopped calling them.
+    def fake_download(ids, dest, repo=None):
+        calls["download_called"].append((tuple(ids), repo))
+        dest.mkdir(parents=True, exist_ok=True)
+        paths = []
+        for game_id in ids:
+            path = dest / f"{game_id}.tar"
+            if not path.exists():
+                calls["download"].append((game_id, repo))
+                path.write_bytes(b"gol\x00tar")
+            paths.append(path)
+        return paths
+
+    # Read at call time, so a test that adds to it before the first run gets a
+    # game whose clips are partly absent -- an extraction a kill cut short --
+    # and one that clears it before the second gets the rest of them.
+    missing = set()
+
+    def fake_extract(tar_path, dest_root):
+        calls["extract_called"].append(tar_path.name)
+        out = dest_root / tar_path.stem
+        marker = dest_root / f"{tar_path.stem}{EXTRACT_MARKER}"
+        if marker.exists() and out.is_dir():
+            return out
+        calls["extract"].append(tar_path.name)
+        return _unpack_game(dest_root, tar_path.stem, skip=missing)
+
+    # Bound against the real align()'s signature, so a call main() could not
+    # actually make -- a misspelled keyword, an argument too many -- fails here
+    # rather than being recorded as if it had worked.
+    signature = inspect.signature(prepare_data.align)
+
+    def fake_align(*args, **kwargs):
+        bound = signature.bind(*args, **kwargs)
+        bound.apply_defaults()
+        out = Path(bound.arguments["out"])
+        if out.exists():
+            return
+        calls["align"].append(dict(bound.arguments))
+        rows = []
+        for entry in _read_jsonl(Path(bound.arguments["manifest"])):
+            # The second clip of every speaker aligns badly and the first does
+            # not, so the cut below takes half of every voice rather than whole
+            # speakers -- which is what tells a filter that ran from a split
+            # that happened to drop the same rows.
+            bad = entry["id"].endswith(("b", "0001"))
+            rows.append(
+                {
+                    **entry,
+                    "score": BAD_SCORE if bad else GOOD_SCORE,
+                    "frames": ALIGN_FRAMES,
+                    "tokens": ALIGN_TOKENS,
+                    "words": [{"word": entry["transcript"], "start": 0.0, "end": 0.1}],
+                }
+            )
+        write_manifest(rows, out)
+
+    # Whether the japanese dependency group is installed is a property of the
+    # machine, exactly like the hub and the aligner, and CI syncs without it.
+    def fake_segmenter_check(will_align):
+        calls["segmenter_check"].append((will_align, len(calls["download_called"])))
+
+    real_segmenter_check = m.require_japanese_segmenter
+    real_late_check = m.require_segmenter_to_align
+
+    monkeypatch.setattr(m, "hf_hub_download", fake_fetch)
+    monkeypatch.setattr(m, "download_games", fake_download)
+    monkeypatch.setattr(m, "extract_game", fake_extract)
+    monkeypatch.setattr(m, "align", fake_align)
+    monkeypatch.setattr(m, "require_japanese_segmenter", fake_segmenter_check)
+    monkeypatch.setattr(m, "require_segmenter_to_align", lambda aligned: None)
+    for name in (
+        "select_games",
+        "probe_speakers",
+        "select_speakers",
+        "gol_utterances",
+        "concatenate",
+        "merge_entries",
+        "split_across_corpora",
+        "probe_scores",
+        "filter_by_score",
+    ):
+        monkeypatch.setattr(m, name, _recording(calls, name, getattr(m, name)))
+
+    def run(**overrides):
+        options = {
+            "out": str(out_dir),
+            "hours": HOURS,
+            "valid_hours": VALID_HOURS,
+            "target_sec": TARGET_SEC,
+            "moespeech": str(moe_dir),
+            "repo": "fake/repo",
+        }
+        options.update(overrides)
+        return m.main(**options)
+
+    def age(seconds=60.0):
+        """Push both corpora back in time, not only this run's own tree.
+
+        The MoeSpeech entries are one of the split's inputs, so ageing the GOL
+        tree alone leaves them newer than the manifests built out of them.
+        """
+        _age(out_dir, moe_dir, seconds=seconds)
+
+    return SimpleNamespace(
+        module=m,
+        calls=calls,
+        out=out_dir,
+        moe=moe_dir,
+        run=run,
+        age=age,
+        missing=missing,
+        real_segmenter_check=real_segmenter_check,
+        real_late_check=real_late_check,
+    )
+
+
+# Every stage, run once, in the order main runs them. Written down so that the
+# assertions below can say `FIRST_RUN | {...}` and mean "and nothing else moved".
+FIRST_RUN = {
+    "segmenter_check": 1,
+    "metadata.tsv": 1,
+    "select_games": 1,
+    "download_called": 1,
+    "download": 2,
+    "extract_called": 2,
+    "extract": 2,
+    "probe_speakers": 1,
+    "select_speakers": 1,
+    "gol_utterances": 1,
+    "concatenate": 25,
+    "merge_entries": 1,
+    "split_across_corpora": 1,
+    "align": 2,
+    "probe_scores": 1,
+    "filter_by_score": 2,
+}
+
+
+def test_the_pipeline_skips_stages_whose_output_exists(tmp_path, monkeypatch):
+    """The property the whole script is designed around: re-running after a
+    preemption must not redo finished work.
+
+    The instance this runs on is reclaimed without warning, so the command is
+    typed again -- often, over a 7 TB corpus. Every stage is asserted to have
+    run once and then not again, and the tree it left is asserted byte-identical
+    afterwards: a stage that redid its work shows up as a second recording, and
+    one that rewrote its output from different inputs as different bytes.
+
+    "Skipped" and "never ran" are kept apart deliberately. `download_called` and
+    `extract_called` go up on the second run while `download` and `extract` do
+    not, so a main() that had simply stopped calling those two stages would fail
+    here -- and it is exactly that call, over a tar the first run never reached,
+    that a resumed download depends on.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+
+    p.run(**FLOORS, **CUTOFF)
+
+    done = {stage: len(c) for stage, c in p.calls.items()}
+    assert done == FIRST_RUN, done
+    # And it operated on what it was told to. The repo is an option, the tars
+    # are the selected games', and each stage is handed the previous one's
+    # output; a stage that ran the right number of times over the wrong file is
+    # the failure a count cannot see.
+    assert p.calls["metadata.tsv"] == [("fake/repo", "metadata.tsv", "dataset")]
+    assert sorted(p.calls["download"]) == [("g-big", "fake/repo"), ("g-small", "fake/repo")]
+    assert sorted(p.calls["extract"]) == ["g-big.tar", "g-small.tar"]
+    before = _tree(p.out)
+    assert (p.out / "train_aligned.jsonl").exists()
+
+    p.run(**FLOORS, **CUTOFF)
+
+    assert {stage: len(c) for stage, c in p.calls.items()} == FIRST_RUN | {
+        "download_called": 2,
+        "extract_called": 4,
+        # Asked once per run, before anything else: it costs an import and the
+        # answer can change between runs, which is the point of asking again.
+        "segmenter_check": 2,
+        # metadata.tsv is fetched every run rather than only when the selection
+        # is made -- three stages read it, not one -- and the hub serves it out
+        # of its own cache after the first time.
+        "metadata.tsv": 2,
+    }
+    assert _tree(p.out) == before
+
+
+def test_the_run_stops_until_the_speaker_floors_have_been_chosen(tmp_path, monkeypatch, caplog):
+    """Nothing had measured this corpus, so neither floor has a default.
+
+    The speaker probe is what produces the table they are read off, so the run
+    downloads, unpacks and measures, then stops and names the file to read and
+    the two flags to pass. Guessing instead is what `--min-mos 3.0` did on the
+    corpus before this one: the plausible default, against a measured median of
+    2.281, would have cut 124.4 hours to 16.2.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    caplog.set_level(logging.INFO)
+
+    with pytest.raises(typer.Exit):
+        p.run()
+
+    assert (p.out / "speakers_probe.json").exists()
+    assert not p.calls["select_speakers"], "no speaker may be selected on a floor nobody chose"
+    assert not p.calls["align"]
+    said = "\n".join(record.message for record in caplog.records)
+    assert "speakers_probe.json" in said, said
+    assert "--min-utterances" in said and "--min-seconds" in said, said
+
+
+def test_supplying_the_floors_resumes_from_the_speaker_probe(tmp_path, monkeypatch):
+    """The stop above is a stage boundary, not a failed run.
+
+    The operator reads the table and types the command again with the two
+    flags. Two hundred gigabytes fetched and unpacked is what must not be paid
+    for a second time.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    with pytest.raises(typer.Exit):
+        p.run()
+    probe = (p.out / "speakers_probe.json").read_bytes()
+
+    p.run(**FLOORS, **CUTOFF)
+
+    assert len(p.calls["probe_speakers"]) == 1, "the speakers were measured twice"
+    assert len(p.calls["extract"]) == 2, "the tars were unpacked twice"
+    assert len(p.calls["download"]) == 2, "the tars were fetched twice"
+    assert (p.out / "speakers_probe.json").read_bytes() == probe
+    assert (p.out / "train_aligned.jsonl").exists()
+
+
+def test_the_run_stops_until_the_score_cutoff_has_been_chosen(tmp_path, monkeypatch, caplog):
+    """The second stop, and the one that says where the score comes from.
+
+    An alignment log-probability has no scale known before the corpus is
+    measured, and it does not exist at all until the aligner has run (G7). So
+    this run aligns -- which is the expensive stage -- and only then measures,
+    stops, and asks. Nothing is filtered on a number nobody read off a table.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    caplog.set_level(logging.INFO)
+
+    with pytest.raises(typer.Exit):
+        p.run(**FLOORS)
+
+    assert len(p.calls["align"]) == 2, "the score is the aligner's, so it has to have run"
+    assert (p.out / "scores.json").exists()
+    assert not p.calls["filter_by_score"], "nothing may be cut on a threshold nobody chose"
+    assert not (p.out / "train_aligned.jsonl").exists()
+    said = "\n".join(record.message for record in caplog.records)
+    assert "scores.json" in said, said
+    assert "--min-score-per-frame" in said, said
+
+
+def test_supplying_the_cutoff_resumes_from_the_score_probe(tmp_path, monkeypatch):
+    """And the alignment -- the most expensive stage in the script -- is not
+    redone to apply a number that only ever reads its output."""
+    p = _pipeline(tmp_path, monkeypatch)
+    with pytest.raises(typer.Exit):
+        p.run(**FLOORS)
+    scores = (p.out / "scores.json").read_bytes()
+
+    p.run(**FLOORS, **CUTOFF)
+
+    assert len(p.calls["align"]) == 2, "the corpus was aligned twice"
+    assert len(p.calls["probe_scores"]) == 1, "the scores were measured twice"
+    assert (p.out / "scores.json").read_bytes() == scores
+    assert (p.out / "train_aligned.jsonl").exists()
+
+
+def test_the_filter_reads_the_aligners_output_and_leaves_it_alone(tmp_path, monkeypatch):
+    """Ruling G7, as the two files it produces.
+
+    The MoeSpeech pipeline filters before it aligns; this one cannot, because
+    the score is the aligner's own and does not exist any earlier. So the
+    aligner runs over utterances that are then discarded, and both files stay on
+    disk: the scored one is what a cutoff can be re-read off without paying for
+    the alignment again, and the filtered one is what training reads.
+
+    Asserted as the scored manifest holding rows the filtered one does not -- a
+    filter that ran before the aligner, or over the unaligned manifest, has
+    nothing to cut on and would leave the two the same length.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+
+    p.run(**FLOORS, **CUTOFF)
+
+    scored = _read_jsonl(p.out / "train_scored.jsonl")
+    filtered = _read_jsonl(p.out / "train_aligned.jsonl")
+    assert len(scored) == 10 and len(filtered) == 5, (len(scored), len(filtered))
+    # Every row of the scored manifest carries what the cut is made on, and the
+    # rows that survived are the ones that cleared it.
+    assert {row["score"] for row in scored} == {GOOD_SCORE, BAD_SCORE}
+    assert {row["score"] for row in filtered} == {GOOD_SCORE}
+    # Read from the aligner's output, written beside it, and neither is the
+    # other: a filter pointed at its own output truncates the corpus on every
+    # re-run, and one pointed at train.jsonl reads rows that have no score.
+    (args, _kwargs) = p.calls["filter_by_score"][0]
+    assert [Path(a).name for a in args[:2]] == ["train_scored.jsonl", "train_aligned.jsonl"], args
+    assert args[2] == CUTOFF["min_score_per_frame"], args
+    # Both manifests are cut, not just the training one. The valid loss is the
+    # entire readout of this run, and a valid set selected under a different
+    # rule from the training set is not comparable with it.
+    assert len(_read_jsonl(p.out / "valid_scored.jsonl")) == 44
+    assert len(_read_jsonl(p.out / "valid_aligned.jsonl")) == 22
+
+
+def test_every_speaker_is_joined_on_their_own(tmp_path, monkeypatch):
+    """Ruling G4: `concatenate` refuses a mixed-speaker list rather than
+    grouping one, so the grouping is main's.
+
+    A file holding two voices would teach the model that the prompt does not
+    decide the voice, and nothing downstream could see it -- the manifest
+    parses, every offset is inside a real file, and the loader takes one side of
+    a cut as the prompt for the other. The guard inside `concatenate` compares
+    labels, so what it catches is main handing it a mixed list; what it cannot
+    catch is main never handing it anything at all.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+
+    p.run(**FLOORS, **CUTOFF)
+
+    joined = []
+    for args, _kwargs in p.calls["concatenate"]:
+        utterances, out_wav, target_sec = args
+        speakers = {u["speaker"] for u in utterances}
+        assert len(speakers) == 1, (out_wav, sorted(speakers))
+        assert target_sec == TARGET_SEC, args
+        joined += sorted(speakers)
+    # Every selected speaker, once each: a grouping that dropped one, or ran the
+    # same one twice, is the failure a per-call check cannot see.
+    assert len(joined) == 25 and len(set(joined)) == 25, sorted(joined)
+    assert set(joined) == {
+        _speaker_key(game, speaker) for game, speakers in CORPUS.items() for speaker in speakers
+    }
+
+
+def test_the_speaker_floors_keep_the_speakers_out_of_everything_below(tmp_path, monkeypatch):
+    """`solo` has one utterance and `quiet` has a tenth of a second, and each is
+    rejected by one floor and not the other.
+
+    A speaker with a single clip cannot be evaluated -- the protocol clones a
+    voice from one utterance and synthesizes another -- and has nothing to be
+    joined to; a speaker with a dozen seconds is a bit part. Neither may reach
+    the audio, the manifests or the alignment, and the whole point of two floors
+    is that either one alone lets the other's speaker through.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+
+    p.run(**FLOORS, **CUTOFF)
+
+    rejected = {"g-big:solo", "g-big:quiet"}
+    for name in ("utterances.jsonl", "train.jsonl", "valid.jsonl", "train_aligned.jsonl"):
+        speakers = {row["speaker"] for row in _read_jsonl(p.out / name)}
+        assert not (speakers & rejected), (name, sorted(speakers & rejected))
+    assert json.loads((p.out / "speakers.json").read_text(encoding="utf-8"))["speakers"] == sorted(
+        _speaker_key(game, speaker) for game, speakers in CORPUS.items() for speaker in speakers
+    )
+
+
+def test_the_manifests_name_the_audio_the_run_selected(tmp_path, monkeypatch):
+    """What the run leaves behind is read, not just counted.
+
+    Every way this pipeline can be miswired ends in a file of the right name:
+    the split handed the wrong manifest, --target-sec replaced by its default,
+    the transcripts never normalized, a speaker dropped by a `=` where a `+=`
+    belongs. None of them raises. They show up here, as a manifest describing
+    different audio.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+
+    p.run(**FLOORS, **CUTOFF)
+
+    train = _read_jsonl(p.out / "train.jsonl")
+    valid = _read_jsonl(p.out / "valid.jsonl")
+    # Whole speakers are held out, across both corpora at once, and the split
+    # takes the smallest first -- so the twenty-two voices it buys are GOL's and
+    # the two ten-minute MoeSpeech characters are trained on.
+    assert {e["speaker"] for e in valid} == {
+        _speaker_key("g-big", f"s{i:02d}") for i in range(13)
+    } | {_speaker_key("g-small", f"s{i:02d}") for i in range(13, 22)}
+    assert {e["speaker"] for e in train} == {
+        "g-small:s22",
+        "g-small:s23",
+        "g-small:s24",
+        "アリス",
+        "ボブ",
+    }
+    # Half a second a clip against --target-sec 0.75, so a speaker's two clips
+    # land in two files and the second offset restarts at zero inside its own.
+    mine = [e for e in train if e["speaker"] == "g-small:s24"]
+    assert [(Path(e["path"]).name, e["start"], e["duration"]) for e in mine] == [
+        ("0024.wav", 0.0, 0.5),
+        ("0024_001.wav", 0.0, 0.5),
+    ], mine
+    # The id is the corpus's own path for the clip, which is the only way back
+    # from a suspect row to the audio it was cut out of.
+    assert [e["id"] for e in mine] == ["g-small/s24/a", "g-small/s24/b"], mine
+    for entry in train + valid:
+        assert Path(entry["path"]).exists(), entry
+    assert {e["transcript"] for e in train + valid} == {"こんにちは", "あ"}
+
+
+def test_both_corpora_reach_the_split_and_the_run_says_so(tmp_path, monkeypatch, caplog):
+    """The merge is where a corpus can vanish with nothing downstream noticing.
+
+    A manifest built out of GOL alone parses, aligns and trains, and the only
+    sign is a speaker count nobody has a second number to compare against. So
+    the MoeSpeech entries directory is named on the command line and merged with
+    this run's own, and both of them are asserted to be in what came out.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    caplog.set_level(logging.INFO)
+
+    p.run(**FLOORS, **CUTOFF)
+
+    (args, _kwargs) = p.calls["merge_entries"][0]
+    assert [Path(d).parent.name for d in args[0]] == ["gol", "moe"], args
+    everyone = {row["speaker"] for row in _read_jsonl(p.out / "train.jsonl")}
+    everyone |= {row["speaker"] for row in _read_jsonl(p.out / "valid.jsonl")}
+    assert {"アリス", "ボブ"} <= everyone, sorted(everyone)
+    assert len(everyone) == 27, sorted(everyone)
+
+
+def test_a_corpus_too_small_to_hold_out_twenty_voices_is_refused(tmp_path, monkeypatch):
+    """The floor phase 1 did not have, asked of the whole command.
+
+    Phase 1 held out one speaker. Its validation loss bottomed at 7,500 and had
+    doubled by 15,000, and one voice cannot tell that apart from noise -- while
+    the samples, whose prompt `train.py` takes from a training batch, kept
+    getting better. For a model whose point is cloning an unseen voice, the
+    unseen number is the one that says when to stop.
+
+    Asserted through `main` rather than through `split_across_corpora`, which
+    has its own test: that function takes the floor as an argument with a
+    default, so a main() that passed `minimum=1` would satisfy every test the
+    function has and still start a 40,000-step run with no stopping criterion.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+
+    # 0.003 hours is less than g-big alone, so only that game is taken and only
+    # its thirteen speakers reach the split.
+    with pytest.raises(typer.BadParameter, match=str(MIN_VALID_SPEAKERS)):
+        p.run(**FLOORS, **CUTOFF, hours=0.003)
+
+    assert not (p.out / "train.jsonl").exists()
+    assert not p.calls["align"], "a run with no stopping criterion reached the aligner"
+
+
+def test_alignment_uses_the_japanese_segmenter_and_a_kana_model(tmp_path, monkeypatch):
+    """align_data refuses a model without hiragana in its vocabulary, but only
+    at run time on the instance -- catching it here costs nothing.
+
+    The segmenter matters as much and refuses nothing: `whitespace` over a
+    language written without spaces returns one word per utterance, so the
+    aligner emits a single span, the loader finds no cut point, and the voice
+    prompt silently comes from the utterance being predicted.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+
+    p.run(**FLOORS, **CUTOFF, align_shards=3)
+
+    assert len(p.calls["align"]) == 2, p.calls["align"]
+    for call in p.calls["align"]:
+        assert call["segmenter"] == "japanese", call
+        assert call["model"] == KANA_ALIGNER, call
+    # Each manifest is aligned from itself, and the valid one is aligned too:
+    # the loader reads `words` on either side, and an unaligned valid set is
+    # scored differently from the set it is compared against.
+    assert [(Path(c["manifest"]).name, Path(c["out"]).name) for c in p.calls["align"]] == [
+        ("train.jsonl", "train_scored.jsonl"),
+        ("valid.jsonl", "valid_scored.jsonl"),
+    ], p.calls["align"]
+    # --align-shards is a count of GPUs and belongs to the long pass; the valid
+    # manifest is a fraction of the size and is aligned in one process.
+    assert [c["shards"] for c in p.calls["align"]] == [3, 1], p.calls["align"]
+
+
+def test_a_kill_between_the_gathering_and_the_joining_resumes_from_the_file(tmp_path, monkeypatch):
+    """The preemption `utterances.jsonl` exists to survive.
+
+    That file is the stream over 7.4 million metadata rows against every wav on
+    disk, and a kill just after it was renamed into place -- before a single
+    speaker's clips had been joined -- is the case the whole design is for.
+    Proving the run carries on from it means leaving it and taking away
+    everything built after: with every artifact present, a stage reading the
+    file back is indistinguishable from one that never read it.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**FLOORS, **CUTOFF)
+    uninterrupted = _tree(p.out)
+
+    shutil.rmtree(p.out / "entries")
+    shutil.rmtree(p.out / "audio")
+    for name in (
+        "train.jsonl",
+        "valid.jsonl",
+        "train_scored.jsonl",
+        "valid_scored.jsonl",
+        "train_aligned.jsonl",
+        "valid_aligned.jsonl",
+    ):
+        (p.out / name).unlink()
+
+    p.run(**FLOORS, **CUTOFF)
+
+    assert len(p.calls["gol_utterances"]) == 1, "the corpus was walked a second time"
+    assert len(p.calls["concatenate"]) == 50, "the clips the kill cost were not joined"
+    # The rows read back off disk are the rows the first run held, so the tree
+    # the second one finishes with is the tree it would have finished with.
+    assert _tree(p.out) == uninterrupted
+
+
+def test_a_kill_between_the_joining_and_the_split_resumes_from_the_entries(tmp_path, monkeypatch):
+    """One stage further down, and the same property one level deeper.
+
+    Joining is the hours of audio work. A kill after the last speaker's offsets
+    were written but before the split must not redo it, and the offsets it reads
+    back have to be the ones on disk -- a split over nothing at all writes two
+    manifests that parse and describe no training data.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**FLOORS, **CUTOFF)
+    uninterrupted = _tree(p.out)
+
+    for name in (
+        "train.jsonl",
+        "valid.jsonl",
+        "train_scored.jsonl",
+        "valid_scored.jsonl",
+        "train_aligned.jsonl",
+        "valid_aligned.jsonl",
+    ):
+        (p.out / name).unlink()
+
+    p.run(**FLOORS, **CUTOFF)
+
+    assert len(p.calls["concatenate"]) == 25, "the audio was joined a second time"
+    assert len(p.calls["split_across_corpora"]) == 2, "the split the kill cost was not redone"
+    assert _tree(p.out) == uninterrupted
+
+
+def test_a_changed_score_cutoff_refilters_without_aligning_again(tmp_path, monkeypatch):
+    """Changing the cutoff is the documented way to change the cut, and nothing
+    else on disk records what the last one was.
+
+    Without that record the re-run finds `train_aligned.jsonl` sitting there,
+    newer than everything it was built from, and reuses it -- so the run reports
+    success over the cut the operator has just replaced, with no way afterwards
+    for anyone to tell which threshold a given manifest was written under. And
+    the alignment, which is the day of GPU time, must not be redone for it.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**FLOORS, **CUTOFF)
+    assert len(_read_jsonl(p.out / "train_aligned.jsonl")) == 5
+    p.age()
+
+    # -1.0 is below the worse of the two scores per frame (-0.9), so nothing is
+    # cut this time and every row of the scored manifest survives.
+    p.run(**FLOORS, min_score_per_frame=-1.0)
+
+    assert len(_read_jsonl(p.out / "train_aligned.jsonl")) == 10
+    assert len(_read_jsonl(p.out / "valid_aligned.jsonl")) == 44
+    assert len(p.calls["align"]) == 2, "the corpus was aligned a second time"
+    assert len(p.calls["probe_scores"]) == 1, "the scores did not change and were measured twice"
+    assert len(p.calls["filter_by_score"]) == 4, "the manifests still hold the rejected cut"
+
+
+def test_changed_floors_rebuild_everything_they_decided(tmp_path, monkeypatch):
+    """The other recorded pair, and it reaches further down.
+
+    The speaker floors decide the selection, which decides the offsets, the
+    audio, both manifests and both alignments. Nothing else on disk records
+    them, so a re-run under a looser floor that only rewrote `speakers.json`
+    would leave `train.jsonl` describing the selection the operator had just
+    replaced -- with the alignment beside it, and the run reporting success.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**FLOORS, **CUTOFF)
+    assert "g-big:solo" not in {r["speaker"] for r in _read_jsonl(p.out / "utterances.jsonl")}
+    p.age()
+
+    # One utterance is now enough, so `solo` joins the corpus; `quiet` is still
+    # below the seconds floor, which is what tells one floor from the other.
+    p.run(min_utterances=1, min_seconds=FLOORS["min_seconds"], **CUTOFF)
+
+    trained = {r["speaker"] for r in _read_jsonl(p.out / "train.jsonl")}
+    assert "g-big:solo" in trained, sorted(trained)
+    assert "g-big:quiet" not in trained, sorted(trained)
+    assert len(p.calls["select_speakers"]) == 2, "the floors were not applied again"
+    assert len(p.calls["gol_utterances"]) == 2, "the selection still holds the old floors"
+    assert len(p.calls["concatenate"]) == 51, "the audio still holds the old selection"
+    assert len(p.calls["align"]) == 4, "the alignments still describe the old manifests"
+    assert len(p.calls["filter_by_score"]) == 4, "the training manifests were not rebuilt"
+
+
+def test_an_entries_file_holding_another_speaker_is_not_reused(tmp_path, monkeypatch):
+    """The offsets files are numbered, not named after their speaker, and this
+    is what pays for that.
+
+    A GOL key holds a colon, which is not a legal Windows file name, so the file
+    a speaker's offsets go in is `<index>.jsonl` -- the index they have in the
+    sorted selection. That index moves whenever the selection does, and the only
+    thing standing between a moved index and a reused file is that the selection
+    is rewritten first, which makes every offsets file stale. File clocks are
+    coarser than these stages are fast, and equal timestamps count as fresh, so
+    that is a race rather than a guarantee.
+
+    Constructed as the race losing: the file is made NEWER than the selection,
+    which is the one state where the timestamps say reuse it. Only reading whose
+    rows are actually in it can catch that, and getting it wrong writes one
+    speaker's offsets under another's label -- two voices in one manifest entry,
+    which every guard below compares by label and none of them can see.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**FLOORS, **CUTOFF)
+    uninterrupted = _tree(p.out)
+    p.age()
+
+    # g-small:s24's rows, written under g-big:s00's number and left newer than
+    # the selection, which is the state the timestamps read as "reuse it".
+    write_manifest(_read_jsonl(p.out / "entries" / "0024.jsonl"), p.out / "entries" / "0000.jsonl")
+
+    p.run(**FLOORS, **CUTOFF)
+
+    assert len(p.calls["concatenate"]) == 26, "the mislabelled offsets file was reused"
+    assert _tree(p.out) == uninterrupted
+
+
+def test_a_moespeech_corpus_that_moved_rebuilds_the_split(tmp_path, monkeypatch):
+    """The two corpora are prepared by two commands, and the other one goes on
+    running after this one has split.
+
+    prepare_moespeech is re-run after its own preemptions, and every re-run that
+    reaches its joining stage rewrites the offsets files this merge reads. A
+    split measured against GOL's own entries alone sees none of its inputs move,
+    so `train.jsonl` goes on describing the MoeSpeech corpus as it was -- fewer
+    speakers, or a selection under cutoffs since replaced -- while both
+    directories on disk say otherwise and the run reports success over it.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**FLOORS, **CUTOFF)
+    assert "キャロル" not in {r["speaker"] for r in _read_jsonl(p.out / "train.jsonl")}
+    p.age()
+
+    # What the other command reaching its joining stage leaves behind: the same
+    # directory, with a speaker in it that was not there before.
+    _entries(
+        p.moe / "entries",
+        {"アリス": [600.0, 600.0], "ボブ": [600.0, 600.0], "キャロル": [600.0, 600.0]},
+    )
+    _at(p.moe / "audio", "0002.wav", CLIP_SEC)
+
+    p.run(**FLOORS, **CUTOFF)
+
+    trained = {r["speaker"] for r in _read_jsonl(p.out / "train.jsonl")}
+    assert "キャロル" in trained, sorted(trained)
+    assert len(p.calls["split_across_corpora"]) == 2, "the split still holds the older corpus"
+    assert len(p.calls["align"]) == 4, "the alignments still describe the older split"
+    assert len(p.calls["concatenate"]) == 25, "GOL's own audio was joined a second time"
+
+
+def test_a_game_unpacked_after_the_gathering_reaches_the_manifests(tmp_path, monkeypatch):
+    """An interrupted extraction is invisible from inside the gather.
+
+    metadata.tsv describes all 7,405,094 clips while the tars actually on disk
+    hold a subset, so a row naming a wav that is not there is dropped and
+    counted rather than raised on -- which is right, and which means a game the
+    kill cut short looks exactly like a game whose clips the corpus does not
+    have. `extract_game` redoes such a game on the next run, and the completion
+    marker it then writes is the only thing on disk that says the walk is now
+    short of clips that have since arrived.
+
+    Without the markers among the gather's inputs, `utterances.jsonl` is reused,
+    those clips never reach a manifest, and nothing anywhere reports that the
+    corpus is smaller than the tars that were paid for.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    # The kill arrived partway through g-small: its last speaker's clips were
+    # never written, and the marker the fake writes afterwards claims otherwise.
+    p.missing.add(("g-small", "s24"))
+
+    p.run(**FLOORS, **CUTOFF)
+
+    assert "g-small:s24" not in {r["speaker"] for r in _read_jsonl(p.out / "utterances.jsonl")}
+    assert len(p.calls["concatenate"]) == 24
+    p.age()
+
+    # The re-run finds the game half-extracted and unpacks it again, which is
+    # `extract_game`'s own behaviour and has its own tests; what is asked here
+    # is what the stage below does about it.
+    p.missing.clear()
+    shutil.rmtree(p.out / "extracted" / "g-small")
+    (p.out / "extracted" / f"g-small{EXTRACT_MARKER}").unlink()
+
+    p.run(**FLOORS, **CUTOFF)
+
+    assert len(p.calls["extract"]) == 3, "the half-extracted game was not unpacked again"
+    assert len(p.calls["gol_utterances"]) == 2, "the walk still holds the clips the kill cost"
+    assert "g-small:s24" in {r["speaker"] for r in _read_jsonl(p.out / "utterances.jsonl")}
+    assert "g-small:s24" in {r["speaker"] for r in _read_jsonl(p.out / "train.jsonl")}
+
+
+def test_a_speaker_label_no_selected_speaker_answers_to_stops_the_run(
+    tmp_path, monkeypatch, caplog
+):
+    """The braces to `gol_utterances`'s belt: labels are checked once, here.
+
+    Every guard below this point compares the speaker label and not one of them
+    can check it. `concatenate` refuses a mixed list by comparing labels, so a
+    single wrong label shared by two characters *is* a mixed list and passes --
+    two voices joined into one recording, the loader taking one side of a cut as
+    the voice prompt for the other, the split holding out a label instead of a
+    character, and one audio file written twice under one name.
+
+    A key built the same way in both places is one of the selected speakers by
+    construction, so that is what is checked, before a single wav is joined or
+    deleted. It is the last thing standing if `_speaker_key` and the selection
+    ever come apart -- which is a live risk here and not a hypothetical, because
+    the key is assembled from two columns rather than read from one.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    gathering = p.module.gol_utterances
+
+    def mislabelled(*args, **kwargs):
+        # What taking the speaker off the directory name would produce on a
+        # double-nested tree: every clip of every speaker under one label that
+        # is not a speaker.
+        for utterance in gathering(*args, **kwargs):
+            yield {**utterance, "speaker": "wav"}
+
+    monkeypatch.setattr(p.module, "gol_utterances", mislabelled)
+    caplog.set_level(logging.ERROR)
+
+    with pytest.raises(typer.Exit):
+        p.run(**FLOORS, **CUTOFF)
+
+    assert not p.calls["concatenate"], "two speakers were joined under one label"
+    assert not (p.out / "audio").exists()
+    said = "\n".join(record.message for record in caplog.records)
+    assert "wav" in said, said

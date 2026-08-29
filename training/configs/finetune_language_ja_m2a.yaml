@@ -1,0 +1,142 @@
+# M2a: the intermediate run. It exists to settle one question.
+#
+# Phase 1 overfitted: the validation loss bottomed at step 7,500 and had doubled
+# by 15,000. Two causes were possible and nothing distinguishes them from that
+# run alone -- 19.5 epochs over 49,200 utterances, or 27 speakers. The answer
+# decides how much of GOL's 7 TB phase 2 needs: about 1,000 hours if diversity
+# was the cause, 5,000+ if the epoch count was.
+#
+# M2a is the experiment. GOL's 1,000 hours plus MoeSpeech's is ~745,000
+# utterances from 2,451 speakers, and 40,000 steps over that is about 3.4
+# epochs -- 91x phase 1's speaker count at a sixth of its epochs. If the
+# validation loss still turns, the epochs were never the cause and M2b needs
+# 5,000+ hours. If it does not, diversity was, and 1,000 hours is enough.
+#
+# Everything that makes this Japanese is production's, byte for byte --
+# test_config_invariants pins that against finetune_language_ja.yaml. What
+# differs is what makes the answer readable, and each of those is something
+# phase 1 got wrong; see max_steps, valid_freq and num_ckpt_keep below.
+#
+# What it costs: roughly $15-25 on a single rented GPU, against phase 1's $10.
+#
+# Prepare the inputs first (see docs/Japanese Model/training-strategy.md):
+#   uv sync --group japanese
+#   uv run python -m training.scripts.prepare_gol --hours 1000 --out data/ja-gol \
+#       --moespeech data/ja
+# That command stops twice on purpose -- once for the speaker floors and once
+# for the alignment-score cutoff -- and prints the table each is read off. Both
+# stops are stage boundaries: everything above them stays on disk.
+model_config: pocket_tts/config/english_2026-04_24l.yaml
+model_overrides:
+  flow_lm.lookup_table.tokenizer_path: training/tokenizers/japanese_8000.model
+  # Measured on 1.4M deduplicated GOL + MoeSpeech utterances: 4092 distinct
+  # characters after normalization. sentencepiece spends one vocabulary slot per
+  # character at character_coverage 1.0 and fails outright below that count, so
+  # the released 4000 cannot be used; the surplus over 4092 is what becomes
+  # merges. 8000 measured 1.805 chars/token against 1.658 at 6000 and 1.961 at
+  # 12000, and leaves headroom for the characters the remaining MoeSpeech
+  # speakers will add. Must equal the tokenizer's vocab size exactly.
+  flow_lm.lookup_table.n_bins: 8000
+start_from_pretrained: true
+reset_text_embedding: true  # the Japanese tokenizer is not the one these weights were trained with
+
+data:
+  # prepare_gol.py --out data/ja-gol writes exactly these two names, and they
+  # are the *filtered* manifests: the aligner's own output is train_scored.jsonl
+  # beside them, and stage 9 cuts it on the alignment score. Pointing this at
+  # data/ja instead would train on phase 1's 27 speakers and answer the
+  # speaker-diversity question with the corpus that raised it.
+  train_jsonl: data/ja-gol/train_aligned.jsonl
+  valid_jsonl: data/ja-gol/valid_aligned.jsonl
+  max_duration_sec: 30.0
+  max_voice_prompt_sec: 5.0
+  # Japanese is written without spaces. align_data.py --segmenter japanese
+  # splits the transcript into words the writing system does not separate, so
+  # the loader has to put them back with nothing between them -- otherwise the
+  # model trains on spaced text that no user will ever type.
+  word_separator: ""
+
+flow:
+  type: lsd
+  kwargs: {}
+
+flow_batch_multiplier: 4
+eos_loss_weight: 0.1
+text_dropout: 0.2
+voice_dropout: 0.2
+
+optim:
+  lr: 2e-4
+  schedule: constant
+  warmup_steps: 1000
+
+# Its own directory. latest_checkpoint() resumes from whatever is newest in
+# run_dir, so sharing one with production or with phase 1 would mean resuming
+# from the other run's weights -- or quietly becoming its starting point.
+run_dir: runs/finetune_language_ja_m2a
+
+# 16 x 4 = 64 rows per optimizer step, the same effective batch production
+# reaches through batch_size 64 alone, and the same split phase 1 used. Below 64
+# the acoustic-quality transition arrives late or not at all. How the 64 is
+# split matters only to the card: measured on a 16 GB RTX 4070 Ti SUPER, 8 x 8
+# ran fourteen times faster than 16 x 4, which thrashed at 15.3 of 16.4 GB. On
+# the 24 GB and up this is aimed at, 16 x 4 is the better split; if throughput
+# decays step over step rather than holding steady, that is this problem.
+batch_size: 16
+grad_accum_steps: 4
+
+# 40,000, not phase 1's 15,000 and not production's 250,000.
+#
+# This is the one number the experiment is made of. 40,000 steps x 64 rows over
+# ~745,000 utterances is about 3.4 epochs. Phase 1 broke at 19.5, and reaching
+# 19.5 on this corpus would take about 232,000 steps -- so if the validation
+# loss turns anywhere inside this run, the epoch count is not what turned it.
+# Stopping at 20,000 would leave the answer ambiguous in the direction that
+# costs the most: an untitled curve, and M2b sized by guesswork.
+max_steps: 40000
+
+# +24% throughput on one GPU for a ~9 minute warmup (args.py:98), which this
+# run is long enough to pay back many times over.
+#
+# On Windows set this to false: torch.compile needs Triton and there is no
+# official Windows build, so the first batch dies with TritonMissing. Windows
+# also needs PYTHONUTF8=1 in the environment -- torch's inductor reads its
+# kernel templates without naming an encoding, so on a Japanese Windows the
+# cp932 default makes `import torch._inductor` itself raise UnicodeDecodeError
+# before any of this code runs. Neither applies on the rented Linux box this
+# config is aimed at.
+compile: true
+
+stats_ema_steps: 1000
+ema_decay: 0.999
+log_freq: 50
+
+# Every 1,000 steps, not phase 1's 2,500. The turn IS the result of this run,
+# and phase 1 saw its minimum at step 7,500 -- three validation points before
+# the curve went the other way. Three points cannot tell a turn from noise, and
+# there is no second chance at the curve once the run is over.
+valid_freq: 1000
+
+# 2,500 x 20 = 50,000, which is past max_steps: every checkpoint this run writes
+# survives to the end of it. Phase 1 kept three, so by the time anyone looked at
+# the curve the step-7,500 minimum -- the checkpoint the whole run had been
+# for -- had already been deleted. Sixteen checkpoints of a 24-layer model is
+# real disk on a rented box; it is cheaper than the run it would otherwise make
+# necessary a second time.
+ckpt_freq: 2500
+num_ckpt_keep: 20
+
+sample_cfg_coef: 2.0
+
+# Every 500 steps, as in phase 1 and for the same reason: the tripwire is an ear
+# judgement at 2-3k steps. This is also the first run over GOL data, and the
+# pipeline that built its manifests has never been run on the real corpus -- if
+# the audio and the text do not line up, the samples are where that shows first.
+# Samples land in runs/finetune_language_ja_m2a/samples/.
+sample_freq: 500
+
+# The English defaults would write meaningless wavs every sample_freq steps.
+sample_sentences:
+  - こんにちは、今日はいい天気ですね。
+  - 昨夜からずっと気配を探られていたか。
+  - すみません、この近くにコンビニはありますか。

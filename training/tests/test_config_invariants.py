@@ -18,9 +18,11 @@ SCRATCH = CONFIGS / "scratch.yaml"
 DISTILL = CONFIGS / "depth_distill.yaml"
 JAPANESE = CONFIGS / "finetune_language_ja.yaml"
 JAPANESE_PHASE1 = CONFIGS / "finetune_language_ja_phase1.yaml"
-# Every Japanese-specific invariant has to hold for BOTH. A phase-1 run that
+JAPANESE_M2A = CONFIGS / "finetune_language_ja_m2a.yaml"
+# Every Japanese-specific invariant has to hold for ALL of them. A run that
 # differs from production in any of them validates a pipeline nobody will run.
-JAPANESE_CONFIGS = [JAPANESE, JAPANESE_PHASE1]
+# Production is first, and the agreement test below compares the rest to it.
+JAPANESE_CONFIGS = [JAPANESE, JAPANESE_PHASE1, JAPANESE_M2A]
 
 # Below 64 rows per optimizer step the acoustic-quality transition arrives late
 # or not at all, and 400k steps is where expressivity settles (see README).
@@ -187,11 +189,18 @@ def test_japanese_configs_read_the_manifests_the_pipeline_writes(path: Path):
     assert data.valid_jsonl.endswith("valid_aligned.jsonl")
 
 
-def test_the_two_japanese_configs_agree_on_everything_that_is_japanese():
-    """Phase 1 exists to predict phase 2. Any drift in the settings that make
-    these configs Japanese -- the tokenizer, its vocabulary, the missing word
-    separator -- and the validation measures a model nobody will train."""
-    a, b = load_args(JAPANESE), load_args(JAPANESE_PHASE1)
+@pytest.mark.parametrize("path", JAPANESE_CONFIGS[1:], ids=lambda p: p.name)
+def test_every_japanese_config_agrees_on_what_is_japanese(path: Path):
+    """Every cheaper run exists to predict production. Any drift in the settings
+    that make these configs Japanese -- the tokenizer, its vocabulary, the
+    missing word separator -- and the cheap run measures a model nobody will
+    train.
+
+    Compared against `JAPANESE_CONFIGS[0]`, which is production, rather than
+    pairwise: production is the one these are predicting, and a fourth config
+    joins by being added to that list rather than by anyone editing this.
+    """
+    a, b = load_args(JAPANESE_CONFIGS[0]), load_args(path)
     assert a.model_config == b.model_config
     assert a.model_overrides == b.model_overrides
     assert a.data.word_separator == b.data.word_separator
@@ -201,6 +210,63 @@ def test_the_two_japanese_configs_agree_on_everything_that_is_japanese():
         b.reset_text_embedding,
     )
     assert a.optim.lr == b.optim.lr
+
+
+# M2a asks one question: was phase 1's overfit caused by 19.5 epochs or by 27
+# speakers? It answers it by running 2,451 speakers for about 3.4 epochs and
+# watching whether the validation loss turns. Every number below is what makes
+# that answer readable, and each of them is a thing phase 1 got wrong.
+M2A_STEPS = 40_000
+M2A_VALID_FREQ = 1_000
+
+
+def test_m2a_runs_far_enough_to_see_the_turn():
+    """Phase 1's 15,000 steps were 19.5 epochs over 49,200 utterances. The same
+    step count over M2a's 745,000 is 0.6 of one, which is nowhere near the range
+    the question is about -- the run would end before either candidate cause
+    could show itself, and the experiment would report nothing."""
+    assert load_args(JAPANESE_M2A).max_steps >= M2A_STEPS
+
+
+def test_m2a_validates_often_enough_to_see_a_turn():
+    """Phase 1 validated every 2,500 steps and its minimum landed at 7,500: three
+    points before the curve turned. The turn is the entire readout of this run,
+    and three points cannot distinguish a turn from noise."""
+    assert load_args(JAPANESE_M2A).valid_freq <= M2A_VALID_FREQ
+
+
+def test_m2a_keeps_enough_checkpoints_to_find_the_best_one():
+    """Phase 1 kept three and the validation minimum at step 7,500 was gone
+    before anyone looked at the curve.
+
+    Asserted as a relation between three settings rather than as `num_ckpt_keep
+    >= 20`, because 20 is only the right number for this max_steps and this
+    ckpt_freq: what the run actually needs is that the last checkpoint written
+    is not the only one left, whatever those two become.
+    """
+    args = load_args(JAPANESE_M2A)
+    assert args.num_ckpt_keep * args.ckpt_freq >= args.max_steps, (
+        f"{args.max_steps} steps at ckpt_freq {args.ckpt_freq} writes "
+        f"{args.max_steps // args.ckpt_freq} checkpoints and only "
+        f"{args.num_ckpt_keep} survive"
+    )
+
+
+def test_m2a_keeps_its_own_run_directory():
+    """`latest_checkpoint()` resumes from whatever is newest in run_dir, so a run
+    sharing one with production or with phase 1 would resume from the other's
+    weights -- or become the other's starting point."""
+    m2a = load_args(JAPANESE_M2A).run_dir
+    assert m2a != load_args(JAPANESE).run_dir
+    assert m2a != load_args(JAPANESE_PHASE1).run_dir
+
+
+def test_m2a_reads_the_corpus_it_was_built_to_measure():
+    """M2a is the GOL run. Pointed at data/ja it would train on the 27 speakers
+    phase 1 already overfitted and answer the speaker-diversity question with
+    phase 1's own corpus -- a run that costs the same and settles nothing."""
+    data = load_args(JAPANESE_M2A).data
+    assert "ja-gol" in data.train_jsonl and "ja-gol" in data.valid_jsonl, data
 
 
 REPO = CONFIGS.parents[1]

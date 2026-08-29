@@ -22,6 +22,7 @@ import tarfile
 from collections import Counter, defaultdict
 from collections.abc import Iterator
 from pathlib import Path, PurePosixPath
+from typing import Annotated
 
 import typer
 from huggingface_hub import hf_hub_download
@@ -30,22 +31,47 @@ from huggingface_hub import hf_hub_download
 # the tokenizer and the loader as one distribution rather than two.
 from pocket_tts.utils.text_normalization import normalize_japanese
 
+# The aligner and its skip predicate, shared with the MoeSpeech script and with
+# the English path before it: align() already streams into a .partial that
+# --resume picks up and renames its output in only once a pass has finished.
+from training.scripts.prepare_data import align, already_aligned
+
 # Borrowed rather than copied: these two scripts are one pipeline in two files.
 # _distribution because the survey in docs/ prints their percentiles in the same
 # table and two definitions of "median" would eventually disagree in a way
-# nobody would think to check; _read_jsonl because it is the other half of the
-# write_manifest that wrote those files and a second reader could drift from the
-# writer; and split_by_speaker because holding speakers out of the two corpora
-# separately is the one thing the merge below exists to prevent. write_manifest
-# itself is main's, at the point where the split is written out.
+# nobody would think to check; _read_jsonl and write_manifest because they are
+# the two halves of one format and a second reader could drift from the writer;
+# and split_by_speaker because holding speakers out of the two corpora
+# separately is the one thing the merge below exists to prevent.
+#
+# The rest are main's, and they are the stage machinery rather than the corpus:
+# _reusable, _stale and _same_cutoffs are what "skip work whose output is
+# already there" means, and a second definition of when an artifact is out of
+# date is the one kind of drift neither script could survive; _write_json and
+# _joined_path are the shapes of files the other script's readers also open;
+# concatenate refuses a mixed-speaker list, which is the guard stage 7 leans on;
+# the two segmenter checks answer a question about this machine and not about
+# either corpus; and KANA_ALIGN_MODEL is the vocabulary the aligner has to have,
+# which is a fact about Japanese.
 from training.scripts.prepare_moespeech import (
+    KANA_ALIGN_MODEL,
     _distribution,
+    _joined_path,
     _percentile,
     _read_jsonl,
+    _reusable,
+    _same_cutoffs,
+    _stale,
+    _write_json,
+    concatenate,
+    require_japanese_segmenter,
+    require_segmenter_to_align,
     split_by_speaker,
+    write_manifest,
 )
 
 logger = logging.getLogger("prepare_gol")
+app = typer.Typer(pretty_exceptions_show_locals=False)
 
 DATASET_REPO = "midralab/gol-dataset"
 EXTRACT_MARKER = ".complete"  # beside the directory, not in it
@@ -910,3 +936,448 @@ def filter_by_score(aligned: Path, out: Path, min_score_per_frame: float | None)
     )
     os.replace(partial, out)
     return kept
+
+
+def _entries_name(index: int) -> str:
+    """The file one speaker's offsets go in, and the stem of their audio.
+
+    Numbered rather than named after the speaker, which is the one place this
+    script cannot follow prepare_moespeech. A GOL key is `<game_id>:<speaker>`
+    (ruling G9) and a colon is not a legal Windows file name at all -- and
+    stripping it would merge two speakers whose keys differ only there, which is
+    the mislabelling every guard below compares by label and none of them can
+    see.
+
+    The index is the speaker's position in the sorted selection, so it moves
+    whenever the selection does. What keeps a moved index from being handed a
+    previous run's file is that the selection is rewritten first, which makes
+    every offsets file older than it; and because file clocks are coarser than
+    these stages are fast, `main` reads back whose rows are actually in the file
+    rather than trusting that alone.
+    """
+    return f"{index:04d}"
+
+
+@app.command()
+def main(
+    out: Annotated[
+        str, typer.Option(help="where every artifact of this run is written")
+    ] = "data/ja-gol",
+    hours: Annotated[float, typer.Option(help="hours of speech to pick whole games for")] = 1000.0,
+    min_utterances: Annotated[
+        int | None,
+        typer.Option(
+            help="keep speakers with at least this many utterances. Read it off "
+            "speakers_probe.json's retention table; there is no default"
+        ),
+    ] = None,
+    min_seconds: Annotated[
+        float | None,
+        typer.Option(
+            help="keep speakers holding at least this many seconds of audio. Read it off "
+            "speakers_probe.json's retention table; there is no default"
+        ),
+    ] = None,
+    min_score_per_frame: Annotated[
+        float | None,
+        typer.Option(
+            help="keep utterances the aligner scored at least this well per frame. Read it "
+            "off scores.json's retention table; there is no default"
+        ),
+    ] = None,
+    valid_hours: Annotated[
+        float,
+        typer.Option(
+            help="hours held out for validation, whole speakers at a time. How many voices "
+            f"that buys is a property of the corpus, and at least {MIN_VALID_SPEAKERS} of "
+            "them are required"
+        ),
+    ] = 10.0,
+    target_sec: Annotated[
+        float,
+        typer.Option(
+            help="longest pseudo-recording to build out of one speaker's clips. Long enough "
+            "that joining is worth doing and well past the loader's max_duration_sec; short "
+            "enough that a preemption costs one small file, since this stage builds each in "
+            "memory"
+        ),
+    ] = 120.0,
+    moespeech: Annotated[
+        str | None,
+        typer.Option(
+            help="the --out of a prepare_moespeech run, whose entries are merged with this "
+            "run's before the split. Both corpora have to be split at once or each one's "
+            "held-out speakers are in the other's training set"
+        ),
+    ] = None,
+    tars: Annotated[
+        str | None,
+        typer.Option(
+            help="where the downloaded tars are kept (default: <out>/tars). Naming one "
+            "directory across runs keeps a larger --hours from re-fetching what a smaller "
+            "one already has"
+        ),
+    ] = None,
+    align_shards: Annotated[
+        int, typer.Option(help="parallel alignment processes (one GPU each)")
+    ] = 1,
+    align_model: Annotated[
+        str, typer.Option(help="CTC model the aligner reads; it must have kana in its vocabulary")
+    ] = KANA_ALIGN_MODEL,
+    repo: Annotated[str, typer.Option(help="the dataset's HuggingFace repo")] = DATASET_REPO,
+    verbose: Annotated[
+        bool, typer.Option("--verbose", "-v", help="log every clip a stage passes over")
+    ] = False,
+) -> None:
+    """Nine stages from a dataset name to a filtered, aligned training manifest.
+
+    Every stage skips work whose output is already on disk, so this command is
+    re-run rather than resumed. That is the whole design: a 1,000-hour selection
+    is 200 GB of tars, the instance it runs on is preemptible, and being killed
+    must cost only the stage in flight.
+
+    It stops twice on purpose, and neither stop is a failed run. The first is
+    after the speaker probe: GOL's median speaker has 0.6 minutes of audio and
+    3,922 of its ids have a single utterance, so a floor guessed rather than
+    read off `speakers_probe.json` would be attached to whatever the tars
+    happened to hold. The second is after the score probe, which cannot come any
+    earlier -- the score is the aligner's own and does not exist until it has
+    run (ruling G7), so the alignment is paid for over utterances the cut then
+    discards. Read the table, pass the flag, and run the same command again.
+
+    What a stage skips on is its output and the timestamps of its inputs, not
+    the options it was given -- with two exceptions, and they are the two the
+    stops above force onto the command line a second time. The speaker floors go
+    to `floors.json` and the score cutoff to `score_cutoff.json`, and each is
+    counted among the inputs of what it decided, so a changed value rebuilds
+    everything below it on its own. Nothing else on disk records either, and
+    without that a stricter floor would rewrite `speakers.json` and change
+    nothing else: the run would report success over the selection it had just
+    replaced.
+
+    Every other option -- --target-sec, --valid-hours, --moespeech -- is
+    recorded nowhere, so changing one re-runs nothing. Delete that stage's
+    artifact to redo it under a new value; deleting is the only way to say so,
+    and it is deliberate, since the alternative is a stage that quietly redoes
+    200 GB of work. Deleting one is enough: what was built out of it is rebuilt
+    with it, so removing `utterances.jsonl` alone carries through `entries/`,
+    `audio/`, both manifests, both alignments and both filtered manifests.
+
+    --hours is the third case. `games.json` is reused whenever it exists,
+    whatever --hours now says, and a mismatch is only warned about: delete that
+    file to select games again, and everything below re-runs against it.
+    """
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s %(levelname)s %(name)s] %(message)s",
+        datefmt="%d-%m %H:%M:%S",
+    )
+    if verbose:
+        logger.setLevel(logging.DEBUG)
+
+    # Named up here, before anything is written, because stage 0 has to ask
+    # about a later stage's outputs: whether the aligner will run at all is what
+    # decides whether a missing segmenter is fatal or merely worth saying.
+    out_dir = Path(out)
+    tar_dir = Path(tars) if tars else out_dir / "tars"
+    extract_root = out_dir / "extracted"
+    games_json = out_dir / "games.json"
+    speakers_probe_json = out_dir / "speakers_probe.json"
+    floors_json = out_dir / "floors.json"
+    speakers_json = out_dir / "speakers.json"
+    utterances_jsonl = out_dir / "utterances.jsonl"
+    entries_dir, audio_dir = out_dir / "entries", out_dir / "audio"
+    train_manifest, valid_manifest = out_dir / "train.jsonl", out_dir / "valid.jsonl"
+    # The aligner's own output, and then what the cut leaves of it. The filtered
+    # pair keeps the `_aligned` name because that is the name the training
+    # configs read and prepare_moespeech writes: the file training reads has to
+    # mean one thing across both pipelines. `_scored` is the intermediate, and
+    # names what stage 8 adds and stage 9 reads.
+    train_scored, valid_scored = out_dir / "train_scored.jsonl", out_dir / "valid_scored.jsonl"
+    scores_json = out_dir / "scores.json"
+    score_cutoff_json = out_dir / "score_cutoff.json"
+    train_aligned, valid_aligned = out_dir / "train_aligned.jsonl", out_dir / "valid_aligned.jsonl"
+    floors = {"min_utterances": min_utterances, "min_seconds": min_seconds}
+    score_cutoff = {"min_score_per_frame": min_score_per_frame}
+
+    # 0. The one thing that can fail for a reason no stage below can fix, asked
+    #    before stage 1 because the answer never changes mid-run and the stage
+    #    that needs it is the eighth: see require_japanese_segmenter. A run
+    #    without both floors stops at the speaker probe and never aligns, and so
+    #    does one whose two alignments are already on disk *and* whose floors are
+    #    the ones that built them -- align() skips an output it finds finished,
+    #    and that is asked of align()'s own predicate rather than restated here.
+    #    The score cutoff is deliberately not part of the question: it is read
+    #    off a table the aligner has to run to produce, so a run without it
+    #    aligns like any other. Anything this still lets past is caught by
+    #    require_segmenter_to_align, one line before each align().
+    require_japanese_segmenter(
+        will_align=min_utterances is not None
+        and min_seconds is not None
+        and not (
+            all(already_aligned(p) for p in (train_scored, valid_scored))
+            and _same_cutoffs(floors_json, floors)
+        )
+    )
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Which games. 1.68 GB of metadata.tsv decides what the other eight
+    #    stages will ever touch, and answers it without fetching a byte of audio.
+    #    Fetched on every run rather than only when the selection is made, which
+    #    is where this differs from the MoeSpeech script: three stages below read
+    #    this file, not one. The hub serves it out of its cache after the first
+    #    time.
+    metadata_tsv = Path(hf_hub_download(repo, "metadata.tsv", repo_type="dataset"))
+    if games_json.exists():
+        chosen = json.loads(games_json.read_text(encoding="utf-8"))
+        if chosen["hours_requested"] != hours:
+            # Silently re-selecting would orphan the tars already unpacked under
+            # a different set of games; silently ignoring --hours would be worse
+            # still, so say which of the two won.
+            logger.warning(
+                f"{games_json} holds the selection for --hours "
+                f"{chosen['hours_requested']:g} and is being reused for --hours {hours:g}; "
+                "delete it to select games again"
+            )
+    else:
+        games = select_games(metadata_tsv, hours)
+        chosen = {
+            "hours_requested": hours,
+            "hours_selected": sum(g["hours"] for g in games),
+            "games": games,
+        }
+        _write_json(chosen, games_json)
+    game_ids = [g["game_id"] for g in chosen["games"]]
+    logger.info(
+        f"{len(game_ids)} games, {chosen['hours_selected']:.1f}h of audio to fetch "
+        f"({sum(g['speakers'] for g in chosen['games'])} speaker ids in them)"
+    )
+
+    # 2 + 3. Fetch every tar, then unpack them. `download_games` returns a list
+    #        rather than yielding, so nothing is unpacked until all of the tars
+    #        are on disk -- the two stages do not overlap. Each still decides per
+    #        game what it already has, which is what a re-run after a preemption
+    #        rests on: this is where the hours are, at a median 11 GB a tar.
+    for tar_path in download_games(game_ids, tar_dir, repo=repo):
+        extract_game(tar_path, extract_root)
+
+    # 4. Measure the speakers, and decide nothing about them. This reads only
+    #    metadata.tsv, so it is bounded by games.json and by nothing on disk --
+    #    it describes the games this run took whether or not their tars have
+    #    finished unpacking.
+    if not _reusable([speakers_probe_json], [games_json], "keeping the measurements it holds"):
+        _write_json(probe_speakers(metadata_tsv, game_ids), speakers_probe_json)
+
+    # 5. Decide, or stop. Both floors are a property of this corpus and the line
+    #    above is what measures it, so there is nothing to default them to.
+    if min_utterances is None or min_seconds is None:
+        logger.error(
+            f"read the retention table in {speakers_probe_json} and run this again with "
+            "--min-utterances and --min-seconds. Neither has a default: GOL's median speaker "
+            "has 0.6 minutes of audio and 3,922 of its ids have a single utterance, so a "
+            "number guessed now would afterwards be indistinguishable from a measured one. "
+            "Everything up to here is on disk and will not be redone."
+        )
+        raise typer.Exit(1)
+    #    The pair is written down beside the selection they make, and is one of
+    #    its inputs: nothing else on disk records them, so without this a re-run
+    #    under a stricter floor would find speakers.json sitting there and reuse
+    #    it -- silently, and with no way afterwards for either the script or the
+    #    operator to tell which floors a given train.jsonl was built under.
+    #    Written only when they differ, so an unchanged pair does not touch the
+    #    file and nothing downstream is rebuilt.
+    if not _same_cutoffs(floors_json, floors):
+        _write_json(floors, floors_json)
+    if _reusable([speakers_json], [games_json, floors_json], "keeping the speakers it holds"):
+        speakers = json.loads(speakers_json.read_text(encoding="utf-8"))["speakers"]
+    else:
+        speakers = select_speakers(metadata_tsv, game_ids, min_utterances, min_seconds)
+        _write_json({**floors, "speakers": speakers}, speakers_json)
+    logger.info(f"{len(speakers)} speakers clear both floors")
+
+    # 6. Gather their utterances. The completion markers are inputs alongside the
+    #    selection: the extract root is what this walks for the audio, and a game
+    #    unpacked after the walk makes it short of exactly the clips that arrived
+    #    late -- which is what a re-run after a kill between two tars leaves.
+    markers = [extract_root / f"{game}{EXTRACT_MARKER}" for game in game_ids]
+    gather_inputs = [speakers_json, *markers]
+    if _reusable([utterances_jsonl], gather_inputs, "keeping the utterances it holds"):
+        utterances = _read_jsonl(utterances_jsonl)
+    else:
+        # `wav` arrives as a Path, which json.dumps refuses; posix separators
+        # rather than str(), because a manifest written on Windows is read on
+        # Linux, where a backslash is part of the name rather than a separator.
+        utterances = [
+            {**u, "wav": u["wav"].as_posix()}
+            for u in gol_utterances(metadata_tsv, extract_root, speakers, game_ids)
+        ]
+        write_manifest(utterances, utterances_jsonl)
+
+    # 7. Join each speaker's clips into pseudo-long recordings. The grouping
+    #    happens here because concatenate() refuses a mixed list rather than
+    #    grouping one (ruling G4): a file holding two voices would teach the
+    #    model that the prompt does not decide the voice, and nothing downstream
+    #    could see it. Each speaker's offsets are recorded under their own
+    #    number, so a kill costs the speaker in flight rather than all of them.
+    by_speaker: dict[str, list[dict]] = defaultdict(list)
+    for utterance in utterances:
+        by_speaker[utterance["speaker"]].append(utterance)
+    #    The braces to the belt in `gol_utterances`. Every guard from here down
+    #    compares this label and none of them can check it, so the one thing that
+    #    can be checked is that every label is a speaker this run selected --
+    #    true of a correct label by construction, and asked before a single wav
+    #    is joined or deleted.
+    unexpected = sorted(set(by_speaker) - set(speakers))
+    if unexpected:
+        logger.error(
+            f"the selection holds speakers that were never selected: {unexpected[:10]}. The "
+            "speaker is metadata.tsv's own column and is keyed by game (ruling G9), so this "
+            "is a key built differently in two places -- joining them would mix characters "
+            "into one recording. Nothing has been joined."
+        )
+        raise typer.Exit(1)
+    numbered = {speaker: _entries_name(i) for i, speaker in enumerate(sorted(by_speaker))}
+    #    What a run stops naming, it deletes. `audio/` is hundreds of gigabytes
+    #    at 1,000 hours of 48 kHz, deleting an artifact and re-running is the
+    #    documented way to change any option, and the disk on a preemptible
+    #    instance is fixed -- filling it mid-run costs the run.
+    for part in sorted(entries_dir.glob("*.jsonl")):
+        if part.stem in set(numbered.values()):
+            continue
+        # The offsets file is what says which audio was this speaker's, so it is
+        # read before it goes; deriving the names from the number instead would
+        # miss the files `_joined_path` numbered beside the first one.
+        for row in _read_jsonl(part):
+            wav = Path(row["path"])
+            if wav.parent == audio_dir:
+                wav.unlink(missing_ok=True)
+        part.unlink()
+        logger.info(f"{part.stem} is no longer selected; their offsets and audio are removed")
+    for speaker, index in numbered.items():
+        part = entries_dir / f"{index}.jsonl"
+        if _reusable([part], [utterances_jsonl], f"keeping {speaker}'s offsets"):
+            held = {row["speaker"] for row in _read_jsonl(part)}
+            if held == {speaker}:
+                continue
+            # A number is not a name. `index` is this speaker's position in the
+            # sorted selection, and it moves whenever the selection does; what
+            # keeps a moved number from being handed the previous run's file is
+            # that the selection is rewritten first and so is newer than every
+            # offsets file. File clocks are coarser than these stages are fast
+            # and equal timestamps count as fresh, so that is a race rather than
+            # a guarantee -- and losing it would write one speaker's offsets
+            # under another's label, which every guard below compares and none
+            # of them can see.
+            logger.warning(
+                f"{part} holds {sorted(held)} rather than {speaker!r}; the selection has "
+                "moved under it and it is being rebuilt"
+            )
+        base = audio_dir / f"{index}.wav"
+        rows = concatenate(by_speaker[speaker], base, target_sec)
+        # The files are numbered from the name upwards, so everything from the
+        # count this run wrote onwards is what a wider previous run left.
+        surplus_index = len({row["path"] for row in rows})
+        while (surplus := _joined_path(base, surplus_index)).exists():
+            surplus.unlink()
+            logger.info(f"{surplus} is past what {speaker} now needs; removed")
+            surplus_index += 1
+        write_manifest(rows, part)
+
+    # 8. Merge the corpora and split off the valid speakers. This is the one
+    #    point where GOL and MoeSpeech meet, and it has to be one point: split
+    #    them separately and each corpus's held-out speakers are in the other
+    #    corpus's training set, so both validation losses report voices the
+    #    weights have already seen. Both manifests or neither -- a kill between
+    #    them leaves train.jsonl describing a corpus valid.jsonl was never held
+    #    out of.
+    corpora = [entries_dir]
+    if moespeech:
+        corpora.append(Path(moespeech) / "entries")
+    written_entries = [part for directory in corpora for part in sorted(directory.glob("*.jsonl"))]
+    if not _reusable(
+        [train_manifest, valid_manifest],
+        [utterances_jsonl, *written_entries],
+        "keeping the split they hold",
+    ):
+        train, valid = split_across_corpora(merge_entries(corpora), valid_hours)
+        write_manifest(train, train_manifest)
+        write_manifest(valid, valid_manifest)
+
+    # 9. Align. prepare_data's align() already streams into a .partial that
+    #    --resume picks up, renames its output in only once a pass has finished
+    #    -- the sharded merge included -- and starts over rather than resuming a
+    #    leftover written under a different --align-shards, so it is reused here
+    #    rather than reimplemented. The segmenter is not an option: this manifest
+    #    is Japanese, and "whitespace" over a language written without spaces
+    #    returns one word per utterance -- the aligner emits a single span, the
+    #    loader finds no cut point, and the voice prompt quietly comes from the
+    #    utterance being predicted.
+    #    That skipping is on the output's name, and --resume continues whatever
+    #    the .partial holds without asking which manifest produced it, so an
+    #    alignment older than the manifest it claims to align has to be thrown
+    #    away here rather than kept or continued.
+    for scored, manifest in ((train_scored, train_manifest), (valid_scored, valid_manifest)):
+        produced = [scored, scored.with_suffix(".partial")]
+        produced += sorted(scored.parent.glob(f"{scored.stem}.shard*"))
+        for leftover in produced:
+            if _stale(leftover, [manifest]):
+                logger.info(f"{leftover} was aligned from an older {manifest.name}; discarding it")
+                leftover.unlink()
+    require_segmenter_to_align(train_scored)
+    align(
+        train_manifest,
+        train_scored,
+        align_shards,
+        align_model,
+        "training manifest",
+        segmenter="japanese",
+    )
+    require_segmenter_to_align(valid_scored)
+    align(valid_manifest, valid_scored, 1, align_model, "valid manifest", segmenter="japanese")
+
+    # 10. Measure what the aligner thought of the audio, then cut on a number
+    #     read off that. This is where GOL's stage order differs from
+    #     MoeSpeech's and why (ruling G7): the score does not exist until the
+    #     aligner has run, so the alignment above was paid for over utterances
+    #     this discards -- still an order of magnitude cheaper than the second
+    #     ASR pass the mutual-CER filter needed. Measured over the training
+    #     manifest, which is where the cutoff has to hold; the valid one is a
+    #     fraction of the size and is then cut by the same number.
+    if not _reusable([scores_json], [train_scored], "keeping the measurements it holds"):
+        _write_json(probe_scores(train_scored), scores_json)
+    if min_score_per_frame is None:
+        logger.error(
+            f"read the retention table in {scores_json} and run this again with "
+            "--min-score-per-frame. It has no default: an alignment log-probability has no "
+            "scale known before the corpus is measured, so a number guessed now would "
+            "afterwards be indistinguishable from a measured one -- and the table reports "
+            "what each cutoff costs in hours and not only in clips. Everything up to here, "
+            "the alignment included, is on disk and will not be redone."
+        )
+        raise typer.Exit(1)
+    #     Recorded beside the manifests it decides, for the same reason the
+    #     floors are: nothing else on disk says which cutoff a given
+    #     train_aligned.jsonl was written under, and without it a re-run under a
+    #     new one would find that file sitting there, newer than the scored
+    #     manifest it came from, and report success over the cut just replaced.
+    if not _same_cutoffs(score_cutoff_json, score_cutoff):
+        _write_json(score_cutoff, score_cutoff_json)
+    #     Both manifests, under the one number. The valid loss is the whole
+    #     readout of this run, and a valid set kept under a different rule from
+    #     the training set is not comparable with it. Separately rather than as a
+    #     pair, because the two are independent files of independent inputs and a
+    #     kill between them should cost the second one alone; a changed cutoff
+    #     moves score_cutoff.json, which is an input to both.
+    for scored, filtered, what in (
+        (train_scored, train_aligned, "training"),
+        (valid_scored, valid_aligned, "valid"),
+    ):
+        if _reusable([filtered], [scored, score_cutoff_json], f"keeping the {what} manifest"):
+            continue
+        filter_by_score(scored, filtered, min_score_per_frame)
+    logger.info(f"Done. Training on {train_aligned.resolve()} and {valid_aligned.resolve()}")
+
+
+if __name__ == "__main__":
+    app()
