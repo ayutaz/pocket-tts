@@ -9,13 +9,13 @@ Pocket TTS の日本語モデルを作るための調査記録と方針をまと
 
 | 論点 | 結論 |
 |---|---|
-| 日本語モデルは存在するか | **存在しない**。公式・コミュニティともに0件（[調査結果](community-survey.md)） |
+| 日本語モデルは存在するか | 調査時点（2026-08-27）で公式・コミュニティともに0件（[調査結果](community-survey.md)）。**現在は本プロジェクトの検証用が1件**（gated、実用品質ではない） |
 | 公式の対応予定はあるか | ない。Issue #118 の計画は es/fr/de/pt/it のみで、日本語は対象外 |
 | 学習コードは使えるか | 使える。2026-08-25 に公開済み。「任意の言語で学習可能」と公式アナウンス |
 | 手本になる先行事例 | **チェコ語モデル 1件のみ**（`vvolhejn/pocket-tts-czech`） |
 | 事前学習か継続学習か | **継続学習（finetune）を採用**（[根拠](training-strategy.md)） |
 | 使用データセット | `ayousanz/moe-speech-plus`（約623h）+ `midralab/gol-dataset-2k-ljspeech`（約2,020h）（[詳細](datasets.md)） |
-| 想定コスト | 検証 **約$10**、本番 finetune + 蒸留 **$130〜265** |
+| コスト | 検証は**実測 $4.59**（見積り $5〜12）。本番 finetune + 蒸留は見積り **$130〜265** |
 
 ## どこまで進んだか
 
@@ -25,7 +25,7 @@ Pocket TTS の日本語モデルを作るための調査記録と方針をまと
 | 日本語トークナイザ（8000語彙） | **学習済み・リポジトリ同梱**（`training/tokenizers/japanese_8000.model`） |
 | MoeSpeech マニフェスト構築 | **実装済み・実データで完走**（[設計](specs/2026-08-28-moespeech-manifest-design.md) / [計画](plans/2026-08-28-moespeech-manifest.md)） |
 | 学習データ | **できています。** train 85.5h / 27話者 / 49,200発話、valid 1.6h / 1話者 / 964発話 |
-| フェーズ1の検証用設定 | **あり**（`training/configs/finetune_language_ja_phase1.yaml`、15k step・約$10） |
+| フェーズ1の検証用設定 | **あり**（`training/configs/finetune_language_ja_phase1.yaml`、15k step。実測 5.15時間・$4.59） |
 | フェーズ1の学習ラン | **完了・合格**（2026-08-29、vast.ai、$4.59）。成果物は [`ayousanz/pocket-tts-ja-phase1`](https://huggingface.co/ayousanz/pocket-tts-ja-phase1)（gated / manual） |
 
 !!! success "パイプラインは実データで完走しました（2026-08-29）"
