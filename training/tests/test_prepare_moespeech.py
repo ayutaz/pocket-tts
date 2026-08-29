@@ -63,18 +63,29 @@ def test_a_japanese_speaker_name_survives_the_read(tmp_path):
 
 
 def test_largest_first_takes_the_biggest(tmp_path):
-    info = _info_csv(tmp_path, [("small", 10, 6.0, 300.0), ("big", 100, 600.0, 300.0)])
-    (chosen,) = select_characters(info, hours=1.0, order="largest")
-    assert chosen["name"] == "big"
+    """Every signal here except duration points at the other character:
+    `a-many-short` has ten times the files, sorts first by name and comes first
+    in info.csv. Only total_duration_min picks `z-one-long`.
+
+    A "big" against a "small" that is smaller in every column would pass under
+    a sort on num_files, on name, or under no sort at all -- and phase 1's 124
+    hours were selected by this function."""
+    rows = [("a-many-short", 100, 1.0, 300.0), ("z-one-long", 10, 120.0, 300.0)]
+    (chosen,) = select_characters(_info_csv(tmp_path, rows), hours=1.0, order="largest")
+    assert chosen["name"] == "z-one-long"
 
 
-def test_selection_is_deterministic(tmp_path):
-    """A re-run after an interrupted download must ask for the same zips."""
-    rows = [(f"c{i}", 100, 30.0, 300.0) for i in range(20)]
-    info = _info_csv(tmp_path, rows)
-    first = select_characters(info, hours=5.0, order="largest")
-    second = select_characters(info, hours=5.0, order="largest")
-    assert [c["name"] for c in first] == [c["name"] for c in second]
+def test_ties_break_on_name_so_a_resumed_run_asks_for_the_same_zips(tmp_path):
+    """Characters of equal length must come out in a stated order.
+
+    Asserting instead that two calls in one process agree would pass for any
+    pure function, including one that leaves equal characters in whatever order
+    a dict or a set happened to hold them: within a process the two calls
+    agree, across processes they do not, and a re-run after an interrupted
+    download would fetch zips it already has."""
+    rows = [(n, 100, 60.0, 300.0) for n in ["cc", "ca", "cb"]]
+    chosen = select_characters(_info_csv(tmp_path, rows), hours=2.0, order="largest")
+    assert [c["name"] for c in chosen] == ["ca", "cb"]
 
 
 def test_random_order_is_also_deterministic(tmp_path):

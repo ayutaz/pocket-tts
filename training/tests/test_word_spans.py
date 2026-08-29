@@ -161,10 +161,23 @@ def test_a_matching_transcript_scores_higher_than_a_wrong_one():
 def test_the_score_comes_with_what_it_has_to_be_normalized_by():
     """Raw log-prob scales with both frame count and token count, and which
     normalization the distribution supports is not knowable before measuring it.
-    So the row carries the raw score and both denominators."""
-    _, scores = _spans_and_scores("aaa___bbb", [1, 2], [0, 1])
+    So the row carries the raw score and both denominators.
+
+    The fixture is deliberately one where neither denominator coincides with
+    anything else in scope. Tokens are not words: this is two words joined by a
+    delimiter, so `n` is 3 where `n_words` -- the local defined two lines above
+    the score in align_data.py, and used on the line directly above it -- is 2.
+    Real Japanese makes that gap 3-5x and varies it per utterance, since UniDic
+    words run 2-4 kana plus a delimiter per gap, so a score normalized by words
+    where it meant tokens would rank utterances by how long their words
+    happened to be. And frames are not the last token's frame: the audio ends
+    in silence, as essentially all real speech does, so `t_end` is 12 where the
+    last span ends at 8. Those trailing blank frames were paid for and belong
+    in the divisor.
+    """
+    _, scores = _spans_and_scores("aaa_|_bbb___", [1, DELIM, 2], [0, -1, 1])
     score, frames, tokens = scores[0]
-    assert frames == 9 and tokens == 2, (frames, tokens)
+    assert (frames, tokens) == (12, 3), (frames, tokens)
     assert score < 0, score
 
 

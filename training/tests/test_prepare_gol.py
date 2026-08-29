@@ -23,10 +23,20 @@ def _metadata(tmp_path, rows, text: str = "あ"):
 
 def test_largest_first_reaches_the_target_with_fewest_tars(tmp_path):
     """Measured on the real metadata: 1,000 hours is 18 tars taken largest-first.
-    A tar is 11 GB on average, so the ordering decides hours of download."""
-    md = _metadata(tmp_path, [("big", "s1", 7200.0), ("big", "s2", 7200.0), ("small", "s3", 60.0)])
-    (chosen,) = select_games(md, hours=1.0)
-    assert chosen["game_id"] == "big"
+    A tar is 11 GB on average, so the ordering decides hours of download.
+
+    Every signal here except duration points at the other game: `a-many-short`
+    has more utterances, more speakers, sorts first by id and comes first in
+    the file. Only summed duration picks `z-one-long`. A fixture where the
+    biggest game also happened to be the first or the busiest would pass under
+    a sort on any of those -- or under no sort at all -- and a size-blind order
+    needs about 57 tars for the 1,000 hours that cost 18 here, some 600 GB of
+    download that buys nothing.
+    """
+    rows = [("a-many-short", f"s{i}", 60.0) for i in range(30)]
+    rows += [("z-one-long", "s", 7200.0)] * 2
+    (chosen,) = select_games(_metadata(tmp_path, rows), hours=1.0)
+    assert chosen["game_id"] == "z-one-long"
 
 
 def test_selection_stops_once_the_target_is_reached(tmp_path):
@@ -42,11 +52,17 @@ def test_a_game_reports_its_speakers_and_utterances(tmp_path):
     assert (g["speakers"], g["utterances"]) == (2, 3)
 
 
-def test_selection_is_deterministic(tmp_path):
-    md = _metadata(tmp_path, [(f"g{i}", "s", 3600.0) for i in range(20)])
-    a = [g["game_id"] for g in select_games(md, hours=5.0)]
-    b = [g["game_id"] for g in select_games(md, hours=5.0)]
-    assert a == b
+def test_ties_break_on_game_id_so_a_resumed_run_asks_for_the_same_tars(tmp_path):
+    """Games of equal length must come out in a stated order, not in whatever
+    order the accumulating dict happens to hold them.
+
+    Asserting instead that two calls agree would pass for any pure function,
+    including one that leaves equal games in hash order: within one process the
+    two calls agree, and across processes they do not. A resumed run would then
+    re-download tars it already has and skip ones it does not, at 11 GB each.
+    """
+    md = _metadata(tmp_path, [(g, "s", 3600.0) for g in ["gc", "ga", "gb"]])
+    assert [g["game_id"] for g in select_games(md, hours=2.0)] == ["ga", "gb"]
 
 
 def test_the_hours_column_is_seconds(tmp_path):
