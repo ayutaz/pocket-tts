@@ -14,7 +14,7 @@ Pocket TTS の日本語モデルを作るための調査記録と方針をまと
 | 学習コードは使えるか | 使える。2026-08-25 に公開済み。「任意の言語で学習可能」と公式アナウンス |
 | 手本になる先行事例 | **チェコ語モデル 1件のみ**（`vvolhejn/pocket-tts-czech`） |
 | 事前学習か継続学習か | **継続学習（finetune）を採用**（[根拠](training-strategy.md)） |
-| 使用データセット | `ayousanz/moe-speech-plus`（約623h）+ `midralab/gol-dataset-2k-ljspeech`（約2,020h）（[詳細](datasets.md)） |
+| 使用データセット | `ayousanz/moe-speech-plus`（約623h）+ `midralab/gol-dataset`（**約10,654h・48 kHz・話者ラベルあり**）（[詳細](datasets.md)） |
 | コスト | 検証は**実測 $4.59**（見積り $5〜12）。本番 finetune + 蒸留は見積り **$130〜265** |
 
 ## どこまで進んだか
@@ -58,7 +58,7 @@ Pocket TTS の日本語モデルを作るための調査記録と方針をまと
 
     日本語としては崩れる箇所もあります。想定内で、原因は品質側です —— 87時間・27話者・
     19.5エポック、そして**転写そのものが `--max-cer 0.2`（2系統の ASR が最大20%の文字で
-    食い違うものまで採用）**であること。本番は 2,640時間・約1.5エポックになります。
+    食い違うものまで採用）**であること。本番は桁違いの量になるので、エポック数の問題は消えます。
 
     成果物は [`ayousanz/pocket-tts-ja-phase1`](https://huggingface.co/ayousanz/pocket-tts-ja-phase1)
     に gated（manual）で置いてあります。重み・チェックポイント3本・サンプル90本・loss 記録・
