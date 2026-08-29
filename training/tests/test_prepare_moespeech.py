@@ -89,12 +89,34 @@ def test_ties_break_on_name_so_a_resumed_run_asks_for_the_same_zips(tmp_path):
 
 
 def test_random_order_is_also_deterministic(tmp_path):
-    """Reproducibility does not depend on which ordering was chosen."""
+    """Reproducibility does not depend on which ordering was chosen, and the
+    test above is why this one is written down rather than compared with itself.
+
+    Two calls in one process agree for any pure function, `SELECTION_SEED`
+    replaced by `hash(name)` included -- and that is the version that breaks,
+    because PYTHONHASHSEED is per process and a resumed download would fetch
+    zips it already has, at a gigabyte apiece. So the order this seed produces
+    is stated here, the same way the tie-break above is: what has to hold is
+    that a second process, days later, asks for these ten names.
+
+    Every character is the same size, so nothing but the shuffle decides which
+    ten of the twenty; the base sort is by name, which is why `c10` comes
+    between `c1` and `c2` in what it shuffled.
+    """
     rows = [(f"c{i}", 100, 30.0, 300.0) for i in range(20)]
-    info = _info_csv(tmp_path, rows)
-    a = select_characters(info, hours=5.0, order="random")
-    b = select_characters(info, hours=5.0, order="random")
-    assert [c["name"] for c in a] == [c["name"] for c in b]
+    chosen = select_characters(_info_csv(tmp_path, rows), hours=5.0, order="random")
+    assert [c["name"] for c in chosen] == [
+        "c18",
+        "c8",
+        "c6",
+        "c4",
+        "c0",
+        "c7",
+        "c19",
+        "c10",
+        "c11",
+        "c17",
+    ]
 
 
 def test_asking_for_more_than_exists_returns_everything(tmp_path):

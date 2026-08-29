@@ -1,13 +1,26 @@
-"""Segmentation behaviour that silently degrades training when it breaks.
+"""Segmentation behaviour that silently degrades training when it breaks, and
+the row `main` writes it onto.
 
 The manifest's "word" field is load-bearing twice over: align_data.py aligns it
 and training/dataloader.py re-reads it as the text to speak. A segmenter bug
 therefore corrupts the training text, not just the timestamps, and nothing
 downstream would notice.
+
+The row at the bottom of this file is the other join nothing else sees.
+`batched_word_spans` returns a tuple and prepare_gol's score filter reads named
+keys; between them is one line of `main`, and every pipeline test that has a
+score in it writes that row itself out of a fake aligner -- which stands
+exactly where the bug would be.
 """
 
-import pytest
+import json
+from pathlib import Path
+from types import SimpleNamespace
 
+import pytest
+import torch
+
+from training.scripts import align_data
 from training.scripts.align_data import (
     SEGMENTERS,
     _japanese_segmenter,
@@ -172,3 +185,103 @@ def test_normalized_transcript_survives_the_round_trip(segment):
     ]:
         text = normalize(raw)
         assert "".join(s for s, _, _ in segment(text)) == text, raw
+
+
+# -- the row main writes ------------------------------------------------------
+
+# Index in this string is the token id, exactly as in test_word_spans.py: "_" is
+# the blank and "|" the delimiter `_tokens_for` puts between words. Lower case,
+# so `case_fold_for` lands on str.lower and the transcripts below survive it.
+_SYMBOLS = "_abc|"
+_VOCAB = {c: i for i, c in enumerate(_SYMBOLS)}
+
+
+class _FakeCTC:
+    """A CTC model with no opinion about the audio.
+
+    Every logit is zero, so every path through the trellis is as good as every
+    other: the alignment succeeds and the score is a real number. Where the
+    spans land is not this test's subject -- test_word_spans.py dictates its
+    emissions frame by frame for that -- and what is wanted here is the frame
+    count, which is the model's own answer about the audio and one of the two
+    numbers the row has to keep apart.
+
+    One frame per 1,600 samples, so the two utterances below have different
+    frame counts and neither one's equals its own token count. Rounded rather
+    than floored, so that a sample or two either way at the end of a read
+    cannot move the answer.
+    """
+
+    def _get_feat_extract_output_lengths(self, samples):
+        return round(samples / 1600)
+
+    def __call__(self, x, attention_mask=None):
+        lengths = attention_mask.sum(-1).tolist()
+        frames = max(self._get_feat_extract_output_lengths(n) for n in lengths)
+        return SimpleNamespace(logits=torch.zeros(len(lengths), frames, len(_SYMBOLS)))
+
+
+def _speech(path, seconds, sr=16000):
+    """`seconds` of a tone at the rate the fake checkpoint claims."""
+    import numpy as np
+    import sphn
+
+    t = np.linspace(0, seconds, int(seconds * sr), endpoint=False)
+    sphn.write_wav(str(path), (0.5 * np.sin(2 * np.pi * 220 * t)).astype(np.float32), sr)
+    return path
+
+
+def test_main_writes_the_score_beside_the_denominators_that_belong_to_it(tmp_path, monkeypatch):
+    """The one line where the aligner's answer becomes a manifest row.
+
+    `batched_word_spans` returns `(score, frames, tokens)` in that order and
+    test_word_spans.py pins it there; prepare_gol reads `entry["frames"]` and
+    `entry["tokens"]` by name and its tests pin that. In between is a single
+    unpacking assignment, and swapping two names in it is silent everywhere
+    else: every pipeline test with a score in it writes those two fields out of
+    a fake aligner, so the fake stands exactly where the bug would be.
+
+    What the swap costs is the cutoff. `filter_by_score` divides by `frames`,
+    so a row whose token count is filed as its frame count turns every
+    per-frame threshold an operator reads off the retention table into a
+    per-token one -- on a Japanese corpus roughly a 3-5x difference, varying per
+    utterance, and reported by nothing.
+
+    So the two counts differ within each row, and differ between the two rows:
+    a swap, a batch-wide constant and a count taken off the wrong utterance are
+    three different mistakes and none of them survives all four numbers. The
+    longer utterance is written first, so the length sort inside `main` has to
+    reorder it and put it back.
+    """
+    monkeypatch.setattr(
+        align_data,
+        "_load_ctc_model",
+        lambda name, device: (
+            _FakeCTC(),
+            _VOCAB,
+            _VOCAB["_"],
+            _VOCAB["|"],
+            str.lower,
+            16000,
+            False,
+        ),
+    )
+    manifest, out = tmp_path / "in.jsonl", tmp_path / "out.jsonl"
+    rows = [
+        # 19,200 samples is 12 frames, and "ab c" is two words joined by a
+        # delimiter, so 4 tokens.
+        {"path": str(_speech(tmp_path / "long.wav", 1.2)), "duration": 1.2, "transcript": "ab c"},
+        # 14,400 samples is 9 frames, and one word of three characters is 3.
+        {"path": str(_speech(tmp_path / "short.wav", 0.9)), "duration": 0.9, "transcript": "abc"},
+    ]
+    manifest.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8", newline="\n")
+
+    align_data.main(str(manifest), str(out), segmenter="whitespace", device="cpu")
+
+    written = [json.loads(line) for line in out.read_text(encoding="utf-8").splitlines()]
+    assert [Path(r["path"]).name for r in written] == ["long.wav", "short.wav"]
+    assert [(r["frames"], r["tokens"]) for r in written] == [(12, 4), (9, 3)]
+    # Raw and undivided, and a real alignment rather than a row that merely
+    # carries the right two integers.
+    assert all(r["score"] < 0 for r in written), written
+    assert [[w["word"] for w in r["words"]] for r in written] == [["ab", "c"], ["abc"]]

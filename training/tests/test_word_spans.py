@@ -161,7 +161,12 @@ def test_a_matching_transcript_scores_higher_than_a_wrong_one():
 def test_the_score_comes_with_what_it_has_to_be_normalized_by():
     """Raw log-prob scales with both frame count and token count, and which
     normalization the distribution supports is not knowable before measuring it.
-    So the row carries the raw score and both denominators.
+    So what comes back is the raw score and both denominators, in that order.
+
+    In that order, and nothing more: this pins a tuple, and no test in this file
+    ever sees a manifest row. Which of the row's named fields each of these
+    three lands in is one assignment in `align_data.main`, and it is pinned by
+    `test_main_writes_the_score_beside_the_denominators_that_belong_to_it`.
 
     The fixture is deliberately one where neither denominator coincides with
     anything else in scope. Tokens are not words: this is two words joined by a

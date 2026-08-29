@@ -1022,6 +1022,47 @@ def test_a_clip_two_paths_could_answer_is_dropped_rather_than_guessed_at(tmp_pat
     assert [_dominant_hz(u["wav"]) for u in us] == [660]
 
 
+def test_every_row_that_did_not_make_it_is_counted_in_what_the_walk_reports(tmp_path, caplog):
+    """The three counts are the run's whole account of the gap between what the
+    selection promised and what the manifest holds, and on the real corpus they
+    say different things: a wav that never arrived is an extraction a kill cut
+    short, a name the tree answers twice is a work shipped on two discs, and an
+    empty transcript is one of the 1,055 rows GOL writes with no text. An
+    operator who cannot tell those apart cannot tell a broken run from a corpus.
+
+    The three numbers are deliberately different, and none of them is the number
+    of rows kept: three equal counts would pass under a report that had them the
+    wrong way round, and a report of zeros would pass under one that never
+    counted at all -- which is the silence `test_only_the_games_this_run_took_
+    are_read` below reads as a clean walk.
+    """
+    md = _metadata(
+        tmp_path,
+        [
+            ("g", "spk", 1.0, "kept.wav", "こんにちは"),
+            ("g", "spk", 1.0, "gone-a.wav", "こんにちは"),
+            ("g", "spk", 1.0, "gone-b.wav", "こんにちは"),
+            ("g", "spk", 1.0, "twice.wav", "こんにちは"),
+            ("g", "spk", 1.0, "empty-a.wav", "　"),
+            ("g", "spk", 1.0, "empty-b.wav", "　"),
+            ("g", "spk", 1.0, "empty-c.wav", "　"),
+        ],
+    )
+    root = tmp_path / "extracted"
+    for name in ("kept.wav", "twice.wav", "empty-a.wav", "empty-b.wav", "empty-c.wav"):
+        _clip(root, "g", "spk", name)
+    _at(root / "g" / "g" / "disc2" / "spk", "twice.wav")
+
+    with caplog.at_level(logging.WARNING, logger="prepare_gol"):
+        us = list(gol_utterances(md, root, ["g:spk"], ["g"]))
+
+    assert [u["id"] for u in us] == ["g/spk/kept"]
+    (said,) = [r.getMessage() for r in caplog.records]
+    assert "2 rows name a wav that is not under" in said, said
+    assert "1 name one the tree holds under more than one path" in said, said
+    assert "3 have no text left after normalization" in said, said
+
+
 def test_only_the_games_this_run_took_are_read(tmp_path, caplog):
     """The extract root accumulates across runs: it is where a larger run's
     games were unpacked, and asking for fewer hours afterwards has to mean
@@ -1037,6 +1078,11 @@ def test_only_the_games_this_run_took_are_read(tmp_path, caplog):
     counted as audio the extraction is missing. On the real metadata that is
     6.7 million of 7.4 million rows, a warning that reads like a failed run
     over a run that took exactly what it was asked for.
+
+    An empty log is only that assertion because the test above pins the same
+    report firing, with its three counts in it. On its own, "nothing was
+    dropped" and "nothing is counted" are the same silence -- which is the
+    mechanism this docstring names, read the other way round.
     """
     md = _metadata(tmp_path, [("kept", "spk", 1.0), ("older", "spk", 1.0)])
     root = tmp_path / "extracted"
@@ -1310,7 +1356,12 @@ def test_a_valid_split_of_too_few_speakers_is_refused(tmp_path):
     """A warning is what phase 1 had. `split_by_speaker` already says out loud
     that it could not hold out the hours it was asked for, and the run went on
     for 15,000 steps over a validation set of one voice regardless, so the
-    count is checked where it can still stop the run."""
+    count is checked where it can still stop the run.
+
+    The 20 at the end is what 40 valid-hours bought over this corpus -- two
+    hours a speaker, twenty speakers -- and not the floor: it clears any floor
+    of 20 or less equally well. Where the floor itself is is the test below.
+    """
     entries = [{"speaker": f"s{i:03d}", "duration": 3600.0} for i in range(25) for _ in range(2)]
     with pytest.raises(typer.BadParameter, match="valid-hours"):
         split_across_corpora(entries, valid_hours=1.0)
@@ -1318,6 +1369,28 @@ def test_a_valid_split_of_too_few_speakers_is_refused(tmp_path):
     _, valid = split_across_corpora(entries, valid_hours=40.0)
 
     assert len({e["speaker"] for e in valid}) == 20
+
+
+def test_nineteen_voices_are_refused_and_twenty_are_not(tmp_path):
+    """Where MIN_VALID_SPEAKERS actually is. The fixtures around this one land
+    well clear of it -- refused at 1, at 10 and at 13, accepted at 20, 22 and
+    30 -- and not one of them can tell a floor of 20 from a floor of 19, or an
+    inclusive comparison from an exclusive one. Both are off-by-ones that let a
+    run through, and what they let through is the experiment M2a exists to run:
+    whether a validation loss turns over voices the weights have never heard.
+
+    Two hours a speaker, so `--valid-hours` names the count directly and the
+    two halves differ by one voice and nothing else.
+    """
+    entries = [{"speaker": f"s{i:03d}", "duration": 3600.0} for i in range(30) for _ in range(2)]
+
+    _, nineteen = split_by_speaker(entries, valid_hours=38.0)
+    assert len({e["speaker"] for e in nineteen}) == 19, "the fixture is not on the line"
+    with pytest.raises(typer.BadParameter, match="valid-hours"):
+        split_across_corpora(entries, valid_hours=38.0)
+
+    _, twenty = split_across_corpora(entries, valid_hours=40.0)
+    assert len({e["speaker"] for e in twenty}) == 20
 
 
 def test_how_many_speakers_the_valid_hours_buy_is_a_property_of_the_corpus(tmp_path):
@@ -2120,12 +2193,47 @@ def test_the_run_stops_until_the_speaker_floors_have_been_chosen(tmp_path, monke
     with pytest.raises(typer.Exit):
         p.run()
 
-    assert (p.out / "speakers_probe.json").exists()
+    # What the file holds and not merely that it is there. This is the one
+    # artifact the run deliberately stops to have read, and a probe that
+    # measured one game of the two -- or measured the wrong file entirely --
+    # writes a table an operator reads a floor off exactly as confidently as a
+    # right one. 27 is every speaker of both games taken, `solo` and `quiet`
+    # included: this stage measures the corpus and applies no floor to it.
+    probe = json.loads((p.out / "speakers_probe.json").read_text(encoding="utf-8"))
+    assert probe["speakers"] == 27, probe
     assert not p.calls["select_speakers"], "no speaker may be selected on a floor nobody chose"
     assert not p.calls["align"]
     said = "\n".join(record.message for record in caplog.records)
     assert "speakers_probe.json" in said, said
     assert "--min-utterances" in said and "--min-seconds" in said, said
+
+
+def test_one_speaker_floor_without_the_other_is_still_a_stop(tmp_path, monkeypatch):
+    """Half a pair is not a pair. `select_speakers` takes both floors as
+    required arguments -- deliberately, so no number can reach the corpus
+    without somebody having read the table -- and comparing a count against
+    `None` is a TypeError, not a refusal: a run that walked past this stop
+    holding one of the two would die inside stage 5, after the download and the
+    extraction that for the real corpus are 660 GB and the whole reason this
+    stage stops rather than guessing.
+
+    Both halves are tried, because a bound written for two values can be wrong
+    in a way that lets exactly one of them through, and either one is that run.
+    A fresh tree apiece, since the point is the first stop of a run and not what
+    a second one skips.
+    """
+    for name, half in (
+        ("no-seconds", {"min_utterances": 2}),
+        ("no-utterances", {"min_seconds": 0.3}),
+    ):
+        (tmp_path / name).mkdir()
+        p = _pipeline(tmp_path / name, monkeypatch)
+
+        with pytest.raises(typer.Exit):
+            p.run(**half)
+
+        assert not p.calls["select_speakers"], f"{half} selected speakers on half a pair"
+        assert (p.out / "speakers_probe.json").exists(), half
 
 
 def test_supplying_the_floors_resumes_from_the_speaker_probe(tmp_path, monkeypatch):
@@ -2164,12 +2272,44 @@ def test_the_run_stops_until_the_score_cutoff_has_been_chosen(tmp_path, monkeypa
         p.run(**FLOORS)
 
     assert len(p.calls["align"]) == 2, "the score is the aligner's, so it has to have run"
-    assert (p.out / "scores.json").exists()
+    # And again what the file holds. Ten is the training manifest's rows -- the
+    # three GOL speakers the split did not hold out, two clips each, plus the
+    # two MoeSpeech speakers' four -- every one of them scored, so `count` is
+    # the whole of it and `unscored` is zero. A probe pointed at the manifest
+    # before the aligner instead reports ten unscored rows and a table over
+    # nothing; one pointed at the valid manifest reports 44 rows of a corpus the
+    # cutoff is not meant to be read off. Both write a scores.json.
+    scores = json.loads((p.out / "scores.json").read_text(encoding="utf-8"))
+    assert (scores["count"], scores["unscored"]) == (10, 0), scores
     assert not p.calls["filter_by_score"], "nothing may be cut on a threshold nobody chose"
     assert not (p.out / "train_aligned.jsonl").exists()
     said = "\n".join(record.message for record in caplog.records)
     assert "scores.json" in said, said
     assert "--min-score" in said and "--score-normalization" in said, said
+
+
+def test_one_half_of_the_score_cutoff_without_the_other_is_still_a_stop(tmp_path, monkeypatch):
+    """The same pair, one stage later, and here the halves are not even on the
+    same kind of scale: a threshold without the normalization its row named is a
+    number with no units, and a normalization without a threshold is a scale
+    with nothing on it. `filter_by_score` refuses both, so a run that walked
+    past this stop would raise out of stage 10 -- with the alignment, the most
+    expensive stage in the script, already paid for.
+
+    Both halves again, and a fresh tree apiece.
+    """
+    for name, half in (
+        ("no-norm", {"min_score": -0.5}),
+        ("no-score", {"score_normalization": "per_frame"}),
+    ):
+        (tmp_path / name).mkdir()
+        p = _pipeline(tmp_path / name, monkeypatch)
+
+        with pytest.raises(typer.Exit):
+            p.run(**FLOORS, **half)
+
+        assert not p.calls["filter_by_score"], f"{half} cut the corpus on half a cutoff"
+        assert (p.out / "scores.json").exists(), half
 
 
 def test_supplying_the_cutoff_resumes_from_the_score_probe(tmp_path, monkeypatch):
@@ -2186,6 +2326,35 @@ def test_supplying_the_cutoff_resumes_from_the_score_probe(tmp_path, monkeypatch
     assert len(p.calls["probe_scores"]) == 1, "the scores were measured twice"
     assert (p.out / "scores.json").read_bytes() == scores
     assert (p.out / "train_aligned.jsonl").exists()
+
+
+def test_a_realigned_training_manifest_is_measured_again(tmp_path, monkeypatch):
+    """scores.json is the training alignment's table and no other file's, so
+    what makes it stale is that alignment changing.
+
+    Deleting an artifact is this script's documented way of redoing the stage
+    that wrote it -- there is no flag for it, because the alternative is a stage
+    that quietly redoes 660 GB of work -- and the aligner's output is one an
+    operator has reason to delete: a --model or a --segmenter changed there
+    rewrites nothing else. The valid alignment is untouched here and stays
+    older than the table, so a run that watched the wrong one of the two would
+    hand the operator the previous corpus's percentiles to read a cutoff off
+    and nothing would say which corpus they came from.
+
+    The counts are what this asserts, and not the file's bytes: the fixture's
+    two runs align the same rows to the same scores, so a table rebuilt from
+    them is byte-identical to the one it replaced. Only whether the measurement
+    ran again separates the two.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**FLOORS, **CUTOFF)
+    p.age()
+
+    (p.out / "train_scored.jsonl").unlink()
+    p.run(**FLOORS, **CUTOFF)
+
+    assert len(p.calls["align"]) == 3, "the training manifest was not realigned"
+    assert len(p.calls["probe_scores"]) == 2, "the table still describes the alignment that went"
 
 
 def test_the_filter_reads_the_aligners_output_and_leaves_it_alone(tmp_path, monkeypatch):
@@ -2512,6 +2681,78 @@ def test_changed_floors_rebuild_everything_they_decided(tmp_path, monkeypatch):
     assert len(p.calls["concatenate"]) == 51, "the audio still holds the old selection"
     assert len(p.calls["align"]) == 4, "the alignments still describe the old manifests"
     assert len(p.calls["filter_by_score"]) == 4, "the training manifests were not rebuilt"
+
+
+def test_a_tightened_floor_takes_the_dropped_speakers_offsets_and_audio_away(tmp_path, monkeypatch):
+    """The floor change above loosens, so every speaker it moved was joining the
+    selection. This one tightens, which is the direction that leaves something
+    behind.
+
+    What it leaves behind is audio, and `main`'s own docstring is why that
+    matters more here than tidiness: `audio/` is hundreds of gigabytes at 1,000
+    hours of 48 kHz, the instance is preemptible with a fixed disk, and filling
+    it mid-run costs the run. A stage that only ever adds to that directory adds
+    a speaker's worth of it on every floor an operator tries.
+
+    Asserted on the names the two directories hold and not on the departing
+    speaker's own number, because the number is not theirs: it is a position in
+    the sorted selection, so `solo` and `quiet` leaving from the middle of it
+    renumbers everybody below them. What is stable is that a selection of 25
+    speakers leaves 25 offsets files and the audio those name, and nothing else.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    # Loose enough for both of the two the fixture keeps out: `solo` has one
+    # utterance and `quiet` a tenth of a second.
+    p.run(min_utterances=1, min_seconds=0.0, **CUTOFF)
+    assert len(p.calls["concatenate"]) == 27, "the loose run did not take all 27 speakers"
+    p.age()
+
+    p.run(**FLOORS, **CUTOFF)
+
+    held = {
+        row["speaker"]
+        for part in sorted((p.out / "entries").glob("*.jsonl"))
+        for row in _read_jsonl(part)
+    }
+    assert "g-big:solo" not in held and "g-big:quiet" not in held, sorted(held)
+    assert sorted(part.name for part in (p.out / "entries").glob("*.jsonl")) == [
+        f"{i:04d}.jsonl" for i in range(25)
+    ]
+    # Two files a speaker, since each one's two half-second clips are more than
+    # a --target-sec of 0.75 apart; the pair that left took four of them.
+    assert sorted(wav.name for wav in (p.out / "audio").glob("*.wav")) == sorted(
+        f"{i:04d}{tail}.wav" for i in range(25) for tail in ("", "_001")
+    )
+
+
+def test_a_speaker_who_now_needs_fewer_files_loses_the_ones_past_them(tmp_path, monkeypatch):
+    """The other half of that disk safety, and the half a changed selection
+    cannot reach: this speaker is still selected, still under the same number,
+    and simply needs less room than the run before left them.
+
+    --target-sec is recorded nowhere, so changing it re-runs nothing on its own;
+    deleting the artifact of the stage to redo is how this script is told, and
+    `utterances.jsonl` is the one that carries through `entries/` and `audio/`.
+    A wider previous run's files are then still sitting beside the narrower
+    run's, numbered past the end of it, and named by no manifest -- so nothing
+    downstream reads them, nothing downstream reports them, and they hold the
+    hundreds of gigabytes the next stage needs.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    p.run(**FLOORS, **CUTOFF)
+    assert sorted(wav.name for wav in (p.out / "audio").glob("*.wav")) == sorted(
+        f"{i:04d}{tail}.wav" for i in range(25) for tail in ("", "_001")
+    )
+    p.age()
+
+    # Both clips now fit in one recording, so every speaker's second file is
+    # past what they need -- and no speaker's number has moved.
+    (p.out / "utterances.jsonl").unlink()
+    p.run(**FLOORS, **CUTOFF, target_sec=2.0)
+
+    assert sorted(wav.name for wav in (p.out / "audio").glob("*.wav")) == [
+        f"{i:04d}.wav" for i in range(25)
+    ]
 
 
 def test_an_entries_file_holding_another_speaker_is_not_reused(tmp_path, monkeypatch):
