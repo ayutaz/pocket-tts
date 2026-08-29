@@ -318,6 +318,42 @@ def test_a_member_that_points_outside_the_game_directory_is_refused(tmp_path):
     assert not (root / "escaped.wav").exists()
 
 
+def test_extraction_is_safe_on_the_oldest_interpreter_this_project_runs_on(tmp_path, monkeypatch):
+    """`filter="data"` is a keyword `extractall` only grew in 3.10.12, and
+    pyproject asks for ">= 3.10". On 3.10.0 through 3.10.11 passing it is a
+    TypeError on every single extraction: the whole download paid for, the
+    instance rented, and not one game unpacked -- and it would only be found on
+    the rented box, since the machine this suite runs on has the keyword.
+
+    So the containment those tars need does not come from the keyword. It is
+    checked here, on every interpreter, and the keyword is added on top where it
+    exists. `tarfile.data_filter` is what its presence is asked through, and
+    taking that away is what an older interpreter looks like from in here.
+    """
+    from training.scripts.prepare_gol import extract_game
+
+    real_extractall = tarfile.TarFile.extractall
+
+    def without_the_keyword(self, path=".", members=None, *, numeric_owner=False):
+        """`extractall`'s signature before 3.10.12. Deleting `tarfile.data_filter`
+        alone would not do: `filter="data"` is resolved through a dict of names
+        rather than through that attribute, so the call would go on working here
+        and the test would pass against the very code it exists to reject."""
+        return real_extractall(self, path, members, numeric_owner=numeric_owner)
+
+    monkeypatch.setattr(tarfile.TarFile, "extractall", without_the_keyword)
+    monkeypatch.delattr(tarfile, "data_filter", raising=False)
+    root = tmp_path / "extracted"
+
+    out = extract_game(_make_tar(tmp_path / "g.tar", ["g/spk/a.wav"]), root)
+    assert (out / "g" / "spk" / "a.wav").read_text() == "x"
+
+    escaping = _make_tar(tmp_path / "h.tar", ["h/spk/a.wav", "../escaped.wav"])
+    with pytest.raises(tarfile.TarError):
+        extract_game(escaping, root)
+    assert not (root / "escaped.wav").exists()
+
+
 def test_the_completion_marker_sits_beside_the_directory_not_inside_it(tmp_path):
     """So the directory holds corpus files and nothing else, and every later
     stage can rglob it without excluding a name. Written inside, the marker
@@ -871,20 +907,27 @@ def test_the_clip_is_found_wherever_the_tar_put_it(tmp_path):
 
 def test_the_speaker_never_comes_from_the_directory_name(tmp_path):
     """Ruling G2 again, and the trap MoeSpeech's `read_annotation` documents:
-    take the speaker from `path.parent.name` and a corpus that packs its clips
-    one level down labels every character `wav`. `concatenate` then sees one
-    speaker where there are two and joins them, the split holds out a label
-    rather than a character, and none of it raises.
+    take the speaker from a directory name and a corpus that packs its clips one
+    level down labels every character after whatever directory happens to be
+    there. `concatenate` then sees one speaker where there are two and joins
+    them, the split holds out a label rather than a character, and none of it
+    raises.
 
     metadata.tsv states the speaker in its own column, so the tree decides only
-    where the audio is. The directory here is named nothing like the speaker.
+    where the audio is. What separates the two here is ruling G9: the speaker
+    is `<game_id>:<speaker>`, assembled from two of the metadata's columns, and
+    no directory in this tree is named that. The clip does sit under a `spk`
+    directory, because that is where the metadata says it is and the lookup now
+    holds the corpus to its own claim -- see the test below for why. So the
+    directory name is available to be taken and is still not the answer.
     """
     md = _metadata(tmp_path, [("game", "spk", 1.0)])
     root = tmp_path / "extracted"
-    _at(root / "game" / "game" / "not-the-speaker", "x.wav")
+    _clip(root, "game", "spk", "x.wav")
 
     (u,) = list(gol_utterances(md, root, ["game:spk"], ["game"]))
     assert u["speaker"] == "game:spk"
+    assert u["speaker"] != Path(u["wav"]).parent.name
 
 
 def test_two_speakers_sharing_a_file_name_keep_their_own_audio(tmp_path):
@@ -906,6 +949,31 @@ def test_two_speakers_sharing_a_file_name_keep_their_own_audio(tmp_path):
         ("game:ann", root / "game" / "game" / "ann" / "0001.wav"),
         ("game:bob", root / "game" / "game" / "bob" / "0001.wav"),
     ]
+
+
+def test_a_clip_that_is_not_where_the_metadata_says_is_missing_rather_than_theirs(tmp_path):
+    """The test above narrows two candidates down by the path the metadata
+    states. One candidate was never narrowed at all, and a name unique within a
+    game was therefore accepted wherever in the game it happened to sit.
+
+    So a clip under the wrong speaker -- a game whose tar packs one character's
+    lines under another's directory, or a name reused across speakers where only
+    one of the two clips was extracted -- is handed to this row as if it were
+    its own: that character's voice under this row's transcript, in a manifest
+    that parses, with every offset inside a real file, and nothing downstream
+    able to see it. The metadata states where the clip should be; matching that
+    costs the same lookup whether there is one candidate or two.
+
+    Counted as missing instead, which is a number the run already reports at the
+    end of the walk. The corpus is then short a clip rather than wrong about
+    one, and short is the direction this pipeline can survive.
+    """
+    md = _metadata(tmp_path, [("game", "ann", 1.0, "0001.wav")])
+    root = tmp_path / "extracted"
+    # The only 0001.wav in the game, and it is not ann's.
+    _clip(root, "game", "bob", "0001.wav")
+
+    assert list(gol_utterances(md, root, ["game:ann"], ["game"])) == []
 
 
 def test_only_the_games_this_run_took_are_read(tmp_path, caplog):
@@ -1471,7 +1539,7 @@ def test_no_default_threshold(tmp_path):
     """
     aligned = _aligned(tmp_path, [(-10.0, 10, 5)])
     with pytest.raises(typer.BadParameter):
-        filter_by_score(aligned, tmp_path / "kept.jsonl", min_score_per_frame=None)
+        filter_by_score(aligned, tmp_path / "kept.jsonl", None, "per_frame")
     assert not (tmp_path / "kept.jsonl").exists()
 
 
@@ -1482,24 +1550,50 @@ def test_a_better_alignment_is_the_one_that_survives(tmp_path):
     rows = [(-5.0, 10, 3), (-90.0, 9, 4)]  # per_frame -0.5 and -10.0
     out = tmp_path / "kept.jsonl"
 
-    assert filter_by_score(_aligned(tmp_path, rows), out, min_score_per_frame=-1.0) == 1
+    assert filter_by_score(_aligned(tmp_path, rows), out, -1.0, "per_frame") == 1
     assert [r["id"] for r in _read_jsonl(out)] == ["g:s/0000"]
 
 
-def test_the_filter_compares_per_frame_and_not_raw_or_per_token(tmp_path):
-    """One threshold, three answers, so the denominator cannot hide.
+def test_the_filter_cuts_under_the_normalization_it_was_given(tmp_path):
+    """`probe_scores` reports all three and chooses none, which is only worth
+    the apparatus if all three can then be acted on. A filter that could apply
+    one of them would leave a measurement favouring either other one with
+    nothing to do about it -- and would take a number read off those rows and
+    silently keep the whole corpus, since a per-token cutoff is far below every
+    per-frame score there is.
 
-    At -1.75 the per-frame filter keeps r2 and r3; the same number against the
-    per-token score keeps only r3, and against the raw score keeps nothing at
-    all -- a raw log-probability over a whole utterance is nowhere near -1.75.
-    A fixture whose frames and tokens were proportional would give one answer
-    three times.
+    One threshold, three answers, so the denominator cannot hide. At -1.75 the
+    per-frame cut keeps r2 and r3; the same number per token keeps only r3, and
+    raw keeps nothing at all -- a raw log-probability over a whole utterance is
+    nowhere near -1.75. A fixture whose frames and tokens were proportional
+    would give one answer three times.
     """
-    out = tmp_path / "kept.jsonl"
-    kept = filter_by_score(_aligned(tmp_path, DISAGREEING), out, min_score_per_frame=-1.75)
+    kept = {}
+    for normalization in ("raw", "per_frame", "per_token"):
+        out = tmp_path / f"{normalization}.jsonl"
+        assert filter_by_score(_aligned(tmp_path, DISAGREEING), out, -1.75, normalization) == len(
+            _read_jsonl(out)
+        )
+        kept[normalization] = [r["id"] for r in _read_jsonl(out)]
 
-    assert kept == 2
-    assert [r["id"] for r in _read_jsonl(out)] == ["g:s/0001", "g:s/0002"]
+    assert kept["per_frame"] == ["g:s/0001", "g:s/0002"], kept
+    assert kept["per_token"] == ["g:s/0002"], kept
+    assert kept["raw"] == [], kept
+
+
+def test_a_normalization_the_probe_does_not_report_is_refused(tmp_path):
+    """The three names are the retention table's own column, and the number
+    passed beside one of them was read off the rows carrying it. A fourth name
+    -- or one of these three misspelt -- is a cutoff whose meaning nobody can
+    recover afterwards, so it is refused rather than defaulted to per-frame,
+    which would silently apply a threshold to the scale it was not read off.
+    """
+    aligned = _aligned(tmp_path, [(-1.0, 10, 3)])
+
+    with pytest.raises(typer.BadParameter, match="per_token"):
+        filter_by_score(aligned, tmp_path / "kept.jsonl", -1.0, "per-frame")
+
+    assert not (tmp_path / "kept.jsonl").exists()
 
 
 def test_the_table_promises_the_count_the_filter_delivers(tmp_path):
@@ -1524,7 +1618,11 @@ def test_the_table_promises_the_count_the_filter_delivers(tmp_path):
 
     assert row["min_score"] == -4.0, "the cutoff has to be a value the corpus actually holds"
     assert row["kept"] == 4, "a floor is a floor, not a strict inequality"
-    assert filter_by_score(aligned, tmp_path / "kept.jsonl", row["min_score"]) == row["kept"]
+    # The row's own two columns, handed over together: `min_score` is only a
+    # cutoff alongside the `normalization` it was measured under, and reading
+    # one off the table without the other is the mistake the filter now refuses.
+    kept = filter_by_score(aligned, tmp_path / "kept.jsonl", row["min_score"], row["normalization"])
+    assert kept == row["kept"]
 
 
 def test_a_row_without_a_score_is_kept_and_counted(tmp_path, caplog):
@@ -1542,7 +1640,7 @@ def test_a_row_without_a_score_is_kept_and_counted(tmp_path, caplog):
     out = tmp_path / "kept.jsonl"
 
     with caplog.at_level(logging.WARNING, logger="prepare_gol"):
-        kept = filter_by_score(_aligned(tmp_path, rows), out, min_score_per_frame=-2.0)
+        kept = filter_by_score(_aligned(tmp_path, rows), out, -2.0, "per_frame")
 
     assert kept == 2
     assert [r["id"] for r in _read_jsonl(out)] == ["g:s/0000", "g:s/0002"]
@@ -1560,7 +1658,7 @@ def test_a_row_with_a_score_but_no_denominator_is_kept_too(tmp_path):
     rows = [(-10.0, 10, 4), (-10.0, None, 4)]
     out = tmp_path / "kept.jsonl"
 
-    assert filter_by_score(_aligned(tmp_path, rows), out, min_score_per_frame=-2.0) == 2
+    assert filter_by_score(_aligned(tmp_path, rows), out, -2.0, "per_frame") == 2
     assert [r["id"] for r in _read_jsonl(out)] == ["g:s/0000", "g:s/0001"]
 
 
@@ -1576,7 +1674,7 @@ def test_the_filter_changes_nothing_but_which_rows_are_present(tmp_path):
     lines = aligned.read_bytes().splitlines(keepends=True)
     out = tmp_path / "kept.jsonl"
 
-    filter_by_score(aligned, out, min_score_per_frame=-1.75)
+    filter_by_score(aligned, out, -1.75, "per_frame")
 
     assert out.read_bytes() == lines[1] + lines[2]
 
@@ -1597,7 +1695,7 @@ def test_a_kill_mid_filter_leaves_nothing_under_the_finished_name(tmp_path, monk
     monkeypatch.setattr(m.os, "replace", killed)
 
     with pytest.raises(KeyboardInterrupt):
-        m.filter_by_score(aligned, out, min_score_per_frame=-1.75)
+        m.filter_by_score(aligned, out, -1.75, "per_frame")
 
     assert not out.exists(), "the kill left something under the finished name"
 
@@ -1638,7 +1736,7 @@ TARGET_SEC = 0.75
 # apiece, so per-frame the two are -0.1 and -0.9 and the cutoff sits between.
 GOOD_SCORE, BAD_SCORE = -1.0, -9.0
 ALIGN_FRAMES, ALIGN_TOKENS = 10, 3
-CUTOFF = {"min_score_per_frame": -0.5}
+CUTOFF = {"min_score": -0.5, "score_normalization": "per_frame"}
 KANA_ALIGNER = "vumichien/wav2vec2-large-xlsr-japanese-hiragana"
 
 
@@ -1798,6 +1896,13 @@ def _pipeline(tmp_path, monkeypatch):
     # rather than being recorded as if it had worked.
     signature = inspect.signature(prepare_data.align)
 
+    # Speakers every one of whose utterances the aligner scores badly, read at
+    # call time so a test can add to it between two runs. Whole voices, where
+    # the `bad` below is per utterance: the filter is per utterance too, and a
+    # voice whose every clip aligns badly is how a per-utterance cut removes a
+    # whole speaker from the held-out set with nothing per-utterance noticing.
+    badly_aligned: set[str] = set()
+
     def fake_align(*args, **kwargs):
         bound = signature.bind(*args, **kwargs)
         bound.apply_defaults()
@@ -1811,7 +1916,7 @@ def _pipeline(tmp_path, monkeypatch):
             # not, so the cut below takes half of every voice rather than whole
             # speakers -- which is what tells a filter that ran from a split
             # that happened to drop the same rows.
-            bad = entry["id"].endswith(("b", "0001"))
+            bad = entry["id"].endswith(("b", "0001")) or entry["speaker"] in badly_aligned
             rows.append(
                 {
                     **entry,
@@ -1878,6 +1983,7 @@ def _pipeline(tmp_path, monkeypatch):
         run=run,
         age=age,
         missing=missing,
+        badly_aligned=badly_aligned,
         real_segmenter_check=real_segmenter_check,
         real_late_check=real_late_check,
     )
@@ -2017,7 +2123,7 @@ def test_the_run_stops_until_the_score_cutoff_has_been_chosen(tmp_path, monkeypa
     assert not (p.out / "train_aligned.jsonl").exists()
     said = "\n".join(record.message for record in caplog.records)
     assert "scores.json" in said, said
-    assert "--min-score-per-frame" in said, said
+    assert "--min-score" in said and "--score-normalization" in said, said
 
 
 def test_supplying_the_cutoff_resumes_from_the_score_probe(tmp_path, monkeypatch):
@@ -2065,7 +2171,7 @@ def test_the_filter_reads_the_aligners_output_and_leaves_it_alone(tmp_path, monk
     # re-run, and one pointed at train.jsonl reads rows that have no score.
     (args, _kwargs) = p.calls["filter_by_score"][0]
     assert [Path(a).name for a in args[:2]] == ["train_scored.jsonl", "train_aligned.jsonl"], args
-    assert args[2] == CUTOFF["min_score_per_frame"], args
+    assert (args[2], args[3]) == (CUTOFF["min_score"], CUTOFF["score_normalization"]), args
     # Both manifests are cut, not just the training one. The valid loss is the
     # entire readout of this run, and a valid set selected under a different
     # rule from the training set is not comparable with it.
@@ -2325,7 +2431,7 @@ def test_a_changed_score_cutoff_refilters_without_aligning_again(tmp_path, monke
 
     # -1.0 is below the worse of the two scores per frame (-0.9), so nothing is
     # cut this time and every row of the scored manifest survives.
-    p.run(**FLOORS, min_score_per_frame=-1.0)
+    p.run(**FLOORS, min_score=-1.0, score_normalization="per_frame")
 
     assert len(_read_jsonl(p.out / "train_aligned.jsonl")) == 10
     assert len(_read_jsonl(p.out / "valid_aligned.jsonl")) == 44
@@ -2507,3 +2613,131 @@ def test_a_speaker_label_no_selected_speaker_answers_to_stops_the_run(
     assert not (p.out / "audio").exists()
     said = "\n".join(record.message for record in caplog.records)
     assert "wav" in said, said
+
+
+def test_a_corpus_named_only_on_a_later_run_reaches_the_split(tmp_path, monkeypatch):
+    """--moespeech is supplied at whichever invocation the operator remembers.
+
+    This command stops twice on purpose, so it is typed three times, and the
+    entries the other script wrote are older than this run's train.jsonl by the
+    time the third one is typed. Gated on those entries files alone nothing
+    looks stale: the split is skipped, `Done.` is printed, and the manifest goes
+    on describing one corpus while the command line names two -- which is the
+    exact failure `merge_entries` refuses an empty directory to prevent, reached
+    by not merging at all. Taking the flag away again is the same silence in the
+    other direction, and the MoeSpeech rows stay in a manifest that no longer
+    claims them.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+
+    p.run(**FLOORS, **CUTOFF, moespeech=None)
+    assert "アリス" not in {r["speaker"] for r in _read_jsonl(p.out / "train.jsonl")}
+    p.age()
+
+    p.run(**FLOORS, **CUTOFF)
+
+    everyone = {r["speaker"] for r in _read_jsonl(p.out / "train.jsonl")}
+    everyone |= {r["speaker"] for r in _read_jsonl(p.out / "valid.jsonl")}
+    assert {"アリス", "ボブ"} <= everyone, sorted(everyone)
+    assert len(p.calls["split_across_corpora"]) == 2, "the corpus that was added never merged"
+    p.age()
+
+    p.run(**FLOORS, **CUTOFF, moespeech=None)
+
+    left = {r["speaker"] for r in _read_jsonl(p.out / "train.jsonl")}
+    left |= {r["speaker"] for r in _read_jsonl(p.out / "valid.jsonl")}
+    assert not {"アリス", "ボブ"} & left, sorted(left)
+    assert len(p.calls["split_across_corpora"]) == 3, "the corpus that was dropped is still in"
+    # The audio is not rebuilt for either change: which corpora are merged is a
+    # fact about the split and about nothing above it, and this stage is
+    # hundreds of gigabytes at 1,000 hours.
+    assert len(p.calls["concatenate"]) == 25, "GOL's own audio was joined again"
+
+
+def test_a_valid_set_the_score_filter_shrank_below_the_floor_is_refused(tmp_path, monkeypatch):
+    """The twenty-voice floor is asserted at the split, and two stages after it
+    can undo what it asserted.
+
+    Ruling G7 put the score filter after alignment, so between the floor and the
+    manifests training actually reads there are two per-utterance stages that
+    drop rows: the aligner discards what it cannot align, and this cut discards
+    what it scored badly. Per-utterance is the trap -- a voice whose every clip
+    goes is a voice gone, and nothing counting utterances sees a voice leave.
+
+    M2a exists to answer one question, whether the validation loss turns over
+    20+ voices the weights have never heard. A held-out set that quietly falls
+    under that is the experiment failing silently, at the end of a run whose
+    alignment has already been paid for.
+
+    Three invocations, as the two stops force. The first aligns and stops at the
+    score probe, which is where valid.jsonl first exists to be read.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+
+    with pytest.raises(typer.Exit):
+        p.run(**FLOORS)
+    held_out = sorted({row["speaker"] for row in _read_jsonl(p.out / "valid.jsonl")})
+    assert len(held_out) == 22, held_out
+
+    # Five held-out voices align badly enough to be cut whole, which takes the
+    # set to 17. The aligner is re-run over the valid manifest alone, which is
+    # what a rented instance re-run after the aligner was improved would do.
+    p.badly_aligned.update(held_out[:5])
+    (p.out / "valid_scored.jsonl").unlink()
+
+    with pytest.raises(typer.BadParameter, match=str(MIN_VALID_SPEAKERS)):
+        p.run(**FLOORS, **CUTOFF)
+
+    assert len({r["speaker"] for r in _read_jsonl(p.out / "valid_aligned.jsonl")}) == 17
+    filtered = len(p.calls["filter_by_score"])
+    p.age()
+
+    # And again on the next invocation, which finds both filtered manifests up
+    # to date and skips the stage that wrote them. A refusal only the run that
+    # happened to write the file makes is one an operator gets past by typing
+    # the same command twice.
+    with pytest.raises(typer.BadParameter, match=str(MIN_VALID_SPEAKERS)):
+        p.run(**FLOORS, **CUTOFF)
+
+    assert len(p.calls["filter_by_score"]) == filtered, "the manifests were not the reused ones"
+
+
+def test_a_valid_set_the_filter_emptied_is_refused(tmp_path, monkeypatch):
+    """The same floor at its far end. A cutoff above every score this corpus
+    holds leaves a valid manifest of zero bytes, which is still valid JSONL:
+    every line in it parses and every path in it exists, so the loader opens it,
+    the run starts, and the number the whole experiment is read off is taken
+    over nothing at all.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+
+    with pytest.raises(typer.BadParameter, match=str(MIN_VALID_SPEAKERS)):
+        p.run(**FLOORS, min_score=0.0, score_normalization="per_frame")
+
+    assert (p.out / "valid_aligned.jsonl").read_bytes() == b""
+
+
+def test_the_run_says_what_the_cut_cost_each_manifest_apart(tmp_path, monkeypatch, caplog):
+    """The cutoff is read off `probe_scores(train_scored)` -- the training
+    distribution -- and then applied to a valid set nobody measured it against.
+    What it costs there is the number M2a turns on, so the two manifests are
+    reported apart, by name, and in voices as well as in clips.
+
+    One line saying "kept 27 of 54" over both together cannot answer either
+    question an operator has here: whether the cut was the one they read off the
+    table, and whether the held-out set survived it.
+    """
+    p = _pipeline(tmp_path, monkeypatch)
+    caplog.set_level(logging.INFO)
+
+    p.run(**FLOORS, **CUTOFF)
+
+    said = [r.message for r in caplog.records if r.message.startswith(("train_al", "valid_al"))]
+    assert len(said) == 2, said
+    train_line, valid_line = said
+    # Every voice loses its second clip and keeps its first, so the cut costs
+    # half the clips and no voices at all -- which is the pair of numbers that
+    # tells "this cut is survivable" from "this cut emptied the held-out set",
+    # and which a count of utterances alone cannot.
+    assert "kept 5 of 10 utterances from 5 of 5 voices" in train_line, train_line
+    assert "kept 22 of 44 utterances from 22 of 22 voices" in valid_line, valid_line

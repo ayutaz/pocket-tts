@@ -22,10 +22,21 @@
 # Prepare the inputs first (see docs/Japanese Model/training-strategy.md):
 #   uv sync --group japanese
 #   uv run python -m training.scripts.prepare_gol --hours 1000 --out data/ja-gol \
-#       --moespeech data/ja
+#       --moespeech data/ja --valid-hours 25
 # That command stops twice on purpose -- once for the speaker floors and once
 # for the alignment-score cutoff -- and prints the table each is read off. Both
-# stops are stage boundaries: everything above them stays on disk.
+# stops are stage boundaries: everything above them stays on disk. Supply
+# --moespeech at every invocation, not only the first: the merge is recorded in
+# corpora.json and a run that drops the flag drops the corpus.
+#
+# --valid-hours is here because its default of 10 does not complete. How many
+# voices held-out hours buy is a property of the corpus rather than of that
+# number: the split takes the smallest speakers first, so it is those hours
+# divided by the size of the smallest selected one. At the roughly one-hour
+# speaker floor this run is designed around, ten hours buy about ten voices and
+# the pipeline refuses anything under twenty -- one voice is what phase 1 held
+# out, and it could not tell a validation loss turning from noise. 25 buys
+# about that many, at 2.5% of the corpus not trained on.
 model_config: pocket_tts/config/english_2026-04_24l.yaml
 model_overrides:
   flow_lm.lookup_table.tokenizer_path: training/tokenizers/japanese_8000.model

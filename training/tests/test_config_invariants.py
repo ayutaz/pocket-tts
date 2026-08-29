@@ -5,6 +5,7 @@ before the quality transition, a batch size a quarter of the floor it needs,
 and a teacher path pointing at an architecture the distill step cannot load.
 """
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -12,6 +13,7 @@ import pytest
 
 from training.args import TrainArgs, _from_dict, load_args
 from training.modules.builders import load_model_config
+from training.scripts.prepare_gol import MIN_VALID_SPEAKERS
 
 CONFIGS = Path(__file__).resolve().parents[1] / "configs"
 SCRATCH = CONFIGS / "scratch.yaml"
@@ -267,6 +269,27 @@ def test_m2a_reads_the_corpus_it_was_built_to_measure():
     phase 1's own corpus -- a run that costs the same and settles nothing."""
     data = load_args(JAPANESE_M2A).data
     assert "ja-gol" in data.train_jsonl and "ja-gol" in data.valid_jsonl, data
+
+
+def test_the_m2a_prepare_command_holds_out_enough_voices():
+    """The command in this config's header is the one an operator types on the
+    rented box, and it has to reach the end.
+
+    `--valid-hours` defaults to 10, and how many voices ten hours buy is a
+    property of the corpus rather than of that number: `split_by_speaker` takes
+    the smallest speakers first, so it is the held-out hours divided by the size
+    of the smallest selected one. At the roughly one-hour speaker floor this run
+    is designed around, every selected speaker is at least an hour and ten hours
+    buy about ten voices -- against a floor of twenty, so `split_across_corpora`
+    refuses and the documented command stops without a manifest.
+
+    It stops at the second of the three invocations the two deliberate stops
+    force, which is after the tars are already downloaded and unpacked.
+    """
+    documented = JAPANESE_M2A.read_text(encoding="utf-8")
+    named = re.search(r"--valid-hours\s+(\d+(?:\.\d+)?)", documented)
+    assert named, "the documented prepare command does not name --valid-hours"
+    assert float(named.group(1)) >= MIN_VALID_SPEAKERS, documented
 
 
 REPO = CONFIGS.parents[1]

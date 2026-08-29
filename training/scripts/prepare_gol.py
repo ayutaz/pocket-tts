@@ -188,6 +188,43 @@ def download_games(ids: list[str], dest: Path, repo: str = DATASET_REPO) -> list
     return paths
 
 
+def _members_inside(archive: tarfile.TarFile, dest_root: Path) -> Iterator[tarfile.TarInfo]:
+    """`archive`'s members, refusing any that would land outside `dest_root`.
+
+    This is the containment `filter="data"` provides, done here rather than
+    left to that keyword because the keyword does not exist before 3.10.12 and
+    pyproject asks for ">= 3.10,<3.15". On 3.10.0 through 3.10.11 -- which is
+    what a rented image can perfectly well come with -- passing it is a
+    TypeError on every single extraction, so the run would download 660 GB and
+    unpack none of it, and it would fail there and not here. The check
+    therefore runs on every interpreter, and the keyword is added on top of it
+    where it exists rather than being the only thing between a third-party tar
+    and the filesystem.
+
+    Refused rather than skipped. A tar holding a member that names somewhere
+    else is not a tar this corpus can be built out of, and a game quietly short
+    of clips is the state the completion marker exists to prevent; the caller
+    writes no marker when this raises, so the next run unpacks it again.
+
+    Stricter than `data` in one place: only regular files and directories go
+    through. A GOL tar holds wavs, and a symlink or a device node in one is a
+    thing to refuse outright rather than to resolve carefully.
+    """
+    root = Path(dest_root).resolve()
+    for member in archive:
+        if not (member.isfile() or member.isdir()):
+            raise tarfile.ExtractError(
+                f"{member.name!r} is neither a file nor a directory. These tars hold wavs, "
+                "and this one is unpacked unattended on a rented box."
+            )
+        target = (root / member.name).resolve()
+        if target != root and root not in target.parents:
+            raise tarfile.ExtractError(
+                f"{member.name!r} would be written to {target}, which is outside {root}."
+            )
+        yield member
+
+
 def extract_game(tar_path: Path, dest_root: Path) -> Path:
     """Unpack one game's tar into `dest_root/<game_id>/`, once.
 
@@ -212,11 +249,13 @@ def extract_game(tar_path: Path, dest_root: Path) -> Path:
     to take the speaker from the path; metadata.tsv states the speaker in its
     own column, and every scan below is `rglob`, so the depth costs nothing.
 
-    `filter="data"` is not tidiness. These tars come from a third-party repo,
-    and without it a member named `../../something`, or one with an absolute
-    path, is written where it says -- outside `dest_root` entirely, on a machine
-    this pipeline runs unattended on. It is also the default from 3.14 on, so
-    stating it keeps this stable across the interpreter as well.
+    Containment is not tidiness. These tars come from a third-party repo, and
+    unfiltered, a member named `../../something`, or one with an absolute path,
+    is written where it says -- outside `dest_root` entirely, on a machine this
+    pipeline runs unattended on. `_members_inside` is what refuses that, and it
+    refuses it on every interpreter; `filter="data"` is asked for as well
+    wherever `extractall` has it, which is 3.10.12 on and the default from 3.14,
+    for the mode bits and ownership it strips that this does not.
     """
     dest_root.mkdir(parents=True, exist_ok=True)
     out = dest_root / tar_path.stem
@@ -229,7 +268,14 @@ def extract_game(tar_path: Path, dest_root: Path) -> Path:
         shutil.rmtree(out)
     marker.unlink(missing_ok=True)  # so a kill mid-unpack cannot leave it lying
     with tarfile.open(tar_path) as t:
-        t.extractall(out, filter="data")
+        # `tarfile.data_filter` exists exactly where the `filter=` keyword does,
+        # so it is what the interpreter is asked through -- and it is asked
+        # about, not assumed, because passing the keyword where it is absent is
+        # a TypeError rather than a warning.
+        if hasattr(tarfile, "data_filter"):
+            t.extractall(out, _members_inside(t, out), filter="data")
+        else:
+            t.extractall(out, _members_inside(t, out))
     marker.write_text("", encoding="utf-8")
     return out
 
@@ -519,16 +565,22 @@ def gol_utterances(
             if speaker not in wanted_speakers:
                 continue
             stated = PurePosixPath(row["file_path"])
-            found = clips.get((game, stated.name), [])
-            if len(found) > 1:
-                # Narrowed by the speaker directory the metadata itself names,
-                # which is a lookup against the corpus's own claim about where
-                # it put the file and not a speaker read off a path. Two clips
-                # of one name under one speaker of one game would take two
-                # directories of that name at different depths, which is not a
-                # tree a tar can hold.
-                tail = "/" + "/".join(stated.parts[-2:])
-                found = [p for p in found if p.as_posix().endswith(tail)]
+            # Narrowed by the speaker directory the metadata itself names, which
+            # is a lookup against the corpus's own claim about where it put the
+            # file and not a speaker read off a path. Two clips of one name
+            # under one speaker of one game would take two directories of that
+            # name at different depths, which is not a tree a tar can hold.
+            #
+            # Always, and not only when the name is ambiguous. A name that
+            # happens to be unique within its game is otherwise taken wherever
+            # in that game it sits, so a clip packed under another character's
+            # directory is handed to this row -- that character's voice under
+            # this row's transcript, in a manifest that parses, with every
+            # offset inside a real file and nothing downstream able to see it.
+            # The lookup costs the same either way, and what it turns a wrong
+            # clip into is one more of the `missing` this walk already counts.
+            tail = "/" + "/".join(stated.parts[-2:])
+            found = [p for p in clips.get((game, stated.name), []) if p.as_posix().endswith(tail)]
             if not found:
                 missing += 1
                 logger.debug(f"{row['file_path']}: no such wav under {Path(extract_root) / game}")
@@ -695,6 +747,58 @@ def split_across_corpora(
     return train, valid
 
 
+def require_held_out_voices(
+    valid_aligned: Path, minimum: int = MIN_VALID_SPEAKERS
+) -> set[str | None]:
+    """The voices left in the manifest training will actually validate on, and
+    a refusal when there are too few of them.
+
+    `split_across_corpora` asserts this same floor, and two stages that run
+    after it can undo what it asserted. Ruling G7 put the score filter after
+    alignment, so between the split and these manifests there are two stages
+    that drop rows -- the aligner discards the utterances it could not align,
+    and `filter_by_score` discards the ones it scored badly. Both work one
+    utterance at a time, and a voice all of whose utterances went is a voice
+    gone: nothing counting utterances sees a speaker leave, and the cutoff was
+    read off the training distribution in any case, so what it does to the
+    held-out set is not a number anybody looked at.
+
+    M2a exists to answer exactly one question -- whether the validation loss
+    turns over 20+ voices the weights have never heard. A held-out set that has
+    quietly fallen under that is the experiment failing silently, at the end of
+    a run whose alignment has already been paid for. An empty one is worse and
+    is not detectable further down: a zero-byte manifest is valid JSONL, so the
+    loader opens it, the run starts, and the loss the whole thing is read off is
+    taken over nothing.
+
+    Read back off the file rather than carried down from the split, because
+    what happened in between is the whole question. Streamed and only the
+    labels kept: the valid manifest is a fraction of the training one, but it is
+    an aligned manifest all the same, and those carry a timestamp per word.
+
+    Asked on every run, not only on the run that wrote the file. Both filtered
+    manifests are skipped when they are up to date, and a refusal that a re-run
+    walked straight past would be a refusal only the first time.
+    """
+    voices: set[str | None] = set()
+    with open(valid_aligned, encoding="utf-8") as f:
+        for line in f:
+            voices.add(json.loads(line).get("speaker"))
+    if len(voices) < minimum:
+        raise typer.BadParameter(
+            f"{valid_aligned} holds {len(voices)} speaker(s) and needs at least {minimum}. "
+            "The split held out enough and the two stages since then took rows out from "
+            "under it one utterance at a time -- the aligner drops what it could not align "
+            "and the score cutoff drops what it scored badly -- so whole voices left "
+            "without anything counting utterances seeing them go. The cutoff was read off "
+            "the training distribution, which is not this one. Lower --min-score, or delete "
+            "train.jsonl and valid.jsonl and split again under a larger --valid-hours; the "
+            "alignment above is on disk either way. This run's whole readout is the loss "
+            "over these voices, and one voice is what phase 1 had."
+        )
+    return voices
+
+
 def _scored(row: dict) -> tuple[float, int, int] | None:
     """One aligned row's `(score, frames, tokens)`, or None if it carries no
     score this stage can read.
@@ -851,18 +955,43 @@ def probe_scores(aligned_jsonl: Path) -> dict:
     }
 
 
-def filter_by_score(aligned: Path, out: Path, min_score_per_frame: float | None) -> int:
-    """Write the rows of `aligned` whose per-frame score clears the floor, and
-    say how many that was.
+def filter_by_score(
+    aligned: Path, out: Path, min_score: float | None, normalization: str | None
+) -> int:
+    """Write the rows of `aligned` whose score clears the floor under
+    `normalization`, and say how many that was.
 
-    There is no default and asking for one raises. The threshold is a property
-    of this corpus, it is read off `probe_scores`'s retention table, and a
-    number written here now would afterwards be indistinguishable from a
+    There is no default threshold and asking for one raises. The threshold is a
+    property of this corpus, it is read off `probe_scores`'s retention table,
+    and a number written here now would afterwards be indistinguishable from a
     measured one. See that function for what the plausible-looking default did
     on the corpus before this one.
 
+    The normalization has no default either, and it is the same argument
+    twice. `probe_scores` reports all three and chooses none, which is only
+    worth its apparatus if all three can then be acted on -- a measurement
+    favouring per-token is not a measurement if this stage can only cut per
+    frame. And the pair cannot be split: the retention table names a
+    normalization on every row, the number was read off one of those rows, and
+    a per-token cutoff applied per frame is not a stricter or a looser cut but
+    a meaningless one. It sits below every per-frame score there is, so it
+    keeps the entire corpus and logs that it kept it. Requiring both is what
+    makes that mismatch impossible to make silently, the same way requiring
+    both speaker floors is.
+
+    Which row was kept is `_normalized`'s answer and not a second definition of
+    it here, so the number an operator read off the table is compared the way
+    the table computed it.
+
     The floor is inclusive, matching the retention table exactly, so the count
     an operator read there is the count they get.
+
+    What it cost is reported per manifest and in voices as well as in clips.
+    The cutoff is read off the *training* distribution and then applied to a
+    valid set nobody measured it against, and the valid set is the whole
+    readout of this run: whether it survived the cut is a different question
+    from whether the training set did, and one line over both together answers
+    neither.
 
     A row with no score goes through and is counted. `align_data` drops the
     utterances it could not align before they reach this file, so a row without
@@ -894,35 +1023,51 @@ def filter_by_score(aligned: Path, out: Path, min_score_per_frame: float | None)
     and every path exists -- so nothing downstream can tell it from a finished
     one, and the re-run that finds it skips this stage.
     """
-    if min_score_per_frame is None:
+    if min_score is None:
         raise typer.BadParameter(
             "filter_by_score has no default threshold and needs one. The scale of an "
             "alignment log-probability is a property of this corpus and it has not been "
             "measured: run probe_scores, read a cutoff off its retention table -- which "
-            "reports what each one costs in hours and not only in clips -- and pass that. "
-            "The corpus before this one is why: --min-mos 3.0 was the plausible default "
-            "there and the measured median was 2.281, which would have cut 124.4 hours to "
-            "16.2 and written a manifest that looked entirely normal."
+            "reports what each one costs in hours and not only in clips -- and pass that, "
+            "with the normalization its row names. The corpus before this one is why: "
+            "--min-mos 3.0 was the plausible default there and the measured median was "
+            "2.281, which would have cut 124.4 hours to 16.2 and written a manifest that "
+            "looked entirely normal."
+        )
+    if normalization not in NORMALIZATIONS:
+        raise typer.BadParameter(
+            f"{normalization!r} is not one of the normalizations the retention table "
+            f"reports ({', '.join(NORMALIZATIONS)}). The cutoff was read off the rows "
+            "carrying one of those names and means nothing away from it: applied to the "
+            "wrong scale it does not cut harder or softer, it sits below every score "
+            "there is and keeps the whole corpus while reporting that it kept it."
         )
     aligned, out = Path(aligned), Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     partial = out.with_name(f"{out.name}.partial")
     kept = unscored = total = 0
     kept_seconds = total_seconds = 0.0
+    # Labels rather than counts, because the two questions differ: a cut that
+    # takes half of every voice and one that takes every clip of half the
+    # voices remove the same number of utterances.
+    voices: set[str | None] = set()
+    kept_voices: set[str | None] = set()
     with open(aligned, "rb") as fin, open(partial, "wb") as fout:
         for line in fin:
             row = json.loads(line)
             total += 1
             duration = row.get("duration", 0.0)
             total_seconds += duration
+            voices.add(row.get("speaker"))
             got = _scored(row)
             if got is None:
                 unscored += 1
-            elif got[0] / got[1] < min_score_per_frame:
+            elif _normalized(*got)[normalization] < min_score:
                 continue
             fout.write(line)
             kept += 1
             kept_seconds += duration
+            kept_voices.add(row.get("speaker"))
     if unscored:
         logger.warning(
             f"{unscored} of {total} rows carry no score to filter on and were kept; "
@@ -931,7 +1076,8 @@ def filter_by_score(aligned: Path, out: Path, min_score_per_frame: float | None)
             "record a different problem as a bad alignment"
         )
     logger.info(
-        f"kept {kept} of {total} utterances at min_score_per_frame={min_score_per_frame}: "
+        f"{out.name}: kept {kept} of {total} utterances from {len(kept_voices)} of "
+        f"{len(voices)} voices at {normalization} >= {min_score}: "
         f"{kept_seconds / 3600:.1f} of {total_seconds / 3600:.1f} hours"
     )
     os.replace(partial, out)
@@ -978,11 +1124,19 @@ def main(
             "speakers_probe.json's retention table; there is no default"
         ),
     ] = None,
-    min_score_per_frame: Annotated[
+    min_score: Annotated[
         float | None,
         typer.Option(
-            help="keep utterances the aligner scored at least this well per frame. Read it "
-            "off scores.json's retention table; there is no default"
+            help="keep utterances the aligner scored at least this well. Read it off "
+            "scores.json's retention table, together with the normalization its row "
+            "names; there is no default"
+        ),
+    ] = None,
+    score_normalization: Annotated[
+        str | None,
+        typer.Option(
+            help="which scale --min-score is on: one of " + ", ".join(NORMALIZATIONS) + ". It "
+            "is the retention table's own column and the cutoff means nothing away from it"
         ),
     ] = None,
     valid_hours: Annotated[
@@ -1033,8 +1187,19 @@ def main(
 
     Every stage skips work whose output is already on disk, so this command is
     re-run rather than resumed. That is the whole design: a 1,000-hour selection
-    is 200 GB of tars, the instance it runs on is preemptible, and being killed
+    is 660 GB of tars, the instance it runs on is preemptible, and being killed
     must cost only the stage in flight.
+
+    Size the disk for four copies of that, because four of them coexist. The
+    hub cache holds every tar `hf_hub_download` fetched and nothing here frees
+    it; `tars/` holds the copy `download_games` made; `extracted/` holds the
+    same audio unpacked; and `audio/` holds it again, joined into 48 kHz
+    pseudo-recordings. That is roughly 660 + 660 + 660 + 660, about 2.6 TB at
+    peak for a 1,000-hour run, against the 660 GB of the download alone. Only
+    one of the four can be given back mid-run: once `tars/` holds every tar,
+    nothing reads the hub cache again and deleting it frees 660 GB before the
+    extraction that needs it. Running out mid-run costs the run, and this
+    docstring is the only number an operator renting the disk sizes it by.
 
     It stops twice on purpose, and neither stop is a failed run. The first is
     after the speaker probe: GOL's median speaker has 0.6 minutes of audio and
@@ -1046,8 +1211,8 @@ def main(
     discards. Read the table, pass the flag, and run the same command again.
 
     What a stage skips on is its output and the timestamps of its inputs, not
-    the options it was given -- with two exceptions, and they are the two the
-    stops above force onto the command line a second time. The speaker floors go
+    the options it was given -- with three exceptions. Two of them are what the
+    stops above force onto the command line a second time: the speaker floors go
     to `floors.json` and the score cutoff to `score_cutoff.json`, and each is
     counted among the inputs of what it decided, so a changed value rebuilds
     everything below it on its own. Nothing else on disk records either, and
@@ -1055,7 +1220,15 @@ def main(
     nothing else: the run would report success over the selection it had just
     replaced.
 
-    Every other option -- --target-sec, --valid-hours, --moespeech -- is
+    The third is --moespeech, which goes to `corpora.json` for that reason and
+    a sharper one. The entries it names were written by the other script's run,
+    so they are older than a train.jsonl this one has already left behind:
+    supplying the flag at the second of these three invocations, having
+    forgotten it at the first, moves nothing the split is gated on, and the run
+    prints Done over a manifest built from one corpus while the command line
+    named two. Taking it away again is the same silence with the rows still in.
+
+    Every other option -- --target-sec, --valid-hours -- is
     recorded nowhere, so changing one re-runs nothing. Delete that stage's
     artifact to redo it under a new value; deleting is the only way to say so,
     and it is deliberate, since the alternative is a stage that quietly redoes
@@ -1097,8 +1270,9 @@ def main(
     scores_json = out_dir / "scores.json"
     score_cutoff_json = out_dir / "score_cutoff.json"
     train_aligned, valid_aligned = out_dir / "train_aligned.jsonl", out_dir / "valid_aligned.jsonl"
+    corpora_json = out_dir / "corpora.json"
     floors = {"min_utterances": min_utterances, "min_seconds": min_seconds}
-    score_cutoff = {"min_score_per_frame": min_score_per_frame}
+    score_cutoff = {"min_score": min_score, "normalization": score_normalization}
 
     # 0. The one thing that can fail for a reason no stage below can fix, asked
     #    before stage 1 because the answer never changes mid-run and the stage
@@ -1294,10 +1468,24 @@ def main(
     corpora = [entries_dir]
     if moespeech:
         corpora.append(Path(moespeech) / "entries")
+    #    Which corpora are in the merge is recorded beside the manifests it
+    #    decides and counted among their inputs, exactly as the floors and the
+    #    score cutoff are -- and for a sharper reason than either. The other
+    #    script's entries were written by another run, so by the time this
+    #    command is typed for the second of the three times its two stops force,
+    #    they are older than the train.jsonl this one already left behind.
+    #    Gated on those files alone, --moespeech remembered late moves nothing
+    #    and the run prints Done over a split that never saw it; --moespeech
+    #    dropped late is the same silence with its rows still in.
+    #    Posix, because this is compared against what a later run writes and a
+    #    path spelled with backslashes cannot be compared with one read on Linux.
+    named_corpora = {"corpora": [d.as_posix() for d in corpora]}
+    if not _same_cutoffs(corpora_json, named_corpora):
+        _write_json(named_corpora, corpora_json)
     written_entries = [part for directory in corpora for part in sorted(directory.glob("*.jsonl"))]
     if not _reusable(
         [train_manifest, valid_manifest],
-        [utterances_jsonl, *written_entries],
+        [utterances_jsonl, corpora_json, *written_entries],
         "keeping the split they hold",
     ):
         train, valid = split_across_corpora(merge_entries(corpora), valid_hours)
@@ -1346,14 +1534,17 @@ def main(
     #     fraction of the size and is then cut by the same number.
     if not _reusable([scores_json], [train_scored], "keeping the measurements it holds"):
         _write_json(probe_scores(train_scored), scores_json)
-    if min_score_per_frame is None:
+    if min_score is None or score_normalization is None:
         logger.error(
             f"read the retention table in {scores_json} and run this again with "
-            "--min-score-per-frame. It has no default: an alignment log-probability has no "
-            "scale known before the corpus is measured, so a number guessed now would "
-            "afterwards be indistinguishable from a measured one -- and the table reports "
-            "what each cutoff costs in hours and not only in clips. Everything up to here, "
-            "the alignment included, is on disk and will not be redone."
+            "--min-score and --score-normalization. Neither has a default: an alignment "
+            "log-probability has no scale known before the corpus is measured, so a number "
+            "guessed now would afterwards be indistinguishable from a measured one -- and "
+            "the table reports what each cutoff costs in hours and not only in clips. The "
+            "normalization comes with it because the table names one on every row and the "
+            "number means nothing away from it: a per-token cutoff applied per frame sits "
+            "below every per-frame score there is and keeps the whole corpus. Everything up "
+            "to here, the alignment included, is on disk and will not be redone."
         )
         raise typer.Exit(1)
     #     Recorded beside the manifests it decides, for the same reason the
@@ -1375,7 +1566,13 @@ def main(
     ):
         if _reusable([filtered], [scored, score_cutoff_json], f"keeping the {what} manifest"):
             continue
-        filter_by_score(scored, filtered, min_score_per_frame)
+        filter_by_score(scored, filtered, min_score, score_normalization)
+    # 11. The twenty-voice floor again, on the file training will actually read.
+    #     Stage 8 asserted it over the split, and the two stages between there
+    #     and here drop rows one utterance at a time, so a voice can leave the
+    #     held-out set entire with nothing per-utterance noticing. Asked outside
+    #     the loop above so that a re-run which skipped the filter still asks it.
+    logger.info(f"{len(require_held_out_voices(valid_aligned))} voices held out and validated on")
     logger.info(f"Done. Training on {train_aligned.resolve()} and {valid_aligned.resolve()}")
 
 
