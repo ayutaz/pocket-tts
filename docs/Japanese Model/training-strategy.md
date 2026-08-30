@@ -774,6 +774,85 @@ HF キャッシュ: zip と同じ            ≈ 30 GB
     10,000 / 12,500 / 15,000 です。**最良は既に存在しません。** 保持数を増やすか、
     valid 最良を別に退避する仕組みが要ります。
 
+### フェーズ2a: 中間検証（GOL 1,000h + MoeSpeech 87h・約$43・約2日）
+
+**目的は「量か多様性か」を決めることです。** フェーズ1の過学習には 19.5エポックと
+27話者という2つの説明があり、どちらが支配的かで M2b に必要な GOL の量が変わります
+（[設計](specs/2026-08-30-gol-and-phase2-design.md)）。
+
+#### インスタンスの要件
+
+| 項目 | 要件 | 理由 |
+|---|---|---|
+| VRAM | **24 GB 以上**、32 GB 推奨 | `batch_size: 16` × `grad_accum: 4`。16 GB は実測で破綻（0.022 it/s） |
+| ディスク | **1.6 TB** | 下の「ディスクは4重になります」参照 |
+| dlperf | **高いほど直接効く** | 通し時間の8割がアライメント。dlperf 半分なら時間も費用も倍 |
+| ネットワーク | 速いほどよい | 660 GB を落とす |
+| 課金 | **on-demand（中断なし）** | 660 GB の再取得は避ける |
+
+2026-08-30 時点の最良は **RTX 5090 / 32 GB / dlperf 199 / store $0.067 per GB month /
+7,972 Mbps** で、1.6 TB 込み **$0.92/h**。
+
+!!! danger "ディスクは4重になります"
+    `hf_hub_download` のキャッシュ、`tars/`、`extracted/`、`audio/` が同時に存在し、
+    660 GB × 4 = **2.6 TB がピーク**です。1.6 TB で走らせるには**段の合間に消します** ——
+    `tars/` が揃ったらキャッシュ、展開が終わったら `tars/`、連結が終わったら `extracted/`。
+    どれも完了マーカーが残るので、再実行しても作り直しません。
+
+    **途中で溢れると走行ごと失います。**
+
+#### 二度止まります。どちらも失敗ではありません
+
+| 停止 | 読むファイル | 渡すもの |
+|---|---|---|
+| 話者プローブの後 | `speakers_probe.json` の残存率表 | `--min-utterances` と `--min-seconds` |
+| スコアプローブの後 | `scores.json` の残存率表 | `--min-score` と `--score-normalization` |
+
+**閾値に既定値はありません。** MoeSpeech で `--min-mos 3.0` がコーパスの8分の7を黙って
+捨てかけた一件の直接の帰結で、**測ってから決める**という規律をスクリプトが強制しています。
+片方だけ渡した実行も止まります。
+
+#### 手順
+
+```bash
+# 0. 準備
+git clone -b japanese-model-training <repo> && cd pocket-tts && uv sync
+export HF_TOKEN=...          # MoeSpeech は gated
+
+# 1. MoeSpeech 側（フェーズ1と同じ。閾値は probe を読んでから）
+uv run python training/scripts/prepare_moespeech.py --out data/ja --hours 124
+uv run python training/scripts/prepare_moespeech.py --out data/ja --hours 124     --max-cer <実測> --min-mos <実測>
+
+# 2. GOL。ここで1度目の停止
+uv run python training/scripts/prepare_gol.py --out data/ja-gol --hours 1000     --moespeech data/ja --valid-hours 10
+
+# 3. speakers_probe.json を読んで floors を渡す。ここで2度目の停止（アライメント後）
+uv run python training/scripts/prepare_gol.py --out data/ja-gol --hours 1000     --moespeech data/ja --valid-hours 10     --min-utterances <実測> --min-seconds <実測>
+
+# 4. scores.json を読んで cutoff を渡す
+uv run python training/scripts/prepare_gol.py --out data/ja-gol --hours 1000     --moespeech data/ja --valid-hours 10     --min-utterances <実測> --min-seconds <実測>     --min-score <実測> --score-normalization <表の列名>
+
+# 5. 学習
+uv run python training/train.py --config training/configs/finetune_language_ja_m2a.yaml
+```
+
+#### 費用の内訳（RTX 5090・$0.92/h）
+
+| 段 | 時間 | 根拠 |
+|---|---|---|
+| 準備 + MoeSpeech 前処理 | 3.5h | フェーズ1の実測（124h で3時間） |
+| GOL 取得 660 GB | 0.7h | 7,972 Mbps |
+| 展開 | 1.5h | |
+| 連結 | 1.0h | 単一プロセス |
+| **アライメント 1,087h** | **32h** | **0.0292 GPU-h / 音声1時間**（フェーズ1の実測） |
+| 停止2回の待ち | 1.0h | 表を読んで判断する時間 |
+| 学習 40k step | 6h | フェーズ1の 15k step / 2.15h から |
+| 回収 | 0.5h | |
+| **合計** | **46.5h** | **約 $43** |
+
+**8割がアライメントです。** ここを速くする唯一の手段が dlperf の高いカードで、
+GPU 単価の差より効きます。
+
 ### フェーズ2以降
 
 | フェーズ | データ | 内容 |
