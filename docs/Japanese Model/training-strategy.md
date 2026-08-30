@@ -778,7 +778,7 @@ HF キャッシュ: zip と同じ            ≈ 30 GB
 
 | フェーズ | データ | 内容 |
 |---|---|---|
-| **2a. 中間検証** | MoeSpeech + GOL 124h（20話者以上） | `finetune_language_ja_m2a.yaml`、24層、**40k step**。**valid が turn するかを見る**のが目的 |
+| **2a. 中間検証** | MoeSpeech 87h + **GOL 1,000h**（18 tar・2,451話者、valid は20話者以上） | `finetune_language_ja_m2a.yaml`、24層、**40k step**。**valid が turn するかを見る**のが目的 |
 | **2b. 本番 finetune** | 上の結果で決める量 | `finetune_language.yaml` ベース、24層、250k step |
 | **3. 仕上げ** | 低 lr | 音響品質の上限を引き上げる。**2026-08-30 訂正:** 当初「MoeSpeech のみ」としたのは GOL に話者ラベルが無いという誤認が理由で、GOL は 48 kHz（MoeSpeech の 44.1 kHz より高い）。どちらを使うかは改めて判断する |
 | **4. 蒸留** | 同上 | `depth_distill.yaml` で 24層 → 6層、CFG を焼き込む |
