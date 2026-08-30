@@ -94,3 +94,6 @@ italk.yaml
 .venv-train/
 /data*/
 runs/
+
+# mkdocs build output
+site/
