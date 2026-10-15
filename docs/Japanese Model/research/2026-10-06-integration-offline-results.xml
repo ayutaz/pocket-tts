@@ -1,0 +1,342 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="10" skipped="0" tests="13" time="51.017" timestamp="2026-10-06T17:55:27.504756+09:00" hostname="DESKTOP-7PPH62N"><testcase classname="tests.test_cli_generate" name="test_generate_with_custom_parameters" time="1.873"><failure message="AssertionError: assert 1 == 0&#10; +  where 1 = &lt;Result LocalEntryNotFoundError('An error happened while trying to locate the file on the Hub and we cannot find the r...ed files in the local cache. Please check your connection and try again or make sure your Internet connection is on.')&gt;.exit_code">tmp_path = WindowsPath('C:/Users/yuta/AppData/Local/Temp/pytest-of-yuta/pytest-8841/popen-gw1/test_generate_with_custom_para0')
+
+    def test_generate_with_custom_parameters(tmp_path: Path):
+        """Test generate command with custom generation parameters."""
+        output_file = tmp_path / "custom_params_test.wav"
+
+        result = runner.invoke(
+            cli_app,
+            [
+                "generate",
+                "--text",
+                "Testing custom parameters.",
+                "--language",
+                "english",
+                "--temperature",
+                "0.8",
+                "--sampler-decode-steps",
+                "2",
+                "--eos-threshold",
+                "-3.0",
+                "--frames-after-eos",
+                "7",
+                "--output-path",
+                str(output_file),
+            ],
+        )
+
+&gt;       assert result.exit_code == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = &lt;Result LocalEntryNotFoundError('An error happened while trying to locate the file on the Hub and we cannot find the r...ed files in the local cache. Please check your connection and try again or make sure your Internet connection is on.')&gt;.exit_code
+
+tests\test_cli_generate.py:94: AssertionError</failure></testcase><testcase classname="tests.test_cli_generate" name="test_generate_basic_usage" time="1.901"><failure message="AssertionError: assert 1 == 0&#10; +  where 1 = &lt;Result LocalEntryNotFoundError('An error happened while trying to locate the file on the Hub and we cannot find the r...ed files in the local cache. Please check your connection and try again or make sure your Internet connection is on.')&gt;.exit_code">tmp_path = WindowsPath('C:/Users/yuta/AppData/Local/Temp/pytest-of-yuta/pytest-8841/popen-gw0/test_generate_basic_usage0')
+
+    def test_generate_basic_usage(tmp_path: Path):
+        """Test basic generate command with default parameters."""
+        output_file = tmp_path / "test_output.wav"
+
+        result = runner.invoke(
+            cli_app,
+            ["generate", "--text", "Hello world, this is a test.", "--output-path", str(output_file)],
+        )
+
+&gt;       assert result.exit_code == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = &lt;Result LocalEntryNotFoundError('An error happened while trying to locate the file on the Hub and we cannot find the r...ed files in the local cache. Please check your connection and try again or make sure your Internet connection is on.')&gt;.exit_code
+
+tests\test_cli_generate.py:29: AssertionError</failure></testcase><testcase classname="tests.test_cli_generate" name="test_generate_verbose_mode" time="1.962"><failure message="AssertionError: assert 1 == 0&#10; +  where 1 = &lt;Result LocalEntryNotFoundError('An error happened while trying to locate the file on the Hub and we cannot find the r...ed files in the local cache. Please check your connection and try again or make sure your Internet connection is on.')&gt;.exit_code">tmp_path = WindowsPath('C:/Users/yuta/AppData/Local/Temp/pytest-of-yuta/pytest-8841/popen-gw1/test_generate_verbose_mode0')
+
+    def test_generate_verbose_mode(tmp_path: Path):
+        """Test generate command with verbose logging."""
+        output_file = tmp_path / "verbose_test.wav"
+
+        result = runner.invoke(
+            cli_app,
+            ["generate", "--text", "Testing verbose mode.", "-q", "--output-path", str(output_file)],
+        )
+
+&gt;       assert result.exit_code == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = &lt;Result LocalEntryNotFoundError('An error happened while trying to locate the file on the Hub and we cannot find the r...ed files in the local cache. Please check your connection and try again or make sure your Internet connection is on.')&gt;.exit_code
+
+tests\test_cli_generate.py:112: AssertionError</failure></testcase><testcase classname="tests.test_cli_generate" name="test_generate_with_custom_voice" time="11.624" /><testcase classname="tests.test_cli_generate" name="test_generate_default_text" time="1.919"><failure message="AssertionError: assert 1 == 0&#10; +  where 1 = &lt;Result LocalEntryNotFoundError('An error happened while trying to locate the file on the Hub and we cannot find the r...ed files in the local cache. Please check your connection and try again or make sure your Internet connection is on.')&gt;.exit_code">tmp_path = WindowsPath('C:/Users/yuta/AppData/Local/Temp/pytest-of-yuta/pytest-8841/popen-gw1/test_generate_default_text0')
+
+    def test_generate_default_text(tmp_path: Path):
+        """Test generate command with default text when no text provided."""
+        output_file = tmp_path / "default_text_test.wav"
+
+        result = runner.invoke(cli_app, ["generate", "--output-path", str(output_file)])
+
+&gt;       assert result.exit_code == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = &lt;Result LocalEntryNotFoundError('An error happened while trying to locate the file on the Hub and we cannot find the r...ed files in the local cache. Please check your connection and try again or make sure your Internet connection is on.')&gt;.exit_code
+
+tests\test_cli_generate.py:122: AssertionError</failure></testcase><testcase classname="tests.test_cli_generate" name="test_generate_multiple_runs" time="1.757"><failure message="AssertionError: assert 1 == 0&#10; +  where 1 = &lt;Result LocalEntryNotFoundError('An error happened while trying to locate the file on the Hub and we cannot find the r...ed files in the local cache. Please check your connection and try again or make sure your Internet connection is on.')&gt;.exit_code">tmp_path = WindowsPath('C:/Users/yuta/AppData/Local/Temp/pytest-of-yuta/pytest-8841/popen-gw1/test_generate_multiple_runs0')
+
+    def test_generate_multiple_runs(tmp_path: Path):
+        """Test multiple consecutive generate commands."""
+        for i in range(3):
+            output_file = tmp_path / f"test_run_{i + 1}.wav"
+
+            result = runner.invoke(
+                cli_app,
+                [
+                    "generate",
+                    "--text",
+                    f"This is test run number {i + 1}.",
+                    "--output-path",
+                    str(output_file),
+                ],
+            )
+
+&gt;           assert result.exit_code == 0
+E           AssertionError: assert 1 == 0
+E            +  where 1 = &lt;Result LocalEntryNotFoundError('An error happened while trying to locate the file on the Hub and we cannot find the r...ed files in the local cache. Please check your connection and try again or make sure your Internet connection is on.')&gt;.exit_code
+
+tests\test_cli_generate.py:167: AssertionError</failure></testcase><testcase classname="tests.test_streaming_cancellation" name="test_setting_the_stop_event_stops_the_generation" time="1.871"><failure message="huggingface_hub.errors.LocalEntryNotFoundError: An error happened while trying to locate the file on the Hub and we cannot find the requested files in the local cache. Please check your connection and try again or make sure your Internet connection is on.">huggingface_hub.errors.OfflineModeIsEnabled: Cannot reach https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/1e08e6a23401048648a9fdcfde2f89348215c2a7/languages/english/embeddings/alba.safetensors: offline mode is enabled. To disable it, please unset the `HF_HUB_OFFLINE` environment variable.
+
+The above exception was the direct cause of the following exception:
+
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x000001D40E375FD0&gt;
+
+    def test_setting_the_stop_event_stops_the_generation(monkeypatch: pytest.MonkeyPatch):
+        model = TTSModel.load_model()
+&gt;       voice_state = model.get_state_for_audio_prompt("alba")
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_streaming_cancellation.py:43:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\torch\utils\_contextlib.py:124: in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+pocket_tts\models\tts_model.py:1012: in get_state_for_audio_prompt
+    download_if_necessary(
+pocket_tts\utils\utils.py:126: in download_if_necessary
+    cached_file = hf_hub_download(repo_id=repo_id, filename=filename, revision=revision)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\huggingface_hub\utils\_validators.py:91: in _inner_fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\huggingface_hub\utils\_http.py:266: in _inner
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\huggingface_hub\file_download.py:1043: in hf_hub_download
+    return _hf_hub_download_to_cache_dir(
+.venv\Lib\site-packages\huggingface_hub\file_download.py:1190: in _hf_hub_download_to_cache_dir
+    _raise_on_head_call_error(head_call_error, force_download, local_files_only)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+head_call_error = OfflineModeIsEnabled('Cannot reach https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/1e08e6a23401...ngs/alba.safetensors: offline mode is enabled. To disable it, please unset the `HF_HUB_OFFLINE` environment variable.')
+force_download = False, local_files_only = False
+
+    def _raise_on_head_call_error(head_call_error: Exception, force_download: bool, local_files_only: bool) -&gt; NoReturn:
+        """Raise an appropriate error when the HEAD call failed and we cannot locate a local file."""
+        # No head call =&gt; we cannot force download.
+        if force_download:
+            if local_files_only:
+                raise ValueError("Cannot pass 'force_download=True' and 'local_files_only=True' at the same time.")
+            elif isinstance(head_call_error, OfflineModeIsEnabled):
+                raise ValueError("Cannot pass 'force_download=True' when offline mode is enabled.") from head_call_error
+            else:
+                raise ValueError("Force download failed due to the above error.") from head_call_error
+
+        # No head call + couldn't find an appropriate file on disk =&gt; raise an error.
+        if local_files_only:
+            raise LocalEntryNotFoundError(
+                "Cannot find the requested files in the disk cache and outgoing traffic has been disabled. To enable"
+                " hf.co look-ups and downloads online, set 'local_files_only' to False."
+            )
+        elif isinstance(head_call_error, (RepositoryNotFoundError, GatedRepoError)) or (
+            isinstance(head_call_error, HfHubHTTPError) and head_call_error.response.status_code == 401
+        ):
+            # Repo not found or gated =&gt; let's raise the actual error
+            # Unauthorized =&gt; likely a token issue =&gt; let's raise the actual error
+            raise head_call_error
+        elif isinstance(head_call_error, FileMetadataError):
+            # The call succeeded but the response lacked the metadata we need =&gt; a configuration issue, not connectivity.
+            raise LocalEntryNotFoundError(
+                f"{head_call_error} We also cannot find the requested files in the local cache."
+            ) from head_call_error
+        else:
+            # Otherwise: most likely a connection issue or Hub downtime =&gt; let's warn the user
+&gt;           raise LocalEntryNotFoundError(
+                "An error happened while trying to locate the file on the Hub and we cannot find the requested files"
+                " in the local cache. Please check your connection and try again or make sure your Internet connection"
+                " is on."
+            ) from head_call_error
+E           huggingface_hub.errors.LocalEntryNotFoundError: An error happened while trying to locate the file on the Hub and we cannot find the requested files in the local cache. Please check your connection and try again or make sure your Internet connection is on.
+
+.venv\Lib\site-packages\huggingface_hub\file_download.py:1957: LocalEntryNotFoundError</failure></testcase><testcase classname="tests.test_streaming_cancellation" name="test_client_disconnect_stops_the_generation" time="2.194"><failure message="huggingface_hub.errors.LocalEntryNotFoundError: An error happened while trying to locate the file on the Hub and we cannot find the requested files in the local cache. Please check your connection and try again or make sure your Internet connection is on.">huggingface_hub.errors.OfflineModeIsEnabled: Cannot reach https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/1e08e6a23401048648a9fdcfde2f89348215c2a7/languages/english/embeddings/alba.safetensors: offline mode is enabled. To disable it, please unset the `HF_HUB_OFFLINE` environment variable.
+
+The above exception was the direct cause of the following exception:
+
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x000001D40E3866F0&gt;
+
+    def test_client_disconnect_stops_the_generation(monkeypatch: pytest.MonkeyPatch):
+        model = TTSModel.load_model()
+        monkeypatch.setattr(pocket_tts.main, "tts_model", model)
+&gt;       voice_state = model.get_state_for_audio_prompt("alba")
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_streaming_cancellation.py:61:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\torch\utils\_contextlib.py:124: in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+pocket_tts\models\tts_model.py:1012: in get_state_for_audio_prompt
+    download_if_necessary(
+pocket_tts\utils\utils.py:126: in download_if_necessary
+    cached_file = hf_hub_download(repo_id=repo_id, filename=filename, revision=revision)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\huggingface_hub\utils\_validators.py:91: in _inner_fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\huggingface_hub\utils\_http.py:266: in _inner
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\huggingface_hub\file_download.py:1043: in hf_hub_download
+    return _hf_hub_download_to_cache_dir(
+.venv\Lib\site-packages\huggingface_hub\file_download.py:1190: in _hf_hub_download_to_cache_dir
+    _raise_on_head_call_error(head_call_error, force_download, local_files_only)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+head_call_error = OfflineModeIsEnabled('Cannot reach https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/1e08e6a23401...ngs/alba.safetensors: offline mode is enabled. To disable it, please unset the `HF_HUB_OFFLINE` environment variable.')
+force_download = False, local_files_only = False
+
+    def _raise_on_head_call_error(head_call_error: Exception, force_download: bool, local_files_only: bool) -&gt; NoReturn:
+        """Raise an appropriate error when the HEAD call failed and we cannot locate a local file."""
+        # No head call =&gt; we cannot force download.
+        if force_download:
+            if local_files_only:
+                raise ValueError("Cannot pass 'force_download=True' and 'local_files_only=True' at the same time.")
+            elif isinstance(head_call_error, OfflineModeIsEnabled):
+                raise ValueError("Cannot pass 'force_download=True' when offline mode is enabled.") from head_call_error
+            else:
+                raise ValueError("Force download failed due to the above error.") from head_call_error
+
+        # No head call + couldn't find an appropriate file on disk =&gt; raise an error.
+        if local_files_only:
+            raise LocalEntryNotFoundError(
+                "Cannot find the requested files in the disk cache and outgoing traffic has been disabled. To enable"
+                " hf.co look-ups and downloads online, set 'local_files_only' to False."
+            )
+        elif isinstance(head_call_error, (RepositoryNotFoundError, GatedRepoError)) or (
+            isinstance(head_call_error, HfHubHTTPError) and head_call_error.response.status_code == 401
+        ):
+            # Repo not found or gated =&gt; let's raise the actual error
+            # Unauthorized =&gt; likely a token issue =&gt; let's raise the actual error
+            raise head_call_error
+        elif isinstance(head_call_error, FileMetadataError):
+            # The call succeeded but the response lacked the metadata we need =&gt; a configuration issue, not connectivity.
+            raise LocalEntryNotFoundError(
+                f"{head_call_error} We also cannot find the requested files in the local cache."
+            ) from head_call_error
+        else:
+            # Otherwise: most likely a connection issue or Hub downtime =&gt; let's warn the user
+&gt;           raise LocalEntryNotFoundError(
+                "An error happened while trying to locate the file on the Hub and we cannot find the requested files"
+                " in the local cache. Please check your connection and try again or make sure your Internet connection"
+                " is on."
+            ) from head_call_error
+E           huggingface_hub.errors.LocalEntryNotFoundError: An error happened while trying to locate the file on the Hub and we cannot find the requested files in the local cache. Please check your connection and try again or make sure your Internet connection is on.
+
+.venv\Lib\site-packages\huggingface_hub\file_download.py:1957: LocalEntryNotFoundError</failure></testcase><testcase classname="tests.test_quantization" name="test_quantized_model_produces_audio" time="8.427"><failure message="huggingface_hub.errors.LocalEntryNotFoundError: An error happened while trying to locate the file on the Hub and we cannot find the requested files in the local cache. Please check your connection and try again or make sure your Internet connection is on.">huggingface_hub.errors.OfflineModeIsEnabled: Cannot reach https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/1e08e6a23401048648a9fdcfde2f89348215c2a7/languages/english/embeddings/alba.safetensors: offline mode is enabled. To disable it, please unset the `HF_HUB_OFFLINE` environment variable.
+
+The above exception was the direct cause of the following exception:
+
+    def test_quantized_model_produces_audio():
+        model = TTSModel.load_model(quantize=True)
+&gt;       voice_state = model.get_state_for_audio_prompt(TEST_VOICE)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_quantization.py:29:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\torch\utils\_contextlib.py:124: in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+pocket_tts\models\tts_model.py:1012: in get_state_for_audio_prompt
+    download_if_necessary(
+pocket_tts\utils\utils.py:126: in download_if_necessary
+    cached_file = hf_hub_download(repo_id=repo_id, filename=filename, revision=revision)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\huggingface_hub\utils\_validators.py:91: in _inner_fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\huggingface_hub\utils\_http.py:266: in _inner
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\huggingface_hub\file_download.py:1043: in hf_hub_download
+    return _hf_hub_download_to_cache_dir(
+.venv\Lib\site-packages\huggingface_hub\file_download.py:1190: in _hf_hub_download_to_cache_dir
+    _raise_on_head_call_error(head_call_error, force_download, local_files_only)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+head_call_error = OfflineModeIsEnabled('Cannot reach https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/1e08e6a23401...ngs/alba.safetensors: offline mode is enabled. To disable it, please unset the `HF_HUB_OFFLINE` environment variable.')
+force_download = False, local_files_only = False
+
+    def _raise_on_head_call_error(head_call_error: Exception, force_download: bool, local_files_only: bool) -&gt; NoReturn:
+        """Raise an appropriate error when the HEAD call failed and we cannot locate a local file."""
+        # No head call =&gt; we cannot force download.
+        if force_download:
+            if local_files_only:
+                raise ValueError("Cannot pass 'force_download=True' and 'local_files_only=True' at the same time.")
+            elif isinstance(head_call_error, OfflineModeIsEnabled):
+                raise ValueError("Cannot pass 'force_download=True' when offline mode is enabled.") from head_call_error
+            else:
+                raise ValueError("Force download failed due to the above error.") from head_call_error
+
+        # No head call + couldn't find an appropriate file on disk =&gt; raise an error.
+        if local_files_only:
+            raise LocalEntryNotFoundError(
+                "Cannot find the requested files in the disk cache and outgoing traffic has been disabled. To enable"
+                " hf.co look-ups and downloads online, set 'local_files_only' to False."
+            )
+        elif isinstance(head_call_error, (RepositoryNotFoundError, GatedRepoError)) or (
+            isinstance(head_call_error, HfHubHTTPError) and head_call_error.response.status_code == 401
+        ):
+            # Repo not found or gated =&gt; let's raise the actual error
+            # Unauthorized =&gt; likely a token issue =&gt; let's raise the actual error
+            raise head_call_error
+        elif isinstance(head_call_error, FileMetadataError):
+            # The call succeeded but the response lacked the metadata we need =&gt; a configuration issue, not connectivity.
+            raise LocalEntryNotFoundError(
+                f"{head_call_error} We also cannot find the requested files in the local cache."
+            ) from head_call_error
+        else:
+            # Otherwise: most likely a connection issue or Hub downtime =&gt; let's warn the user
+&gt;           raise LocalEntryNotFoundError(
+                "An error happened while trying to locate the file on the Hub and we cannot find the requested files"
+                " in the local cache. Please check your connection and try again or make sure your Internet connection"
+                " is on."
+            ) from head_call_error
+E           huggingface_hub.errors.LocalEntryNotFoundError: An error happened while trying to locate the file on the Hub and we cannot find the requested files in the local cache. Please check your connection and try again or make sure your Internet connection is on.
+
+.venv\Lib\site-packages\huggingface_hub\file_download.py:1957: LocalEntryNotFoundError</failure></testcase><testcase classname="tests.test_cli_generate" name="test_generate_long_text" time="1.965"><failure message="AssertionError: assert 1 == 0&#10; +  where 1 = &lt;Result LocalEntryNotFoundError('An error happened while trying to locate the file on the Hub and we cannot find the r...ed files in the local cache. Please check your connection and try again or make sure your Internet connection is on.')&gt;.exit_code">tmp_path = WindowsPath('C:/Users/yuta/AppData/Local/Temp/pytest-of-yuta/pytest-8841/popen-gw0/test_generate_long_text0')
+
+    def test_generate_long_text(tmp_path: Path):
+        """Test generate command with longer text."""
+        long_text = "This is a longer text to test the TTS system. " * 5
+        output_file = tmp_path / "long_text_test.wav"
+
+        result = runner.invoke(
+            cli_app, ["generate", "--text", long_text, "--output-path", str(output_file)]
+        )
+
+&gt;       assert result.exit_code == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = &lt;Result LocalEntryNotFoundError('An error happened while trying to locate the file on the Hub and we cannot find the r...ed files in the local cache. Please check your connection and try again or make sure your Internet connection is on.')&gt;.exit_code
+
+tests\test_cli_generate.py:140: AssertionError</failure></testcase><testcase classname="tests.test_quantization" name="test_cli_quantize_flag" time="7.835"><failure message="AssertionError: CLI failed: &#10;assert 1 == 0&#10; +  where 1 = &lt;Result LocalEntryNotFoundError('An error happened while trying to locate the file on the Hub and we cannot find the r...ed files in the local cache. Please check your connection and try again or make sure your Internet connection is on.')&gt;.exit_code">tmp_path = WindowsPath('C:/Users/yuta/AppData/Local/Temp/pytest-of-yuta/pytest-8841/popen-gw0/test_cli_quantize_flag0')
+
+    def test_cli_quantize_flag(tmp_path: Path):
+        output_file = tmp_path / "quantized_output.wav"
+        result = runner.invoke(
+            cli_app,
+            ["generate", "--quantize", "--text", SHORT_TEXT, "--output-path", str(output_file), "-q"],
+        )
+&gt;       assert result.exit_code == 0, f"CLI failed: {result.output}"
+E       AssertionError: CLI failed:
+E       assert 1 == 0
+E        +  where 1 = &lt;Result LocalEntryNotFoundError('An error happened while trying to locate the file on the Hub and we cannot find the r...ed files in the local cache. Please check your connection and try again or make sure your Internet connection is on.')&gt;.exit_code
+
+tests\test_quantization.py:59: AssertionError</failure></testcase><testcase classname="tests.test_quantization" name="test_quantize_flag_applies_quantization" time="8.671" /><testcase classname="tests.test_quantization" name="test_backend_detection" time="0.004" /></testsuite></testsuites>

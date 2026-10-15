@@ -1,0 +1,63 @@
+{
+  "actual_student_optimizer_step": 35,
+  "student_layers": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "embedding_shape": [
+    8001,
+    1024
+  ],
+  "raw_ema_optimizer_finite": true,
+  "teacher_step": 10000,
+  "teacher_is_provisional": true,
+  "teacher_heads_exactly_preserved": 70,
+  "resume_start_step": 30,
+  "files": {
+    "checkpoint_00000035.pt": {
+      "bytes": 709394483,
+      "sha256": "aaf443826cd1b092e0bcfda1a07cb1fad35ccd81793fa233d78d07db7d2c1431"
+    },
+    "optim_00000035.pt": {
+      "bytes": 670318242,
+      "sha256": "e8b4a69bdb63fa29b01b7ee4cc693de95e113c9ffee32526c6901db6829db21b"
+    }
+  },
+  "protected_restart_pair": "runs/stage4-control/pilot-preserved/35",
+  "validation": [
+    {
+      "time": "2026-10-07 03:59:47+0000",
+      "type": "valid",
+      "step": 10,
+      "metrics": {
+        "distill_mse": 0.12029211223125458,
+        "loss": 0.12029211223125458
+      }
+    },
+    {
+      "time": "2026-10-07 03:59:50+0000",
+      "type": "valid",
+      "step": 20,
+      "metrics": {
+        "distill_mse": 0.11113295331597328,
+        "loss": 0.11113295331597328
+      }
+    },
+    {
+      "time": "2026-10-07 03:59:52+0000",
+      "type": "valid",
+      "step": 30,
+      "metrics": {
+        "distill_mse": 0.11108418554067612,
+        "loss": 0.11108418554067612
+      }
+    }
+  ],
+  "human_listening_completed": false,
+  "quality_approved": false,
+  "publication_performed": false
+}

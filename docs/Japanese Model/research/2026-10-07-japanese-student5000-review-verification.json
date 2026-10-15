@@ -1,0 +1,231 @@
+{
+  "student_step": 5000,
+  "matrix_records": 3024,
+  "primary_profile": "trainer_ema_cfg1_eos-4",
+  "played": [
+    {
+      "voice": "held_00",
+      "case": "daily",
+      "file": "trainer_ema_cfg1_eos-4_held_00_daily.wav",
+      "sha256": "8df22ec6a885b7a4fbe9697c75996b77d4451efb05cbb879576b1da3875b8a3e"
+    },
+    {
+      "voice": "held_00",
+      "case": "date",
+      "file": "trainer_ema_cfg1_eos-4_held_00_date.wav",
+      "sha256": "2c4e3c97ccee551c41bc9e0f8604925ea4a1aa410dada5d515abf438a5687fce"
+    },
+    {
+      "voice": "held_00",
+      "case": "place",
+      "file": "trainer_ema_cfg1_eos-4_held_00_place.wav",
+      "sha256": "c43ae0e0299e94eeab5fed235e8d50df76942c6c6bbc3d98ce3619533719ddf3"
+    },
+    {
+      "voice": "held_00",
+      "case": "number",
+      "file": "trainer_ema_cfg1_eos-4_held_00_number.wav",
+      "sha256": "0100ca6847bd34eab03bcd55850f22135b420cdcf66916c5c3545fde76701ff8"
+    },
+    {
+      "voice": "held_00",
+      "case": "request",
+      "file": "trainer_ema_cfg1_eos-4_held_00_request.wav",
+      "sha256": "41ce03f9dd28c66e2e7c55b141c7ffc177c48a7ba9e99a6c521af1cbc739b3a4"
+    },
+    {
+      "voice": "held_00",
+      "case": "long",
+      "file": "trainer_ema_cfg1_eos-4_held_00_long.wav",
+      "sha256": "5c768a30dc2308a29d1d8a729fa7a086c7ae6f8925a5d0f0533907f9e7fdfc02"
+    },
+    {
+      "voice": "held_00",
+      "case": "proper_name",
+      "file": "trainer_ema_cfg1_eos-4_held_00_proper_name.wav",
+      "sha256": "5413961f75b5f3cf150edec19930b6c5c8fbb888a3afa8ec2c6e5201680a361f"
+    },
+    {
+      "voice": "held_00",
+      "case": "digits",
+      "file": "trainer_ema_cfg1_eos-4_held_00_digits.wav",
+      "sha256": "ed8549ad7aa8ccdd71b9ba93b9cd18fe0ccf14bf493c4c71be3064f3f319f4c8"
+    },
+    {
+      "voice": "held_00",
+      "case": "units",
+      "file": "trainer_ema_cfg1_eos-4_held_00_units.wav",
+      "sha256": "afb7c48a5a03ab0a18b6749dcad816c12f0bf9451f42bd469f82e40d9875bb8f"
+    },
+    {
+      "voice": "held_00",
+      "case": "loanwords",
+      "file": "trainer_ema_cfg1_eos-4_held_00_loanwords.wav",
+      "sha256": "ade4b417c37bc8f23a8d9a2d421d400265146e73037f95b006bec5e8dedc1f1a"
+    },
+    {
+      "voice": "held_00",
+      "case": "short_question",
+      "file": "trainer_ema_cfg1_eos-4_held_00_short_question.wav",
+      "sha256": "443c2bf5466ed7f7494c260b33984dfa6b9d0f3a6a8a8f55f1bbbbe68ffa5fa2"
+    },
+    {
+      "voice": "held_00",
+      "case": "long_sequence",
+      "file": "trainer_ema_cfg1_eos-4_held_00_long_sequence.wav",
+      "sha256": "a759d263a040327abe4f1a81076a2c22eec5136e226a691916c7cb91e957be16"
+    },
+    {
+      "voice": "held_09",
+      "case": "daily",
+      "file": "trainer_ema_cfg1_eos-4_held_09_daily.wav",
+      "sha256": "ec2cf8aec45580853b18f0ecb6acf78b9830818d1718eb95c70fe70a17de932b"
+    },
+    {
+      "voice": "held_09",
+      "case": "date",
+      "file": "trainer_ema_cfg1_eos-4_held_09_date.wav",
+      "sha256": "b98338f347f8e32075502cce3ab9ef88115266d71587e47575c915bf5d72a59b"
+    },
+    {
+      "voice": "held_09",
+      "case": "place",
+      "file": "trainer_ema_cfg1_eos-4_held_09_place.wav",
+      "sha256": "977228e88e7ba108b3cfdd0e0f73cdd5ad47f3d053ab874b80c1fcd7385d4d5a"
+    },
+    {
+      "voice": "held_09",
+      "case": "number",
+      "file": "trainer_ema_cfg1_eos-4_held_09_number.wav",
+      "sha256": "856924c4b24a2dfc5208a6323e59c03708c9e209c0047241e21116cfb9b49924"
+    },
+    {
+      "voice": "held_09",
+      "case": "request",
+      "file": "trainer_ema_cfg1_eos-4_held_09_request.wav",
+      "sha256": "fc4e4a5d0dba73a4322b22dc8f8da635789e7612050931739000431fe3b08592"
+    },
+    {
+      "voice": "held_09",
+      "case": "long",
+      "file": "trainer_ema_cfg1_eos-4_held_09_long.wav",
+      "sha256": "2e74fc475c34a851ff2363529b705f937692ed01ef43f629a10cde1005d740c3"
+    },
+    {
+      "voice": "held_09",
+      "case": "proper_name",
+      "file": "trainer_ema_cfg1_eos-4_held_09_proper_name.wav",
+      "sha256": "f441a0857d85f8bf4d938f71e53e396587df18c68ab79ae7e6e84a4a9d4c323e"
+    },
+    {
+      "voice": "held_09",
+      "case": "digits",
+      "file": "trainer_ema_cfg1_eos-4_held_09_digits.wav",
+      "sha256": "72dd5e4b5515422253207b8709bcfe9c418bd0c4c973bc5b0d2f92f2658d71b1"
+    },
+    {
+      "voice": "held_09",
+      "case": "units",
+      "file": "trainer_ema_cfg1_eos-4_held_09_units.wav",
+      "sha256": "74c10b7bb50fd783ddc9350372f8e2fb2e7d7c5825a910242d49d36c03d4539e"
+    },
+    {
+      "voice": "held_09",
+      "case": "loanwords",
+      "file": "trainer_ema_cfg1_eos-4_held_09_loanwords.wav",
+      "sha256": "e700418eddf9b18a5c00122baa15ab012897e8e18b4bf339275a5caa89289c94"
+    },
+    {
+      "voice": "held_09",
+      "case": "short_question",
+      "file": "trainer_ema_cfg1_eos-4_held_09_short_question.wav",
+      "sha256": "102a998f2cee3aad5981caff743e5297c4fd8b9acd8900ceaacaf9ee97f205ba"
+    },
+    {
+      "voice": "held_09",
+      "case": "long_sequence",
+      "file": "trainer_ema_cfg1_eos-4_held_09_long_sequence.wav",
+      "sha256": "954155f3137c0d44bc66be7d28463d9bf9a3876c4d5f8e1691e5c2409972824f"
+    },
+    {
+      "voice": "held_16",
+      "case": "daily",
+      "file": "trainer_ema_cfg1_eos-4_held_16_daily.wav",
+      "sha256": "6d006fd316aedfe85150020271564024d99490b35bc13435ede17e24e1e4c802"
+    },
+    {
+      "voice": "held_16",
+      "case": "date",
+      "file": "trainer_ema_cfg1_eos-4_held_16_date.wav",
+      "sha256": "aba33aaa6f4ad9c5332e8eff96d7c873660509091715aebd63f8ea3283d6a4c7"
+    },
+    {
+      "voice": "held_16",
+      "case": "place",
+      "file": "trainer_ema_cfg1_eos-4_held_16_place.wav",
+      "sha256": "cabef0833de56cf897f4b8d86252d0436daa86d427cfe1294088faff4bdaeecd"
+    },
+    {
+      "voice": "held_16",
+      "case": "number",
+      "file": "trainer_ema_cfg1_eos-4_held_16_number.wav",
+      "sha256": "419703663f1e84992ebd2f0026106ca13dcdcb23caa9286c02ad6f42c9e73ac8"
+    },
+    {
+      "voice": "held_16",
+      "case": "request",
+      "file": "trainer_ema_cfg1_eos-4_held_16_request.wav",
+      "sha256": "e1d549f2e60beba5e39d1927105537c1da519450b4059cebea2095b9f7d3a55c"
+    },
+    {
+      "voice": "held_16",
+      "case": "long",
+      "file": "trainer_ema_cfg1_eos-4_held_16_long.wav",
+      "sha256": "e14351f1b4c3a31e1d234516b50e5bb18322b2251283185762c7085adc55033d"
+    },
+    {
+      "voice": "held_16",
+      "case": "proper_name",
+      "file": "trainer_ema_cfg1_eos-4_held_16_proper_name.wav",
+      "sha256": "e654958f317aeee73855d68e5b8fd4716f384ea0699eeb1c0694a0a036a72a27"
+    },
+    {
+      "voice": "held_16",
+      "case": "digits",
+      "file": "trainer_ema_cfg1_eos-4_held_16_digits.wav",
+      "sha256": "5ac6a3e360a89e8724a46f06eb37974ba1827287844217aef8fa39bc35c73ca0"
+    },
+    {
+      "voice": "held_16",
+      "case": "units",
+      "file": "trainer_ema_cfg1_eos-4_held_16_units.wav",
+      "sha256": "ac0e95ece6fa59b58e5c832cc282e188fdfbd7ca0571d68ab57d473eb79dfc16"
+    },
+    {
+      "voice": "held_16",
+      "case": "loanwords",
+      "file": "trainer_ema_cfg1_eos-4_held_16_loanwords.wav",
+      "sha256": "c27256c3a52a5cdd799213d8a09b4187af95da75a19da48292aa48ed057f7150"
+    },
+    {
+      "voice": "held_16",
+      "case": "short_question",
+      "file": "trainer_ema_cfg1_eos-4_held_16_short_question.wav",
+      "sha256": "5d9e0fedb4f5101f3f269ce386f6282856c3e27510424487e845e6183d3c966c"
+    },
+    {
+      "voice": "held_16",
+      "case": "long_sequence",
+      "file": "trainer_ema_cfg1_eos-4_held_16_long_sequence.wav",
+      "sha256": "9d451ccc16bb81439e9c049bcf1a719837078a649d1ea9fcabbc63de1fe8361e"
+    }
+  ],
+  "selected_36_audio_decode_and_playback_start_verified": true,
+  "notes_link_to_actual_wave_case_voice_and_condition": true,
+  "platform": "Vast.ai Linux Chromium file URI",
+  "helper_sha256": "6e86d76f32830ceb635edcd2953c9ccaa91b64a97f179655a87db5809a2f62de",
+  "human_listening_completed": false,
+  "quality_approved": false,
+  "publication_performed": false,
+  "limits": "Muted automated playback proves decoding and UI association, not human perception or native Windows playback."
+}

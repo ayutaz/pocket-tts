@@ -1,0 +1,27 @@
+{
+  "start_step": 5000,
+  "end_step": 5005,
+  "actual_optimizer_steps": [
+    5005
+  ],
+  "raw_ema_optimizer_exactly_restored_before_updates": true,
+  "five_real_resumed_updates_verified": true,
+  "finite_raw_ema_optimizer": true,
+  "frozen_heads_exact": 70,
+  "changed_backbone_tensors": 48,
+  "original_5000_pair_preserved": true,
+  "files": {
+    "checkpoint_00005005.pt": {
+      "bytes": 709394483,
+      "sha256": "7f8096c5a1a39afabc079f7786b3cc5777054b85725e24dbe475ebf6a61889be"
+    },
+    "optim_00005005.pt": {
+      "bytes": 670318242,
+      "sha256": "e6e3766fbcdf62765353b9fac50f7b6594309d17240a7a2691a32f0fb44cd6f9"
+    }
+  },
+  "limits": "Exact model, EMA and optimizer restoration; RNG and data-loader position are not checkpointed, so uninterrupted-training bitwise parity is not claimed.",
+  "human_listening_completed": false,
+  "quality_approved": false,
+  "publication_performed": false
+}

@@ -1,5 +1,11 @@
 # Training Pocket TTS
 
+> **Japanese experiments ended (2026-10-15).** The owner ended development after [takuma104/pocket-tts-ja](https://huggingface.co/takuma104/pocket-tts-ja) became available. All six retained models, tokenizer, configs, frozen source and evaluation records are archived at [tts-dataset/pocket-tts-ja-experiments](https://huggingface.co/tts-dataset/pocket-tts-ja-experiments), public with manual access approval. All 31 files (about 12.06 GB) were verified. This is unfinished research, not a production-quality release; see the [final Japanese summary](../docs/Japanese%20Model/index.md).
+>
+> The GOL-only teacher reached 20k updates; the 6-layer student reached 5k. Primary CER was 12.24% for teacher10k and 51.22% for student5k. Full evaluation (3,024 conditions), CPU FP32/INT8 evaluation (96 requests), export and save/resume verification completed. Human review covers one normal-sentence pair; final teacher selection remains unperformed. The owned Vast.ai instance was destroyed after recovery; large-corpus audio/latents were not retained externally. Optimizer sidecars remain local. Upload and waiting jobs have ended.
+>
+> Training, inference, ASR, data processing, evaluation, CPU benchmarks and compute-intensive tests/builds for this work run on Vast.ai. The local PC is limited to editing, cloud control, SSH, transfer and reading results. The upstream recipes below are reference material and do not authorize starting another Japanese run.
+
 If you have a GPU and some speech data, you can train your own Pocket TTS! We try to make the training scripts work out of the box, meaning you don't need to know the ins-and-outs of the model to get a TTS. For best results, you might need to dig a bit deeper and tweak some hyperparameters. The training code follows the [CALM paper](https://arxiv.org/abs/2509.06926), so start there to get an understanding of how the model works.
 
 We're happy to feature community-trained models in the [list of community-trained models](../README.md#models-trained-by-the-community) (giving credit to the author) if they are novel, e.g. cover languages or voices that our official Pocket TTS models cannot do, or are better in other ways. [Open an issue](https://github.com/kyutai-labs/pocket-tts/issues/new) or PR to get started.

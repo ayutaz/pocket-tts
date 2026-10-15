@@ -1,138 +1,65 @@
-# 日本語モデル
+# 日本語モデル：開発終了・成果物保存済み
 
-Pocket TTS の日本語モデルを作るための調査記録と方針をまとめたセクションです。
+最終更新: 2026-10-15。調査開始: 2026-08-27。作業ブランチ: `japanese-model-training`。
 
-調査開始: 2026-08-27 / 起点コミット: `8c98c9b`（PR #254 マージ後） / 作業ブランチ: `japanese-model-training`
-最終更新: 2026-08-30（M2 実装完了。GOL 取り込みが9ステージ1コマンドで通る。実行はこれから）
+## 現在の状態
 
-## 現状サマリ
+[`takuma104/pocket-tts-ja`](https://huggingface.co/takuma104/pocket-tts-ja)の公開を受け、ユーザー指定により日本語モデル開発を終了しました。追加学習・蒸留・最終モデルの品質選定は予定していません。その後に許可された既存成果物の保存公開を完了しています。
 
-| 論点 | 結論 |
+保存先は **[`tts-dataset/pocket-tts-ja-experiments`](https://huggingface.co/tts-dataset/pocket-tts-ja-experiments)** です。モデルページはpublic、ファイル取得はmanual gateです。全6モデルを含む31ファイル・12,062,580,944 bytesを転送し、サイズ・LFS SHA256・添付文書の内容を照合しました。最終revisionは`9cf5427bda9ccf18a9dadb736fa686a4bc990785`です。[保存公開の記録](research/2026-10-15-huggingface-archive-publication.md)と[照合receipt](research/2026-10-15-huggingface-experiments-publication.json)を参照してください。
+
+**研究実験のアーカイブであり、実用品質の合格モデルではありません。** 人手試聴・teacher選定は未完了のまま終了しました。開発終了と、学習・保存・公開の技術的な完了を区別します。
+
+## 保存したモデル
+
+| モデル | HF内の保存先 | 状態 |
+|---|---|---|
+| GOL teacher 2k | `gol/teacher/2000/checkpoint_00002000.pt` | 24層、raw/EMA checkpoint |
+| GOL teacher 5k | `gol/teacher/5000/checkpoint_00005000.pt` | 24層、raw/EMA checkpoint |
+| GOL teacher 10k | `gol/teacher/10000/checkpoint_00010000.pt` | 24層、暫定蒸留teacher |
+| GOL teacher 20k | `gol/teacher/20000/checkpoint_00020000.pt` | 24層、比較候補 |
+| GOL student 5k | `gol/student/5000/model.safetensors` | 6層、検証済みmerged EMA export |
+| 旧220-step検証モデル | `legacy/smoke220/model.safetensors` | 小規模パイプライン検証。M2aの初期値には不使用 |
+
+SP8000、学習・推論設定、固定ソース、評価記録も同梱しています。実験時の日本語実装はHFの`source/stage4-source.tar`に保存しています。teacherの`.pt`は学習checkpointで、単体の推論用safetensorsではありません。異なる版の公式wheelとの互換性は新たに検証していません。
+
+8月の検証用 **[`ayousanz/pocket-tts-ja-phase1`](https://huggingface.co/ayousanz/pocket-tts-ja-phase1)** は別モデルとして変更せずに残しています。Phase 1、10月の220-step検証、GOL M2aを混同しません。
+
+## 完了した作業と未達の品質
+
+| 項目 | 終了時点の結果 |
 |---|---|
-| 日本語モデルは存在するか | 調査時点（2026-08-27）で公式・コミュニティともに0件（[調査結果](community-survey.md)）。**現在は本プロジェクトの検証用が1件**（gated、実用品質ではない） |
-| 公式の対応予定はあるか | ない。Issue #118 の計画は es/fr/de/pt/it のみで、日本語は対象外 |
-| 学習コードは使えるか | 使える。2026-08-25 に公開済み。「任意の言語で学習可能」と公式アナウンス |
-| 手本になる先行事例 | **チェコ語モデル 1件のみ**（`vvolhejn/pocket-tts-czech`） |
-| 事前学習か継続学習か | **継続学習（finetune）を採用**（[根拠](training-strategy.md)） |
-| 使用データセット | `ayousanz/moe-speech-plus`（約623h）+ `midralab/gol-dataset`（**約10,654h・48 kHz・話者ラベルあり**）（[詳細](datasets.md)） |
-| コスト | 検証は**実測 $4.59**（見積り $5〜12）。本番 finetune + 蒸留は見積り **$130〜265** |
+| 日本語前処理・SP8000・alignment・評価の実装 | 実装し実データで実行済み。固定ソースをHFに保存 |
+| GOL単独データ準備 | train 723.507h / 447,090行 / 327 IDグループ、valid 22.329h / 12,951行 / 106グループ |
+| 日本語24層teacher学習 | 20,000 optimizer updatesまで実行。5k/10k/20kを全3,024条件で評価 |
+| 日本語24層→6層蒸留 | 暫定teacher10k EMAから新規studentを5,000 updatesまで学習 |
+| teacher10k対student5k | 主要条件CER **12.24% → 51.22%**。studentの読み・長文・終了に大きな品質差 |
+| teacher10k対teacher20k | 主要条件CER **12.24% → 15.01%**。他profileの改善もあり、一律の品質悪化とは断定しない |
+| CPU評価 | Vast.ai Linux CPUでFP32/INT8、固定12文×2回×4構成＝96リクエスト。異なるguidance・品質の速度値を同品質の比較にしない |
+| export・保存再開 | checkpointなしexportロードと1通常文のPCM一致、raw/EMA/optimizerの復元と5000→5005の実更新を確認 |
+| 人手試聴 | `held_00 / daily`のteacher/student一組のみ。teacherは入力文と一致、studentの「っすね。きっ」は実発話と確認 |
+| 最終品質選定 | 長文・反復・自然さ・終了位置のレビューとteacher選定は未完了。追加作業をせず終了 |
+| 保存公開 | public/manual gateで全6モデル・31ファイルを保存し照合済み |
 
-## どこまで進んだか
+主要条件は20 valid参照×12文、trainer EMA、EOS−4、teacher CFG2／student CFG1（CFG2を蒸留）です。studentは235/240本がEOS終了し、5本は生成上限へ到達しました。長文CERはteacher4.29%／student45.36%、手順長文は7.56%／65.06%でした。ASRによるCERと、人手による自然さ・声質の判断は別です。[蒸留・CPU評価の詳細](research/2026-10-07-japanese-distillation-and-cpu-results.md)を参照してください。
 
-| 段 | 状態 |
-|---|---|
-| 推論側・評価側の欠陥5件 | **対応済み**（[設計](specs/2026-08-27-japanese-text-frontend-design.md) / [計画](plans/2026-08-27-japanese-text-frontend.md)） |
-| 日本語トークナイザ（8000語彙） | **学習済み・リポジトリ同梱**（`training/tokenizers/japanese_8000.model`） |
-| MoeSpeech マニフェスト構築 | **実装済み・実データで完走**（[設計](specs/2026-08-28-moespeech-manifest-design.md) / [計画](plans/2026-08-28-moespeech-manifest.md)） |
-| 学習データ | **できています。** train 85.5h / 27話者 / 49,200発話、valid 1.6h / 1話者 / 964発話 |
-| フェーズ1の検証用設定 | **あり**（`training/configs/finetune_language_ja_phase1.yaml`、15k step。実測 5.15時間・$4.59） |
-| フェーズ1の学習ラン | **完了・合格**（2026-08-29、vast.ai、$4.59）。成果物は [`ayousanz/pocket-tts-ja-phase1`](https://huggingface.co/ayousanz/pocket-tts-ja-phase1)（gated / manual） |
-| GOL 取り込み（M2） | **実装済み・未実行**（[設計](specs/2026-08-30-gol-and-phase2-design.md) / [計画](plans/2026-08-30-gol-ingestion.md)）。9ステージが1コマンド、テスト455件 |
-| M2a の学習設定 | **あり**（`training/configs/finetune_language_ja_m2a.yaml`、40k step、`valid_freq: 1000`）。**実行はこれから** |
+## 環境とデータの終了処理
 
-!!! success "パイプラインは実データで完走しました（2026-08-29）"
-    124.4時間・28話者を、取得からアライメントまで通しました。仕様の「成功の判定」5項目が
-    すべて実測で埋まっています。
+専用Vast.aiインスタンス`54521683`は、成果物回収後の2026-10-15に**削除済み**です。APIの一覧から消えたことを確認しました。GPU停止・ストレージ課金継続の段階を終えており、学習・評価・アップロードの待機ジョブも終了しています。他プロジェクトのインスタンスは操作していません。
 
-    | 判定 | 結果 |
-    |---|---|
-    | アライメント成功率 | **50,164 / 50,164（skipped 0）** |
-    | **カット可能率** | **95.6%**（仕様が「低ければ転写かアライナに原因」としている指標） |
-    | 読み落ち | 0.45%（444,983語中2,003語） |
-    | 話者の重なり | なし |
-    | マニフェストが loader に読める | 実トークナイザでバッチが出る |
+大規模GOLの生音声・派生latentsは外部回収せず、専用環境とともに削除されました。HFには生音声・参照録音・latents・認証情報を含めていません。optimizerとstudent/legacyの重複するtraining stateはローカルに保持しています。再実験にはデータの再取得・再処理が必要ですが、現在は再開予定はありません。
 
-    所要は全体で**約3時間**（DL 16分・展開8分・実測5分・選定〜連結5分・アライメント2時間30分）。
-    実測値は[学習戦略とコスト](training-strategy.md)のフェーズ1に、経緯と発見は
-    [設計文書の末尾](specs/2026-08-28-moespeech-manifest-design.md)にあります。
+実行時の方針は、学習・推論・ASR・データ処理・集計・評価・CPU測定・負荷の高いテストをVast.aiへ限定し、ローカルPCは編集・クラウド操作・転送・結果閲覧だけにする、というものでした。この保存公開ではモデル変換や再推論は行っていません。
 
-!!! success "フェーズ1は合格しました（2026-08-29）"
-    vast.ai の RTX PRO 6000 Max-Q で通しました。**5.15時間・$4.59**、前処理3時間＋学習15k step。
+GOL単独とは10月のM2a/studentの**学習音声**を指します。SP8000の学習テキストは過去のGOL＋MoeSpeech由来です。詳細は[データセット](datasets.md)に記録しています。
 
-    | 問い | 答え |
-    |---|---|
-    | データパイプラインは学習可能なデータを作るか | **yes** — 50,164発話、失敗ゼロ、カット可能率95.6% |
-    | トークナイザ・形態素分割・アライメントの連鎖は機能するか | **yes** — `<unk>` ゼロ、読み落ち0.45% |
-    | **モデルは日本語の音韻を獲得するか** | **yes** — サンプル音声を聴いて確認 |
+## 記録の読み方
 
-    これで**フェーズ2に $75〜145 を払う判断**ができます。パイプラインのバグを $4.59 で
-    否定できた、というのがこのフェーズの経済的な意味でした。
+- [開発終了と先行モデルの確認](research/2026-10-15-project-end-and-released-model-check.md)：終了判断と先行配布物の確認範囲。
+- [HF保存公開の完了記録](research/2026-10-15-huggingface-archive-publication.md)：組織への移管、保存対象、照合結果。
+- [データセット](datasets.md)・[学習戦略](training-strategy.md)：最終データと実行履歴。
+- [M2a準備](research/2026-10-07-gol-only-m2a-preparation.md)・[学習結果](research/2026-10-07-gol-only-m2a-training-results.md)：実行時の測定。
+- [蒸留とCPU評価](research/2026-10-07-japanese-distillation-and-cpu-results.md)・[人手所見](research/2026-10-08-japanese-teacher-student-listening-notes.json)：品質差と確認範囲。
+- [旧継続計画](plans/2026-10-07-next-training-and-release.md)・[コミュニティ調査](community-survey.md)：当時の計画・調査。現在の追加実行指示ではありません。
 
-    日本語としては崩れる箇所もあります。想定内で、原因は品質側です —— 87時間・27話者・
-    19.5エポック、そして**転写そのものが `--max-cer 0.2`（2系統の ASR が最大20%の文字で
-    食い違うものまで採用）**であること。
-
-    **2026-08-30 訂正:** ここで当初「本番は桁違いの量になるのでエポック数の問題は消える」と
-    書きましたが、発話数で計算し直すと誤りでした。250k step は1,600万サンプルなので、
-    GOL 1,000時間（745k発話）では **21.5エポック**とフェーズ1の19.5より多くなります。
-    2エポック台にするには GOL をほぼ全量（10,654時間）取ることになります。
-    ただしフェーズ1の過学習は27話者という少なさも原因でありうるので、
-    **どちらが支配的かを中間検証で測ってから量を決めます**（[設計](specs/2026-08-30-gol-and-phase2-design.md)）。
-
-    成果物は [`ayousanz/pocket-tts-ja-phase1`](https://huggingface.co/ayousanz/pocket-tts-ja-phase1)
-    に gated（manual）で置いてあります。重み・チェックポイント3本・サンプル90本・loss 記録・
-    `probe.json`。**MoeSpeech の音声は1バイトも含みません**（再配布不可のため。重みの公開は可）。
-
-!!! info "M2 の実装が完了しました（2026-08-30）"
-    `training/scripts/prepare_gol.py` が9ステージを1コマンドで通します —— 作品の選定、取得、
-    展開、話者の実測と絞り込み、発話収集、連結、MoeSpeech との合流と分割、アライメント、
-    スコアでの絞り込み。テスト455件、8タスク、15コミット。**実行は vast.ai 上でこれからです。**
-
-    **相互 CER の代わりにアライメントスコアを使います。** アライナが既に計算している対数確率で、
-    転写と音声の一致を*直接*測ります（相互 CER は2系統の ASR が互いに何を言うかという代理指標）。
-    生値・フレーム当たり・トークン当たりの3つで報告し、**閾値の既定値は作りません** ——
-    MoeSpeech で `--min-mos 3.0` が8分の7を黙って捨てかけた、あの規律の続きです。
-
-    **話者キーは `game_id:speaker` の複合キーです。** 実 `metadata.tsv` を測ると、名前だけで
-    束ねた場合に 2,819話者が 2,095話者へ潰れ、失うのは全体の7%の時間でした。
-    **別人を混ぜない方が、量でも勝っていました。**
-
-!!! warning "同じ形の欠陥が、これで4回目です"
-    **ラベルまたはパスが、2人を指しうる。**
-
-    MoeSpeech の入れ子 `wav` ディレクトリ（話者ラベルが親ディレクトリ名だった）、GOL の
-    話者IDの作品跨ぎ、そして M2 の実装が見つけた `disc2/` —— `metadata.tsv` が名指すクリップが
-    ツリーに2つ存在し、**別の話者の音声が、この行の転写の下に入る**ところでした。合成トーンで
-    再現して確認しています。
-
-    3つの背後にあるのは、**`concatenate` のガードが声ではなくラベルを比較している**という
-    事実です。**ラベルを比較するガードは、ラベルの真正性の担保をどこか別の場所に押し付ける。
-    その「どこか」を明示しなければなりません。**
-
-!!! danger "実データが3つ教えました"
-    **バックアップ JSON が半分ありました。** 149,224個中74,612個が `.bak.json` で、音声を
-    持ちません。「音声が隣に無い注釈は採らない」というガードが無ければ、`probe.json` は
-    248時間と報告し、残存率表は実在の倍を約束していました。
-
-    **speechMOS の中央値は 2.281 です。** `--min-mos 3.0` を切ると、CER を一切見なくても
-    124.4時間が16.2時間になります。UTMOS は朗読音声で較正された尺度で、この中央値は
-    「音が悪い」ではなく指標とドメインのずれを測っています。**測る前に「妥当な既定値」を
-    書いていたら、コーパスの8分の7を黙って捨てていました。**
-
-    **実効バッチが同じでも、割り方で14倍違いました。** 16×4 と 8×8 はどちらも64行ですが、
-    16 GBカードでは 0.022 対 0.302 it/s（193時間 対 13.8時間）。カードの VRAM が
-    15.3/16.4 GB に達して破綻していました。
-
-## ページ構成
-
-- **[コミュニティ調査](community-survey.md)** — 公式リポジトリ、フォーク、Hugging Face、日本語コミュニティの網羅調査。なぜ空白地帯なのか。チェコ語モデルの成果物の型。
-- **[データセット](datasets.md)** — 使用する2つのデータセットの実測値と、それぞれの注意点。前処理のディスクとコスト。
-- **[学習戦略とコスト](training-strategy.md)** — 事前学習 vs 継続学習の判断根拠、コスト試算、既知のリスク、段階的な進め方。**フェーズ1の実行手順はここ。**
-- **[日本語テキストフロントエンドの設計](specs/2026-08-27-japanese-text-frontend-design.md)** — 推論側・評価側にあった4つの欠陥（後にもう1件見つかり計5件）をどう直すかの設計。
-- **[日本語テキストフロントエンドの計画](plans/2026-08-27-japanese-text-frontend.md)** — 上記設計をタスクに分割した実装計画。**完了済み。**
-- **[MoeSpeech マニフェストの設計](specs/2026-08-28-moespeech-manifest-design.md)** — zip からアライメント済みマニフェストまでの8ステージ。`info.csv` の実測が設計を3つ変えた記録。
-- **[MoeSpeech マニフェストの計画](plans/2026-08-28-moespeech-manifest.md)** — 上記設計をタスクに分割した実装計画。**完了済み**（実行時に7件の裁定で上書きされた箇所あり、冒頭に記録）。
-- **[GOL 取り込みとフェーズ2の設計](specs/2026-08-30-gol-and-phase2-design.md)** — `metadata.tsv` の実測、相互 CER の代わりになる指標、そして中間検証が何を決めるか。
-- **[GOL 取り込みの実装計画](plans/2026-08-30-gol-ingestion.md)** — 上記設計をタスクに分割した実装計画。**完了済み**（実行時に9件の裁定で上書きされた箇所あり、冒頭に記録）。
-
-## 日本語固有の作業（全体像）
-
-`training/README.md` は非英語言語について「アライナとトークナイザの両方を差し替える必要がある」と明記しています。日本語の場合、それに加えて学習コード自体への小改修が必要です。
-
-1. **トークナイザ** — `training/scripts/train_tokenizer.py` で sentencepiece を学習。CJK だからといって `character_coverage` を下げてはいけない — 実測で 0.9995 は 1,516 字を `<unk>` にするため、**1.0 を維持**する（[詳細](training-strategy.md)）。**学習済み**（語彙8000）。
-2. **強制アライメント** — `training/scripts/align_data.py` のアライナを日本語 wav2vec2 に差し替え。日本語は分かち書きがないため単語分割が別途必要（**対応済み**、MeCab/UniDic 形態素 + 文節マージで分割）。
-3. **DataLoader の単語連結** — `training/dataloader.py:152` の `word_separator.join(...)`（**対応済み**、`data.word_separator: ""` で解決）。
-4. **短尺クリップの連結** — MoeSpeech のキャラ別平均クリップ長は中央値 5.8 秒で、loader がカット点の前後に1秒ずつ要求するとターゲットが 4.8 秒未満しか残らない。同一キャラのクリップを連結して擬似長尺ファイルを作る（**対応済み**、`prepare_moespeech.py` のステージ6）。
-5. **アライナへの窓の受け渡し** — `align_data.py` はマニフェストの `start == 0.0` を「この行はファイル全体」と読んでいた。連結ファイルの先頭発話は必ず `start == 0.0` になるため、そのままでは20件に1件が他人の発話ごとアライメントされる（**対応済み**、`read_window()` が常に窓を読む）。**これは英語パイプラインにもあった上流由来のバグ**で、章の先頭発話が章まるごとに対してアライメントされていた。
-
-1 は[学習戦略とコスト](training-strategy.md)のフェーズ0節、2・3 は同ページの「リスク1: 分かち書きとアライメント（対応済み）」、4・5 は [MoeSpeech マニフェストの設計](specs/2026-08-28-moespeech-manifest-design.md)に詳しい。
+8月・10月6日・10月7日の研究報告とJSON/XMLは実行当時の記録を保持しています。「未公開」「停止・データ保持」「次の試聴」などは当時の状態です。現在の状態は本ページと10月15日の保存公開receiptを基準にします。公開用コピーでは他プロジェクトの情報・ホスト接続情報・個人環境の絶対パスを省略または正規化し、該当JSONに`publication_redactions`を付記しています。元の記録はローカルに保持しています。

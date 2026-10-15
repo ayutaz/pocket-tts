@@ -1,0 +1,138 @@
+{
+  "checked_utc": "2026-10-07T05:05:50.353888+00:00",
+  "instance_id": 54521683,
+  "jobs": {
+    "full_evaluation": {
+      "pid": 3543,
+      "expected_handle_is_live": false,
+      "command": null,
+      "exit_code": 0,
+      "ready": true
+    },
+    "cpu_evaluation": {
+      "pid": 3734,
+      "expected_handle_is_live": false,
+      "command": null,
+      "exit_code": 0,
+      "ready": true
+    },
+    "export_verification": {
+      "pid": 3751,
+      "expected_handle_is_live": false,
+      "command": null,
+      "exit_code": 0,
+      "ready": true
+    },
+    "recovery_archive": {
+      "pid": 3768,
+      "expected_handle_is_live": false,
+      "command": null,
+      "exit_code": 0,
+      "ready": true
+    }
+  },
+  "actual_student_optimizer_step": 5000,
+  "finite_saved_state": true,
+  "validation": [
+    {
+      "time": "2026-10-07 04:16:44+0000",
+      "type": "valid",
+      "step": 500,
+      "metrics": {
+        "distill_mse": 0.09778170354664326,
+        "loss": 0.09778170354664326
+      }
+    },
+    {
+      "time": "2026-10-07 04:18:07+0000",
+      "type": "valid",
+      "step": 1000,
+      "metrics": {
+        "distill_mse": 0.09378614984452724,
+        "loss": 0.09378614984452724
+      }
+    },
+    {
+      "time": "2026-10-07 04:19:30+0000",
+      "type": "valid",
+      "step": 1500,
+      "metrics": {
+        "distill_mse": 0.08323943451046943,
+        "loss": 0.08323943451046943
+      }
+    },
+    {
+      "time": "2026-10-07 04:20:53+0000",
+      "type": "valid",
+      "step": 2000,
+      "metrics": {
+        "distill_mse": 0.07297780118882656,
+        "loss": 0.07297780118882656
+      }
+    },
+    {
+      "time": "2026-10-07 04:22:16+0000",
+      "type": "valid",
+      "step": 2500,
+      "metrics": {
+        "distill_mse": 0.06546177543699741,
+        "loss": 0.06546177543699741
+      }
+    },
+    {
+      "time": "2026-10-07 04:23:39+0000",
+      "type": "valid",
+      "step": 3000,
+      "metrics": {
+        "distill_mse": 0.0583893758058548,
+        "loss": 0.0583893758058548
+      }
+    },
+    {
+      "time": "2026-10-07 04:25:03+0000",
+      "type": "valid",
+      "step": 3500,
+      "metrics": {
+        "distill_mse": 0.051905751042068,
+        "loss": 0.051905751042068
+      }
+    },
+    {
+      "time": "2026-10-07 04:26:26+0000",
+      "type": "valid",
+      "step": 4000,
+      "metrics": {
+        "distill_mse": 0.047790099754929545,
+        "loss": 0.047790099754929545
+      }
+    },
+    {
+      "time": "2026-10-07 04:27:51+0000",
+      "type": "valid",
+      "step": 4500,
+      "metrics": {
+        "distill_mse": 0.045286251604557036,
+        "loss": 0.045286251604557036
+      }
+    },
+    {
+      "time": "2026-10-07 04:29:14+0000",
+      "type": "valid",
+      "step": 5000,
+      "metrics": {
+        "distill_mse": 0.04255462873727083,
+        "loss": 0.04255462873727083
+      }
+    }
+  ],
+  "generated_records_by_shard": [
+    756,
+    756,
+    756,
+    756
+  ],
+  "expected_generated_records": 3024,
+  "teacher_is_provisional": true,
+  "human_listening_completed": false,
+  "publication_performed": false
+}

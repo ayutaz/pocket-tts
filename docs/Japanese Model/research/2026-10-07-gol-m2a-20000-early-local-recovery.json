@@ -1,0 +1,13 @@
+{
+  "checkpoint_step": 20000,
+  "archive": "runs/vast-m2a-control/m2a-20000-early-recovery.tar.gz",
+  "bytes": 132032429,
+  "sha256": "c5c2afac150774345fcbcd56f9a1b7f4cbf8e66553665846d2c62400d2d04bab",
+  "payload_files": 241,
+  "recovered_off_instance": true,
+  "local_whole_archive_identity_verified": true,
+  "observed_utc": "2026-10-07T00:25:37.1703312Z",
+  "verification_scope": "Transfer identity only; archive payload and context verification ran on Vast.ai",
+  "human_listening_completed": false,
+  "teacher_selected": false
+}

@@ -1,0 +1,36 @@
+{
+  "checked_utc": "2026-10-14T18:42:39.319142+00:00",
+  "repo_id": "ayousanz/pocket-tts-ja-experiments",
+  "revision": "ebbd331bc9abedde76d8dac799b8cd0caece4cbd",
+  "private": false,
+  "gated": "manual",
+  "anonymous_model_status": 401,
+  "uploaded_models_verified": [
+    {
+      "file": "gol/student/5000/model.safetensors",
+      "sha256": "a1b27310b7daf6a09f3a5289f0477ec2f20217d53d6438b5bea9c0bdd5ba01ae",
+      "bytes": 454417328
+    },
+    {
+      "file": "gol/teacher/10000/checkpoint_00010000.pt",
+      "sha256": "51f538a3fe5231e4b404f46c47ae49dc4f39a20b6a07ce2bb1cbec03976e17d1",
+      "bytes": 2561110827
+    },
+    {
+      "file": "gol/teacher/2000/checkpoint_00002000.pt",
+      "sha256": "296f388855a63bdc20b0a59d9b10fd0161b57d1c06208cabf0bab0b435951432",
+      "bytes": 2561110827
+    }
+  ],
+  "complete": false,
+  "reason": "Public storage quota accounting refresh pending",
+  "pending_models": [
+    "gol/teacher/5000/checkpoint_00005000.pt",
+    "gol/teacher/20000/checkpoint_00020000.pt",
+    "legacy/smoke220/model.safetensors"
+  ],
+  "phase1_revision_unchanged": "2c3c1a7dab2ff066b5069c30e7951a980ff6e914",
+  "managed_wait_session_id": 70058,
+  "detached_process_launch_rejected": "blocked by policy",
+  "safer_execution_mode": "Tool-managed interruptible exec session; no detached service created"
+}

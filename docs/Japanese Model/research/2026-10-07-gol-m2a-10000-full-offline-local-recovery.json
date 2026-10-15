@@ -1,0 +1,18 @@
+{
+  "checkpoint_step": 10000,
+  "checkpoint_sha256": "51f538a3fe5231e4b404f46c47ae49dc4f39a20b6a07ce2bb1cbec03976e17d1",
+  "matrix_rows": 3024,
+  "files_verified": 3067,
+  "bytes": 2236464814,
+  "review_page": "<workspace>\\runs\\vast-m2a-control\\offline-review\\japanese-m2a-eval-00010000-full\\review.html",
+  "all_transferred_files_sha256_verified": true,
+  "human_listening_completed": false,
+  "local_actions": "result transfer and integrity verification only",
+  "publication_redactions": {
+    "fields": [
+      "review_page (host/path normalized)"
+    ],
+    "original_record_retained_locally": true,
+    "scope": "Public documentation copy only; experiment results and artifact checksums unchanged"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "instance_id": 54521683,
+  "action": "stop",
+  "request_accepted": null,
+  "observed_utc": "2026-10-07T14:26:36.198471+09:00",
+  "before": {
+    "id": 54521683,
+    "label": "pocket-ja-gol-only-m2a-20261007",
+    "actual_status": "running",
+    "cur_state": "running",
+    "intended_status": "running",
+    "dph_total": 2.0962962962962965,
+    "storage_cost": 0.05333333333333334
+  },
+  "student5000_archive_sha256": "93cf11e71de8a6ecf34242ca469d79cc95e512e2589c9300d8b6c5c86238a296",
+  "reason": "All currently scheduled ML and recovery jobs finished; human listening and final teacher/student quality selection are pending.",
+  "storage_billing_continues": true,
+  "data_preserved": true,
+  "destroyed": false,
+  "human_listening_completed": false,
+  "teacher_selected": false,
+  "quality_approved": false,
+  "publication_performed": false,
+  "stopped_state_independently_verified": true,
+  "other_instance_states_unchanged": true,
+  "command_response_note": "CLI exit 0 returned no JSON; independent status recheck proves stopped state. No repeated stop request.",
+  "publication_redactions": {
+    "fields": [
+      "other_instances_before"
+    ],
+    "original_record_retained_locally": true,
+    "scope": "Public documentation copy only; experiment results and artifact checksums unchanged"
+  }
+}

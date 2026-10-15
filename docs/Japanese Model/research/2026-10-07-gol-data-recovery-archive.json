@@ -1,0 +1,14 @@
+{
+  "archive": "runs/m2a-control/m2a-data-recovery.tar.gz",
+  "bytes": 383782232,
+  "sha256": "086a5ba63ce597ca7f3462c2057076cc2efa5472986bb0c603ed0a1e940dc6b2",
+  "files": 504,
+  "archive_contents_verified": true,
+  "matches_final_audit_and_checkpoint_evaluation_inputs": true,
+  "scope": "Final GOL audio/latent manifests and preparation provenance",
+  "limits": [
+    "No original/joined audio, latent tensors or model weights included.",
+    "Manifests and hashes are provenance; audio/latents must be reacquired or rebuilt.",
+    "This recovery does not establish speech quality or teacher selection."
+  ]
+}

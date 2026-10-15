@@ -1,0 +1,23 @@
+{
+  "checked_utc": "2026-10-07T05:21:54.669995+00:00",
+  "archive_bytes": 4448563200,
+  "archive_sha256": "93cf11e71de8a6ecf34242ca469d79cc95e512e2589c9300d8b6c5c86238a296",
+  "archive_matches_vast_receipt": true,
+  "checkpoint_optimizer_verified": true,
+  "export_weights_verified": true,
+  "source_files_verified": 141,
+  "evaluation_records_and_wave_hashes_verified": 3024,
+  "offline_review_directory": "<workspace>\\runs\\vast-m2a-control\\offline-review\\japanese-student5000-eval-full-v2",
+  "recovered_off_instance": true,
+  "human_listening_completed": false,
+  "quality_approved": false,
+  "publication_performed": false,
+  "local_operation": "transfer integrity and offline artifact extraction only",
+  "publication_redactions": {
+    "fields": [
+      "offline_review_directory (host/path normalized)"
+    ],
+    "original_record_retained_locally": true,
+    "scope": "Public documentation copy only; experiment results and artifact checksums unchanged"
+  }
+}

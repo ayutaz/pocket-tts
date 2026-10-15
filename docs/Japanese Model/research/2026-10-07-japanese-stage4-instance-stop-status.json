@@ -1,0 +1,22 @@
+{
+  "checked_utc": "2026-10-07T05:26:53.005257+00:00",
+  "owned": {
+    "id": 54521683,
+    "label": "pocket-ja-gol-only-m2a-20261007",
+    "actual_status": "exited",
+    "cur_state": "stopped",
+    "intended_status": "stopped",
+    "dph_total": 2.0962962962962965,
+    "storage_cost": 0.05333333333333334
+  },
+  "stopped_verified": true,
+  "destroyed": false,
+  "storage_billing_continues": true,
+  "publication_redactions": {
+    "fields": [
+      "others"
+    ],
+    "original_record_retained_locally": true,
+    "scope": "Public documentation copy only; experiment results and artifact checksums unchanged"
+  }
+}

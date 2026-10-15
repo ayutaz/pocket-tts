@@ -1,0 +1,22 @@
+{
+  "checked_utc": "2026-10-07T05:20:26.767791+00:00",
+  "checkpoint_step": 5000,
+  "actual_optimizer_step_in_vast_verification": 5000,
+  "files": {
+    "checkpoint_00005000.pt": {
+      "bytes": 709394483,
+      "sha256": "f9dee3bc786fbcc1358a74a35d1885e7084700eb9d4d5b40d3875a3d9a7d41a8"
+    },
+    "optim_00005000.pt": {
+      "bytes": 670318242,
+      "sha256": "5334737c97b1ed61568aefbf896404042cf6e6b7f5774a62a773ce569b3b06c4"
+    }
+  },
+  "recovered_off_instance": true,
+  "checkpoint_optimizer_bytes_and_sha256_verified": true,
+  "larger_archive_verification_pending": true,
+  "local_operation": "restart member transfer integrity only",
+  "human_listening_completed": false,
+  "quality_approved": false,
+  "publication_performed": false
+}

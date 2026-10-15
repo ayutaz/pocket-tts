@@ -1,0 +1,902 @@
+{
+  "finished_utc": "2026-10-06T16:18:31.956950+00:00",
+  "verification": {
+    "conditions_verified": 144,
+    "asr_controls": 6,
+    "shard_inputs_match": true,
+    "all_waveform_hashes_verified": true,
+    "reference_pcm_matches_across_shards": true,
+    "human_listening_completed": false
+  },
+  "extra_verification": {
+    "all_audio_finite": true,
+    "all_eos_logits_finite": true,
+    "public_api_chunk_traces_complete": true,
+    "frozen_evaluation_source_verified": true
+  },
+  "dataset": {
+    "train_rows": 313,
+    "train_minutes": 34.06,
+    "train_speaker_labels": 3,
+    "valid_rows": 90,
+    "valid_minutes": 6.33,
+    "valid_speaker_labels": 1,
+    "max_train_seconds": 14.857143,
+    "max_valid_seconds": 10.752979,
+    "entries_over_30_seconds": 0
+  },
+  "controls": {
+    "items": 6,
+    "reference_characters": 156,
+    "errors": 34,
+    "cer": 0.21794871794871795
+  },
+  "combined_voices": {
+    "trainer_ema_cfg1_eos-4": {
+      "condition": "trainer_ema_cfg1_eos-4",
+      "voice": "both",
+      "items": 12,
+      "cer": 0.98125,
+      "reference_characters": 320,
+      "substitutions": 27,
+      "deletions": 287,
+      "insertions": 0,
+      "deletion_rate": 0.896875,
+      "median_seconds": 0.76,
+      "under_one_second": 8,
+      "termination": {
+        "eos": 12
+      }
+    },
+    "trainer_ema_cfg1_eos-1": {
+      "condition": "trainer_ema_cfg1_eos-1",
+      "voice": "both",
+      "items": 12,
+      "cer": 1.159375,
+      "reference_characters": 320,
+      "substitutions": 159,
+      "deletions": 150,
+      "insertions": 62,
+      "deletion_rate": 0.46875,
+      "median_seconds": 26.28,
+      "under_one_second": 1,
+      "termination": {
+        "eos": 9,
+        "max_length_without_eos": 3
+      }
+    },
+    "trainer_ema_cfg2_eos-4": {
+      "condition": "trainer_ema_cfg2_eos-4",
+      "voice": "both",
+      "items": 12,
+      "cer": 0.984375,
+      "reference_characters": 320,
+      "substitutions": 41,
+      "deletions": 273,
+      "insertions": 1,
+      "deletion_rate": 0.853125,
+      "median_seconds": 0.9199999999999999,
+      "under_one_second": 7,
+      "termination": {
+        "eos": 12
+      }
+    },
+    "trainer_ema_cfg2_eos-1": {
+      "condition": "trainer_ema_cfg2_eos-1",
+      "voice": "both",
+      "items": 12,
+      "cer": 1.221875,
+      "reference_characters": 320,
+      "substitutions": 134,
+      "deletions": 165,
+      "insertions": 92,
+      "deletion_rate": 0.515625,
+      "median_seconds": 16.84,
+      "under_one_second": 2,
+      "termination": {
+        "eos": 12
+      }
+    },
+    "trainer_raw_cfg1_eos-4": {
+      "condition": "trainer_raw_cfg1_eos-4",
+      "voice": "both",
+      "items": 12,
+      "cer": 1.0125,
+      "reference_characters": 320,
+      "substitutions": 81,
+      "deletions": 234,
+      "insertions": 9,
+      "deletion_rate": 0.73125,
+      "median_seconds": 3.5999999999999996,
+      "under_one_second": 3,
+      "termination": {
+        "eos": 12
+      }
+    },
+    "trainer_raw_cfg1_eos-1": {
+      "condition": "trainer_raw_cfg1_eos-1",
+      "voice": "both",
+      "items": 12,
+      "cer": 1.0125,
+      "reference_characters": 320,
+      "substitutions": 104,
+      "deletions": 211,
+      "insertions": 9,
+      "deletion_rate": 0.659375,
+      "median_seconds": 5.48,
+      "under_one_second": 3,
+      "termination": {
+        "eos": 9,
+        "max_length_without_eos": 3
+      }
+    },
+    "trainer_raw_cfg2_eos-4": {
+      "condition": "trainer_raw_cfg2_eos-4",
+      "voice": "both",
+      "items": 12,
+      "cer": 0.959375,
+      "reference_characters": 320,
+      "substitutions": 101,
+      "deletions": 197,
+      "insertions": 9,
+      "deletion_rate": 0.615625,
+      "median_seconds": 2.08,
+      "under_one_second": 4,
+      "termination": {
+        "eos": 12
+      }
+    },
+    "trainer_raw_cfg2_eos-1": {
+      "condition": "trainer_raw_cfg2_eos-1",
+      "voice": "both",
+      "items": 12,
+      "cer": 0.99375,
+      "reference_characters": 320,
+      "substitutions": 147,
+      "deletions": 155,
+      "insertions": 16,
+      "deletion_rate": 0.484375,
+      "median_seconds": 4.92,
+      "under_one_second": 3,
+      "termination": {
+        "eos": 12
+      }
+    },
+    "public_api_ema_cfg1_eos-4": {
+      "condition": "public_api_ema_cfg1_eos-4",
+      "voice": "both",
+      "items": 12,
+      "cer": 0.975,
+      "reference_characters": 320,
+      "substitutions": 29,
+      "deletions": 283,
+      "insertions": 0,
+      "deletion_rate": 0.884375,
+      "median_seconds": 0.96,
+      "under_one_second": 7,
+      "termination": {
+        "eos": 12
+      }
+    },
+    "public_api_ema_cfg1_eos-1": {
+      "condition": "public_api_ema_cfg1_eos-1",
+      "voice": "both",
+      "items": 12,
+      "cer": 0.978125,
+      "reference_characters": 320,
+      "substitutions": 95,
+      "deletions": 216,
+      "insertions": 2,
+      "deletion_rate": 0.675,
+      "median_seconds": 6.0,
+      "under_one_second": 1,
+      "termination": {
+        "eos": 3,
+        "max_length_without_eos": 9
+      }
+    },
+    "public_api_raw_cfg1_eos-4": {
+      "condition": "public_api_raw_cfg1_eos-4",
+      "voice": "both",
+      "items": 12,
+      "cer": 0.975,
+      "reference_characters": 320,
+      "substitutions": 91,
+      "deletions": 216,
+      "insertions": 5,
+      "deletion_rate": 0.675,
+      "median_seconds": 3.72,
+      "under_one_second": 0,
+      "termination": {
+        "eos": 11,
+        "max_length_without_eos": 1
+      }
+    },
+    "public_api_raw_cfg1_eos-1": {
+      "condition": "public_api_raw_cfg1_eos-1",
+      "voice": "both",
+      "items": 12,
+      "cer": 0.990625,
+      "reference_characters": 320,
+      "substitutions": 115,
+      "deletions": 194,
+      "insertions": 8,
+      "deletion_rate": 0.60625,
+      "median_seconds": 5.199999999999999,
+      "under_one_second": 0,
+      "termination": {
+        "eos": 8,
+        "max_length_without_eos": 4
+      }
+    }
+  },
+  "per_voice": [
+    {
+      "condition": "public_api_ema_cfg1_eos-1",
+      "voice": "held_out",
+      "items": 6,
+      "cer": 0.9875,
+      "reference_characters": 160,
+      "substitutions": 42,
+      "deletions": 114,
+      "insertions": 2,
+      "deletion_rate": 0.7125,
+      "median_seconds": 4.32,
+      "under_one_second": 1,
+      "termination": {
+        "eos": 3,
+        "max_length_without_eos": 3
+      }
+    },
+    {
+      "condition": "public_api_ema_cfg1_eos-1",
+      "voice": "seen",
+      "items": 6,
+      "cer": 0.96875,
+      "reference_characters": 160,
+      "substitutions": 53,
+      "deletions": 102,
+      "insertions": 0,
+      "deletion_rate": 0.6375,
+      "median_seconds": 6.52,
+      "under_one_second": 0,
+      "termination": {
+        "max_length_without_eos": 6
+      }
+    },
+    {
+      "condition": "public_api_ema_cfg1_eos-4",
+      "voice": "held_out",
+      "items": 6,
+      "cer": 0.975,
+      "reference_characters": 160,
+      "substitutions": 12,
+      "deletions": 144,
+      "insertions": 0,
+      "deletion_rate": 0.9,
+      "median_seconds": 0.88,
+      "under_one_second": 6,
+      "termination": {
+        "eos": 6
+      }
+    },
+    {
+      "condition": "public_api_ema_cfg1_eos-4",
+      "voice": "seen",
+      "items": 6,
+      "cer": 0.975,
+      "reference_characters": 160,
+      "substitutions": 17,
+      "deletions": 139,
+      "insertions": 0,
+      "deletion_rate": 0.86875,
+      "median_seconds": 1.8,
+      "under_one_second": 1,
+      "termination": {
+        "eos": 6
+      }
+    },
+    {
+      "condition": "public_api_raw_cfg1_eos-1",
+      "voice": "held_out",
+      "items": 6,
+      "cer": 0.96875,
+      "reference_characters": 160,
+      "substitutions": 25,
+      "deletions": 130,
+      "insertions": 0,
+      "deletion_rate": 0.8125,
+      "median_seconds": 4.64,
+      "under_one_second": 0,
+      "termination": {
+        "eos": 5,
+        "max_length_without_eos": 1
+      }
+    },
+    {
+      "condition": "public_api_raw_cfg1_eos-1",
+      "voice": "seen",
+      "items": 6,
+      "cer": 1.0125,
+      "reference_characters": 160,
+      "substitutions": 90,
+      "deletions": 64,
+      "insertions": 8,
+      "deletion_rate": 0.4,
+      "median_seconds": 6.52,
+      "under_one_second": 0,
+      "termination": {
+        "eos": 3,
+        "max_length_without_eos": 3
+      }
+    },
+    {
+      "condition": "public_api_raw_cfg1_eos-4",
+      "voice": "held_out",
+      "items": 6,
+      "cer": 0.96875,
+      "reference_characters": 160,
+      "substitutions": 25,
+      "deletions": 130,
+      "insertions": 0,
+      "deletion_rate": 0.8125,
+      "median_seconds": 2.16,
+      "under_one_second": 0,
+      "termination": {
+        "eos": 6
+      }
+    },
+    {
+      "condition": "public_api_raw_cfg1_eos-4",
+      "voice": "seen",
+      "items": 6,
+      "cer": 0.98125,
+      "reference_characters": 160,
+      "substitutions": 66,
+      "deletions": 86,
+      "insertions": 5,
+      "deletion_rate": 0.5375,
+      "median_seconds": 5.2,
+      "under_one_second": 0,
+      "termination": {
+        "eos": 5,
+        "max_length_without_eos": 1
+      }
+    },
+    {
+      "condition": "trainer_ema_cfg1_eos-1",
+      "voice": "held_out",
+      "items": 6,
+      "cer": 1.15625,
+      "reference_characters": 160,
+      "substitutions": 64,
+      "deletions": 92,
+      "insertions": 29,
+      "deletion_rate": 0.575,
+      "median_seconds": 3.7199999999999998,
+      "under_one_second": 1,
+      "termination": {
+        "eos": 5,
+        "max_length_without_eos": 1
+      }
+    },
+    {
+      "condition": "trainer_ema_cfg1_eos-1",
+      "voice": "seen",
+      "items": 6,
+      "cer": 1.1625,
+      "reference_characters": 160,
+      "substitutions": 95,
+      "deletions": 58,
+      "insertions": 33,
+      "deletion_rate": 0.3625,
+      "median_seconds": 28.240000000000002,
+      "under_one_second": 0,
+      "termination": {
+        "eos": 4,
+        "max_length_without_eos": 2
+      }
+    },
+    {
+      "condition": "trainer_ema_cfg1_eos-4",
+      "voice": "held_out",
+      "items": 6,
+      "cer": 0.9625,
+      "reference_characters": 160,
+      "substitutions": 10,
+      "deletions": 144,
+      "insertions": 0,
+      "deletion_rate": 0.9,
+      "median_seconds": 0.6000000000000001,
+      "under_one_second": 6,
+      "termination": {
+        "eos": 6
+      }
+    },
+    {
+      "condition": "trainer_ema_cfg1_eos-4",
+      "voice": "seen",
+      "items": 6,
+      "cer": 1.0,
+      "reference_characters": 160,
+      "substitutions": 17,
+      "deletions": 143,
+      "insertions": 0,
+      "deletion_rate": 0.89375,
+      "median_seconds": 1.4,
+      "under_one_second": 2,
+      "termination": {
+        "eos": 6
+      }
+    },
+    {
+      "condition": "trainer_ema_cfg2_eos-1",
+      "voice": "held_out",
+      "items": 6,
+      "cer": 0.95625,
+      "reference_characters": 160,
+      "substitutions": 33,
+      "deletions": 120,
+      "insertions": 0,
+      "deletion_rate": 0.75,
+      "median_seconds": 1.24,
+      "under_one_second": 2,
+      "termination": {
+        "eos": 6
+      }
+    },
+    {
+      "condition": "trainer_ema_cfg2_eos-1",
+      "voice": "seen",
+      "items": 6,
+      "cer": 1.4875,
+      "reference_characters": 160,
+      "substitutions": 101,
+      "deletions": 45,
+      "insertions": 92,
+      "deletion_rate": 0.28125,
+      "median_seconds": 21.56,
+      "under_one_second": 0,
+      "termination": {
+        "eos": 6
+      }
+    },
+    {
+      "condition": "trainer_ema_cfg2_eos-4",
+      "voice": "held_out",
+      "items": 6,
+      "cer": 0.99375,
+      "reference_characters": 160,
+      "substitutions": 24,
+      "deletions": 135,
+      "insertions": 0,
+      "deletion_rate": 0.84375,
+      "median_seconds": 0.9199999999999999,
+      "under_one_second": 4,
+      "termination": {
+        "eos": 6
+      }
+    },
+    {
+      "condition": "trainer_ema_cfg2_eos-4",
+      "voice": "seen",
+      "items": 6,
+      "cer": 0.975,
+      "reference_characters": 160,
+      "substitutions": 17,
+      "deletions": 138,
+      "insertions": 1,
+      "deletion_rate": 0.8625,
+      "median_seconds": 1.2000000000000002,
+      "under_one_second": 3,
+      "termination": {
+        "eos": 6
+      }
+    },
+    {
+      "condition": "trainer_raw_cfg1_eos-1",
+      "voice": "held_out",
+      "items": 6,
+      "cer": 0.99375,
+      "reference_characters": 160,
+      "substitutions": 33,
+      "deletions": 126,
+      "insertions": 0,
+      "deletion_rate": 0.7875,
+      "median_seconds": 17.6,
+      "under_one_second": 1,
+      "termination": {
+        "eos": 3,
+        "max_length_without_eos": 3
+      }
+    },
+    {
+      "condition": "trainer_raw_cfg1_eos-1",
+      "voice": "seen",
+      "items": 6,
+      "cer": 1.03125,
+      "reference_characters": 160,
+      "substitutions": 71,
+      "deletions": 85,
+      "insertions": 9,
+      "deletion_rate": 0.53125,
+      "median_seconds": 5.16,
+      "under_one_second": 2,
+      "termination": {
+        "eos": 6
+      }
+    },
+    {
+      "condition": "trainer_raw_cfg1_eos-4",
+      "voice": "held_out",
+      "items": 6,
+      "cer": 0.99375,
+      "reference_characters": 160,
+      "substitutions": 18,
+      "deletions": 141,
+      "insertions": 0,
+      "deletion_rate": 0.88125,
+      "median_seconds": 2.32,
+      "under_one_second": 1,
+      "termination": {
+        "eos": 6
+      }
+    },
+    {
+      "condition": "trainer_raw_cfg1_eos-4",
+      "voice": "seen",
+      "items": 6,
+      "cer": 1.03125,
+      "reference_characters": 160,
+      "substitutions": 63,
+      "deletions": 93,
+      "insertions": 9,
+      "deletion_rate": 0.58125,
+      "median_seconds": 4.28,
+      "under_one_second": 2,
+      "termination": {
+        "eos": 6
+      }
+    },
+    {
+      "condition": "trainer_raw_cfg2_eos-1",
+      "voice": "held_out",
+      "items": 6,
+      "cer": 0.96875,
+      "reference_characters": 160,
+      "substitutions": 45,
+      "deletions": 109,
+      "insertions": 1,
+      "deletion_rate": 0.68125,
+      "median_seconds": 3.36,
+      "under_one_second": 3,
+      "termination": {
+        "eos": 6
+      }
+    },
+    {
+      "condition": "trainer_raw_cfg2_eos-1",
+      "voice": "seen",
+      "items": 6,
+      "cer": 1.01875,
+      "reference_characters": 160,
+      "substitutions": 102,
+      "deletions": 46,
+      "insertions": 15,
+      "deletion_rate": 0.2875,
+      "median_seconds": 4.92,
+      "under_one_second": 0,
+      "termination": {
+        "eos": 6
+      }
+    },
+    {
+      "condition": "trainer_raw_cfg2_eos-4",
+      "voice": "held_out",
+      "items": 6,
+      "cer": 0.9375,
+      "reference_characters": 160,
+      "substitutions": 31,
+      "deletions": 119,
+      "insertions": 0,
+      "deletion_rate": 0.74375,
+      "median_seconds": 0.9199999999999999,
+      "under_one_second": 4,
+      "termination": {
+        "eos": 6
+      }
+    },
+    {
+      "condition": "trainer_raw_cfg2_eos-4",
+      "voice": "seen",
+      "items": 6,
+      "cer": 0.98125,
+      "reference_characters": 160,
+      "substitutions": 70,
+      "deletions": 78,
+      "insertions": 9,
+      "deletion_rate": 0.4875,
+      "median_seconds": 4.48,
+      "under_one_second": 0,
+      "termination": {
+        "eos": 6
+      }
+    }
+  ],
+  "identities": {
+    "generation": {
+      "checkpoint_sha256": "f777fb50f9b94b123012b94e712d2b362b867c43795abacecd619f48c5dacff9",
+      "export_sha256": "ecc71eb63341c812b96d5ea5996ca8976d71f821a1c960e64a4e3cd71b03eaac",
+      "cases": [
+        {
+          "id": "daily",
+          "category": "daily",
+          "text": "こんにちは、今日はいい天気ですね。",
+          "seed": 42
+        },
+        {
+          "id": "date",
+          "category": "date_time",
+          "text": "今日は十月六日、午後三時です。",
+          "seed": 43
+        },
+        {
+          "id": "place",
+          "category": "place",
+          "text": "東京駅の近くで、温かいお茶を飲みました。",
+          "seed": 44
+        },
+        {
+          "id": "number",
+          "category": "numbers",
+          "text": "料金は1,234円です。3人分の合計は3,702円です。",
+          "seed": 45
+        },
+        {
+          "id": "request",
+          "category": "daily",
+          "text": "すみません、この近くにコンビニはありますか。",
+          "seed": 46
+        },
+        {
+          "id": "long",
+          "category": "long",
+          "text": "明日の朝は少し早く起きて、駅まで歩く予定です。電車に乗る前に温かいお茶を買い、窓の外の景色を眺めながら、今日の出来事をゆっくり思い出したいと思います。",
+          "seed": 47
+        }
+      ],
+      "temperature": 0.3,
+      "decode_steps": 1,
+      "trainer_max_frames": 375,
+      "torch": "2.14.0+cu130",
+      "torch_cuda": "13.0",
+      "gpu_name": "NVIDIA GeForce RTX 3090",
+      "device": "cuda",
+      "threads": 1,
+      "evaluation_script_sha256": "caabce028160515bcfc79d3c9a194c5d10a9d2ff91aebb38d427fe93dedbe45e",
+      "shard": 0,
+      "shards": 1,
+      "input_hashes": {
+        "data/ja-smoke/gol/audio/0000.wav": "49da1a5564cc7a4da3733e63ccff3ca431bda5211709c046ca2026ae656cb9ab",
+        "data/ja-smoke/gol/audio/0001.wav": "dbe4fdf83a56bc56cbfb8bd1c49673e212297b2adabfd2e7c2541c5fe2326c68",
+        "data/ja-smoke/moe/audio/0001_003.wav": "5a80fa6a42c4aec94e840031b79adf381f7230c4116a63582c9e16389667cc4e",
+        "data/ja-smoke/train_aligned.jsonl": "bc8566f45ee93a605c13b9ee0cb279a522099aaa6fb0ce4be2957fcb959ec1d7",
+        "data/ja-smoke/valid_aligned.jsonl": "d74396f5dda94386821e6479b92a08d5979b0019836503f566531e6cbc3973bf",
+        "runs/finetune_language_ja_smoke/args.yaml": "a3cc705d70141a8d87141b596aa0b912a274a84a5d7809cefa53eb521e8528c9",
+        "runs/finetune_language_ja_smoke/inference.local.yaml": "cec0f3018fdcb674e4d282d42925fe378a3d0120fb923a021ff37d320f18a654",
+        "runs/finetune_language_ja_smoke/public_api_voice_prompt.wav": "f40ae073a7b92954da6569db99cac482da8a52a292281ca11705892e3e37ceb6",
+        "training/tokenizers/japanese_8000.model": "4549ee1be7a484cbfd0cc38e3277e7fc91141f42a897152c81238eedb692d25f"
+      },
+      "source_scope": "step 220 functional smoke, three train labels and one held-out label"
+    },
+    "asr": {
+      "path": "/root/.cache/huggingface/hub/models--kotoba-tech--kotoba-whisper-v2.0-faster/snapshots/f44edd35eaeb2274e85ac7b31fb2c6f59ff1c4bc",
+      "snapshot": "f44edd35eaeb2274e85ac7b31fb2c6f59ff1c4bc",
+      "device": "cuda",
+      "compute_type": "float16",
+      "chunk_length": 15,
+      "evaluation_script_sha256": "caabce028160515bcfc79d3c9a194c5d10a9d2ff91aebb38d427fe93dedbe45e",
+      "language": "ja",
+      "beam_size": 5,
+      "temperature": 0,
+      "condition_on_previous_text": false,
+      "vad_filter": false,
+      "initial_prompt": null,
+      "threads": 4,
+      "normalizer": "Whisper basic; remove whitespace; preserve dakuten",
+      "model_bin_sha256": "60d2bc2e33de9d43f2745be09caefe1161acab670f6796d4a750d8d848382b36",
+      "packages": {
+        "faster-whisper": "1.2.1",
+        "ctranslate2": "4.8.2",
+        "av": "18.1.0",
+        "jiwer": "4.0.0",
+        "whisper-normalizer": "0.1.15"
+      }
+    }
+  },
+  "token_coverage": {
+    "train_manifest_rows": 313,
+    "distinct_tokens_in_full_transcripts": 1859,
+    "vocabulary": 8000,
+    "character_count": 770,
+    "scope": "full-transcript coverage; actual cropped/batched token exposure was not logged",
+    "cases": [
+      {
+        "id": "daily",
+        "token_count": 9,
+        "missing_token_occurrences": 4,
+        "missing_pieces": [
+          "▁こ",
+          "んにちは",
+          "今日は",
+          "天"
+        ],
+        "unavailable_characters": [
+          "天"
+        ]
+      },
+      {
+        "id": "date",
+        "token_count": 12,
+        "missing_token_occurrences": 4,
+        "missing_pieces": [
+          "三",
+          "十",
+          "午",
+          "後"
+        ],
+        "unavailable_characters": [
+          "三",
+          "十",
+          "午"
+        ]
+      },
+      {
+        "id": "place",
+        "token_count": 15,
+        "missing_token_occurrences": 6,
+        "missing_pieces": [
+          "お茶",
+          "京",
+          "温",
+          "近く",
+          "飲み",
+          "駅"
+        ],
+        "unavailable_characters": [
+          "京",
+          "温",
+          "茶",
+          "飲",
+          "駅"
+        ]
+      },
+      {
+        "id": "number",
+        "token_count": 27,
+        "missing_token_occurrences": 8,
+        "missing_pieces": [
+          ",",
+          "2",
+          "円",
+          "料",
+          "計"
+        ],
+        "unavailable_characters": [
+          ",",
+          "円",
+          "料",
+          "計"
+        ]
+      },
+      {
+        "id": "request",
+        "token_count": 12,
+        "missing_token_occurrences": 3,
+        "missing_pieces": [
+          "▁すみません",
+          "コン",
+          "近く"
+        ],
+        "unavailable_characters": []
+      },
+      {
+        "id": "long",
+        "token_count": 45,
+        "missing_token_occurrences": 15,
+        "missing_pieces": [
+          "▁明日",
+          "お茶",
+          "に乗",
+          "ゆっくり",
+          "予定",
+          "今日の",
+          "出来",
+          "早く",
+          "朝",
+          "歩",
+          "温",
+          "眺",
+          "窓",
+          "電",
+          "駅"
+        ],
+        "unavailable_characters": [
+          "朝",
+          "温",
+          "眺",
+          "窓",
+          "茶",
+          "電",
+          "駅"
+        ]
+      }
+    ]
+  },
+  "weight_diagnostics": {
+    "step": 220,
+    "ema_decay": 0.999,
+    "initial_shadow_coefficient": 0.8024304668606911,
+    "selected_parameters": [
+      {
+        "key": "flow_lm.conditioner.embed.weight",
+        "shape": [
+          8001,
+          1024
+        ],
+        "raw_norm": 2849.011474609375,
+        "ema_norm": 2859.873779296875,
+        "difference_norm": 11.306083679199219,
+        "relative_difference": 0.0039684233566484265
+      },
+      {
+        "key": "flow_lm.out_eos.weight",
+        "shape": [
+          1,
+          1024
+        ],
+        "raw_norm": 4.023306369781494,
+        "ema_norm": 3.9113564491271973,
+        "difference_norm": 0.1728595644235611,
+        "relative_difference": 0.04296455415920739
+      },
+      {
+        "key": "flow_lm.out_eos.bias",
+        "shape": [
+          1
+        ],
+        "raw_norm": 0.31178784370422363,
+        "ema_norm": 0.30320098996162415,
+        "difference_norm": 0.008586853742599487,
+        "relative_difference": 0.027540694468977996
+      }
+    ],
+    "scope": "parameter differences; causal quality improvement not established"
+  },
+  "diagnostic_repair": {
+    "aggregate_traces_recovered": 143,
+    "source": "individual generation JSON written before the capture list was cleared",
+    "waveforms_changed": false,
+    "asr_hypotheses_and_scores_changed": false,
+    "executed_source_sha256": "caabce028160515bcfc79d3c9a194c5d10a9d2ff91aebb38d427fe93dedbe45e",
+    "corrected_source_sha256": "5fe13d15bccca2001023dad98c9fa1ea4cb93f7c279297f2e1c3650c63be0623"
+  },
+  "human_listening_completed": false,
+  "paid_gpu_started_for_this_evaluation": true,
+  "cloud_rental": {
+    "instance_id": 54503639,
+    "label": "pocket-ja-reading-eval-20261007",
+    "destroy_success": true,
+    "absent_from_instance_list": true,
+    "rental_hours": 0.7467942326598698,
+    "actual_hourly_quote": 0.20855555555555555,
+    "local_artifact_files_verified": 465,
+    "other_instances_not_modified": true
+  },
+  "retrieval": {
+    "files_verified": 465,
+    "archive_bytes": 94464000,
+    "archive_sha256": "c4d63bb040cbe431850e392b4abce1ede54fefd1eacad14ec90676eac620d10b",
+    "remote_and_local_archive_sha256_match": true
+  }
+}

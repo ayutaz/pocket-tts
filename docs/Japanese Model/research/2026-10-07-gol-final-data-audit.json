@@ -1,0 +1,211 @@
+{
+  "scope": "Final GOL-only bounded audio manifests before latent precomputation",
+  "corpora": {
+    "corpora": [
+      "data/ja-gol-only-m2a/entries"
+    ],
+    "group_shared_speaker_ids": true
+  },
+  "splits": {
+    "train": {
+      "rows": 447090,
+      "hours": 723.5069383133333,
+      "duration": {
+        "min": 0.302042,
+        "p1": 0.8614816300000001,
+        "p5": 1.474333,
+        "p10": 2.0206208,
+        "p25": 3.2525105,
+        "median": 5.2148125,
+        "p75": 7.767875,
+        "p90": 10.391333,
+        "p95": 12.16781455,
+        "p99": 16.10325,
+        "max": 29.997125,
+        "mean": 5.825728551137355
+      },
+      "speaker_labels": 359,
+      "speaker_id_groups": 327,
+      "tokens": 7076416,
+      "words": 3382598,
+      "deliberately_untimed_words": 70025,
+      "unknown_tokens": 214,
+      "unknown_token_fraction": 3.024129728947535e-05,
+      "rows_with_unknown_tokens": 206,
+      "unknown_example_ids": [
+        "1422FFC0F4C0ECC520294EE295AE3899/082C4AE74277798E4E6B3C2B5B6076E5/EF_52_kokoro_22b_1_x011",
+        "1422FFC0F4C0ECC520294EE295AE3899/2F8267A89AD55E6B6CCC4831C09EDD81/DE_00_common_19_026",
+        "1422FFC0F4C0ECC520294EE295AE3899/3030235D7D109B93F1D76328981E54B2/BH_00_common_06_029",
+        "1422FFC0F4C0ECC520294EE295AE3899/3030235D7D109B93F1D76328981E54B2/BH_00_common_17_007",
+        "1422FFC0F4C0ECC520294EE295AE3899/3030235D7D109B93F1D76328981E54B2/BH_00_common_17_005"
+      ],
+      "sha256": "6860ac299c4652cb36b0c8cfa74382bbc66f5c3d433bbb4271358e1fd2e3d6ae",
+      "audio_paths": 26218
+    },
+    "valid": {
+      "rows": 12951,
+      "hours": 22.329217135,
+      "duration": {
+        "min": 0.323375,
+        "p1": 0.79975,
+        "p5": 1.441375,
+        "p10": 2.089042,
+        "p25": 3.499854,
+        "median": 5.720125,
+        "p75": 8.4067085,
+        "p90": 11.057083,
+        "p95": 12.6187915,
+        "p99": 15.360354,
+        "max": 25.883,
+        "mean": 6.206870642112578
+      },
+      "speaker_labels": 107,
+      "speaker_id_groups": 106,
+      "tokens": 239728,
+      "words": 110365,
+      "deliberately_untimed_words": 2705,
+      "unknown_tokens": 16,
+      "unknown_token_fraction": 6.674230794900888e-05,
+      "rows_with_unknown_tokens": 15,
+      "unknown_example_ids": [
+        "1422FFC0F4C0ECC520294EE295AE3899/F2ECCA044353AA8EC50A1D09A93A762F/YE_00_common_25e_x027",
+        "1422FFC0F4C0ECC520294EE295AE3899/F2ECCA044353AA8EC50A1D09A93A762F/YE_00_common_25e_x029",
+        "9121A8B0F8785FAB733FD0E5A6DFF155/86FCB0653F30BE0D45C366FCB9245559/naka_0040",
+        "9121A8B0F8785FAB733FD0E5A6DFF155/86FCB0653F30BE0D45C366FCB9245559/naka_0039",
+        "9121A8B0F8785FAB733FD0E5A6DFF155/86FCB0653F30BE0D45C366FCB9245559/naka_0159"
+      ],
+      "sha256": "8f36ab31fd420fd01c3e10704ad09b4a2e16e1392d946f43ab843ea3dd05825e",
+      "audio_paths": 833
+    }
+  },
+  "input_identity": {
+    "games.json": "9e51afefaf7573b3ed65bd4ed6fe29d7530d56091fdcd6df811ec92ea879fdd5",
+    "joining_policy.json": "ae59816dd84b7da5258ab26d4128cbcca9fb3f6907ac465b4e56b67b5301dccc",
+    "score_cutoff.json": "6426f7a76f8bc21231595de3b9cad9847acaf1a23e199f7663a667bf1163ba15",
+    "split_audit.json": "eb1af13b3bb94dc19fdcd5cf6b02a7bdd6da65bf24fd7a50ba78287b57d64b63",
+    "train_bounded.split.json": "ad689626cd8b8625670c3d6b891d8708627f886f4faf443535d79c3dceb86073",
+    "valid_bounded.split.json": "e112b5e5fd2dd08aab9086b34842a6dca75c6e96cae594c98214c8ad10cdeb1b",
+    "train_segmentable.quarantine.json": "41beb4126461acf6065570ee0c8fc1eb7f72112c83a01e0da5ea9cfd4a1d7667",
+    "valid_segmentable.quarantine.json": "cd874b80035083a402f8689c7450e6f7d673be7ad78ce8159e27d6ccfbc08993",
+    "train_long_rejections.jsonl": "5ce0cff3d34327ecdfb90b581c874230b59a622113331ecd6de51578a09f6542",
+    "valid_long_rejections.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "evaluation_token_coverage": [
+    {
+      "id": "daily",
+      "input_text": "\u3053\u3093\u306b\u3061\u306f\u3001\u4eca\u65e5\u306f\u3044\u3044\u5929\u6c17\u3067\u3059\u306d\u3002",
+      "prepared_text": "\u3053\u3093\u306b\u3061\u306f\u3001\u4eca\u65e5\u306f\u3044\u3044\u5929\u6c17\u3067\u3059\u306d\u3002",
+      "tokens": 9,
+      "unknown_tokens": 0,
+      "raw_unknown_tokens": 0
+    },
+    {
+      "id": "date",
+      "input_text": "\u4eca\u65e5\u306f\u5341\u6708\u516d\u65e5\u3001\u5348\u5f8c\u4e09\u6642\u3067\u3059\u3002",
+      "prepared_text": "\u4eca\u65e5\u306f\u5341\u6708\u516d\u65e5\u3001\u5348\u5f8c\u4e09\u6642\u3067\u3059\u3002",
+      "tokens": 12,
+      "unknown_tokens": 0,
+      "raw_unknown_tokens": 0
+    },
+    {
+      "id": "place",
+      "input_text": "\u6771\u4eac\u99c5\u306e\u8fd1\u304f\u3067\u3001\u6e29\u304b\u3044\u304a\u8336\u3092\u98f2\u307f\u307e\u3057\u305f\u3002",
+      "prepared_text": "\u6771\u4eac\u99c5\u306e\u8fd1\u304f\u3067\u3001\u6e29\u304b\u3044\u304a\u8336\u3092\u98f2\u307f\u307e\u3057\u305f\u3002",
+      "tokens": 15,
+      "unknown_tokens": 0,
+      "raw_unknown_tokens": 0
+    },
+    {
+      "id": "number",
+      "input_text": "\u6599\u91d1\u306f1,234\u5186\u3067\u3059\u30023\u4eba\u5206\u306e\u5408\u8a08\u306f3,702\u5186\u3067\u3059\u3002",
+      "prepared_text": "\u6599\u91d1\u306f1,234\u5186\u3067\u3059\u30023\u4eba\u5206\u306e\u5408\u8a08\u306f3,702\u5186\u3067\u3059\u3002",
+      "tokens": 27,
+      "unknown_tokens": 0,
+      "raw_unknown_tokens": 0
+    },
+    {
+      "id": "request",
+      "input_text": "\u3059\u307f\u307e\u305b\u3093\u3001\u3053\u306e\u8fd1\u304f\u306b\u30b3\u30f3\u30d3\u30cb\u306f\u3042\u308a\u307e\u3059\u304b\u3002",
+      "prepared_text": "\u3059\u307f\u307e\u305b\u3093\u3001\u3053\u306e\u8fd1\u304f\u306b\u30b3\u30f3\u30d3\u30cb\u306f\u3042\u308a\u307e\u3059\u304b\u3002",
+      "tokens": 12,
+      "unknown_tokens": 0,
+      "raw_unknown_tokens": 0
+    },
+    {
+      "id": "long",
+      "input_text": "\u660e\u65e5\u306e\u671d\u306f\u5c11\u3057\u65e9\u304f\u8d77\u304d\u3066\u3001\u99c5\u307e\u3067\u6b69\u304f\u4e88\u5b9a\u3067\u3059\u3002\u96fb\u8eca\u306b\u4e57\u308b\u524d\u306b\u6e29\u304b\u3044\u304a\u8336\u3092\u8cb7\u3044\u3001\u7a93\u306e\u5916\u306e\u666f\u8272\u3092\u773a\u3081\u306a\u304c\u3089\u3001\u4eca\u65e5\u306e\u51fa\u6765\u4e8b\u3092\u3086\u3063\u304f\u308a\u601d\u3044\u51fa\u3057\u305f\u3044\u3068\u601d\u3044\u307e\u3059\u3002",
+      "prepared_text": "\u660e\u65e5\u306e\u671d\u306f\u5c11\u3057\u65e9\u304f\u8d77\u304d\u3066\u3001\u99c5\u307e\u3067\u6b69\u304f\u4e88\u5b9a\u3067\u3059\u3002\u96fb\u8eca\u306b\u4e57\u308b\u524d\u306b\u6e29\u304b\u3044\u304a\u8336\u3092\u8cb7\u3044\u3001\u7a93\u306e\u5916\u306e\u666f\u8272\u3092\u773a\u3081\u306a\u304c\u3089\u3001\u4eca\u65e5\u306e\u51fa\u6765\u4e8b\u3092\u3086\u3063\u304f\u308a\u601d\u3044\u51fa\u3057\u305f\u3044\u3068\u601d\u3044\u307e\u3059\u3002",
+      "tokens": 45,
+      "unknown_tokens": 0,
+      "raw_unknown_tokens": 0
+    },
+    {
+      "id": "proper_name",
+      "input_text": "\u6771\u4eac\u90fd\u5343\u4ee3\u7530\u533a\u306e\u795e\u7530\u795e\u4fdd\u753a\u304b\u3089\u3001\u65b0\u5bbf\u99c5\u307e\u3067\u5411\u304b\u3044\u307e\u3059\u3002",
+      "prepared_text": "\u6771\u4eac\u90fd\u5343\u4ee3\u7530\u533a\u306e\u795e\u7530\u795e\u4fdd\u753a\u304b\u3089\u3001\u65b0\u5bbf\u99c5\u307e\u3067\u5411\u304b\u3044\u307e\u3059\u3002",
+      "tokens": 24,
+      "unknown_tokens": 0,
+      "raw_unknown_tokens": 0
+    },
+    {
+      "id": "digits",
+      "input_text": "2026\u5e7410\u67087\u65e5\u3001\u5348\u524d8\u664230\u5206\u306b\u51fa\u767a\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+      "prepared_text": "2026\u5e7410\u67087\u65e5\u3001\u5348\u524d8\u664230\u5206\u306b\u51fa\u767a\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+      "tokens": 21,
+      "unknown_tokens": 0,
+      "raw_unknown_tokens": 0
+    },
+    {
+      "id": "units",
+      "input_text": "\u6c17\u6e29\u306f23.5\u5ea6\u3001\u8ddd\u96e2\u306f2.4\u30ad\u30ed\u30e1\u30fc\u30c8\u30eb\u3001\u6240\u8981\u6642\u9593\u306f\u7d0415\u5206\u3067\u3059\u3002",
+      "prepared_text": "\u6c17\u6e29\u306f23.5\u5ea6\u3001\u8ddd\u96e2\u306f2.4\u30ad\u30ed\u30e1\u30fc\u30c8\u30eb\u3001\u6240\u8981\u6642\u9593\u306f\u7d0415\u5206\u3067\u3059\u3002",
+      "tokens": 30,
+      "unknown_tokens": 0,
+      "raw_unknown_tokens": 0
+    },
+    {
+      "id": "loanwords",
+      "input_text": "\u30d1\u30bd\u30b3\u30f3\u306b\u30de\u30a4\u30af\u3092\u63a5\u7d9a\u3057\u3001\u30aa\u30f3\u30e9\u30a4\u30f3\u4f1a\u8b70\u306e\u97f3\u58f0\u3092\u78ba\u8a8d\u3057\u307e\u3059\u3002",
+      "prepared_text": "\u30d1\u30bd\u30b3\u30f3\u306b\u30de\u30a4\u30af\u3092\u63a5\u7d9a\u3057\u3001\u30aa\u30f3\u30e9\u30a4\u30f3\u4f1a\u8b70\u306e\u97f3\u58f0\u3092\u78ba\u8a8d\u3057\u307e\u3059\u3002",
+      "tokens": 23,
+      "unknown_tokens": 0,
+      "raw_unknown_tokens": 0
+    },
+    {
+      "id": "short_question",
+      "input_text": "\u672c\u5f53\u3067\u3059\u304b\uff1f",
+      "prepared_text": "\u672c\u5f53\u3067\u3059\u304b?",
+      "tokens": 3,
+      "unknown_tokens": 0,
+      "raw_unknown_tokens": 1
+    },
+    {
+      "id": "long_sequence",
+      "input_text": "\u307e\u305a\u7a93\u3092\u958b\u3051\u3066\u3001\u90e8\u5c4b\u306b\u65b0\u3057\u3044\u7a7a\u6c17\u3092\u5165\u308c\u307e\u3059\u3002\u6b21\u306b\u673a\u306e\u4e0a\u3092\u7247\u4ed8\u3051\u3001\u5fc5\u8981\u306a\u8cc7\u6599\u3092\u9806\u756a\u306b\u4e26\u3079\u3066\u304f\u3060\u3055\u3044\u3002\u6e96\u5099\u304c\u7d42\u308f\u3063\u305f\u3089\u304a\u8336\u3092\u98f2\u3093\u3067\u3072\u3068\u606f\u3064\u304d\u3001\u4eca\u65e5\u306e\u4e88\u5b9a\u3092\u78ba\u8a8d\u3057\u3066\u304b\u3089\u3001\u6700\u521d\u306e\u4f5c\u696d\u3092\u59cb\u3081\u307e\u3057\u3087\u3046\u3002",
+      "prepared_text": "\u307e\u305a\u7a93\u3092\u958b\u3051\u3066\u3001\u90e8\u5c4b\u306b\u65b0\u3057\u3044\u7a7a\u6c17\u3092\u5165\u308c\u307e\u3059\u3002\u6b21\u306b\u673a\u306e\u4e0a\u3092\u7247\u4ed8\u3051\u3001\u5fc5\u8981\u306a\u8cc7\u6599\u3092\u9806\u756a\u306b\u4e26\u3079\u3066\u304f\u3060\u3055\u3044\u3002\u6e96\u5099\u304c\u7d42\u308f\u3063\u305f\u3089\u304a\u8336\u3092\u98f2\u3093\u3067\u3072\u3068\u606f\u3064\u304d\u3001\u4eca\u65e5\u306e\u4e88\u5b9a\u3092\u78ba\u8a8d\u3057\u3066\u304b\u3089\u3001\u6700\u521d\u306e\u4f5c\u696d\u3092\u59cb\u3081\u307e\u3057\u3087\u3046\u3002",
+      "tokens": 56,
+      "unknown_tokens": 0,
+      "raw_unknown_tokens": 0
+    }
+  ],
+  "joined_audio": {
+    "files": 27051,
+    "bytes": 149559032832,
+    "inventory": "runs/m2a-control/joined-audio-identity.json",
+    "inventory_sha256": "2e03efc5e6c78c5dc5fe27ff4eec16eb1d62b92064c005d5057a51971f8ca482"
+  },
+  "effective_epochs_at_40k": 5.725916482140061,
+  "elapsed_seconds": 92.76415172033012,
+  "verified_invariants": [
+    "GOL-only",
+    "fresh English teacher initialization",
+    "24kHz mono joined audio",
+    "audio windows inside files",
+    "duration <=30 seconds",
+    "ordered timestamps within millisecond rounding; deliberate untimed words counted",
+    "exact reconstruction of transcript from words",
+    "minimum 20 held-out speaker-id groups",
+    "no speaker label, group, source PCM or joined-file overlap across splits",
+    "token coverage measured on reconstructed training text and fixed evaluation cases"
+  ]
+}

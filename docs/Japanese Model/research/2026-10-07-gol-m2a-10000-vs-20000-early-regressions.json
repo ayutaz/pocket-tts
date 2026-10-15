@@ -1,0 +1,1381 @@
+{
+  "baseline_step": 10000,
+  "candidate_step": 20000,
+  "complete_matrix_rows_each": 216,
+  "all_fixed_conditions_match": true,
+  "profiles_examined": 12,
+  "regressed_profiles": {
+    "trainer_ema_cfg2_eos-4": {
+      "baseline": {
+        "items": 18,
+        "reference_characters": 480,
+        "cer": 0.08333333333333333,
+        "substitutions": 28,
+        "deletions": 4,
+        "insertions": 8,
+        "under_one_second": 0,
+        "median_seconds": 3.56,
+        "termination": {
+          "eos": 18
+        }
+      },
+      "candidate": {
+        "items": 18,
+        "reference_characters": 480,
+        "cer": 0.1125,
+        "substitutions": 19,
+        "deletions": 3,
+        "insertions": 32,
+        "under_one_second": 0,
+        "median_seconds": 3.6399999999999997,
+        "termination": {
+          "eos": 18
+        }
+      },
+      "all_profile_rows": [
+        {
+          "file": "trainer_ema_cfg2_eos-4_held_00_daily.wav",
+          "voice": "held_00",
+          "case_id": "daily",
+          "baseline": {
+            "score": {
+              "reference": "こんにちは今日はいい天気ですね",
+              "hypothesis": "こんにちは今日はいい天気ですね",
+              "cer": 0.0,
+              "reference_characters": 15,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 3.68,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "こんにちは今日はいい天気ですね",
+              "hypothesis": "こんにちは今日はいい天気ですね",
+              "cer": 0.0,
+              "reference_characters": 15,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 3.44,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_ema_cfg2_eos-4_held_00_date.wav",
+          "voice": "held_00",
+          "case_id": "date",
+          "baseline": {
+            "score": {
+              "reference": "今日は十月六日午後三時です",
+              "hypothesis": "今日は10月6時午後3時です",
+              "cer": 0.38461538461538464,
+              "reference_characters": 13,
+              "substitutions": 4,
+              "deletions": 0,
+              "insertions": 1
+            },
+            "seconds": 3.04,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "今日は十月六日午後三時です",
+              "hypothesis": "今日は10月6日午後3時です",
+              "cer": 0.3076923076923077,
+              "reference_characters": 13,
+              "substitutions": 3,
+              "deletions": 0,
+              "insertions": 1
+            },
+            "seconds": 3.84,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": -1,
+            "deletions": 0,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_ema_cfg2_eos-4_held_00_long.wav",
+          "voice": "held_00",
+          "case_id": "long",
+          "baseline": {
+            "score": {
+              "reference": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前に温かいお茶を買い窓の外の景色を眺めながら今日の出来事をゆっくり思い出したいと思います",
+              "hypothesis": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前にお高いお茶を買い窓の鳩の消しを眺めながら今日の出来事をゆっくり思い出したいと思います",
+              "cer": 0.07142857142857142,
+              "reference_characters": 70,
+              "substitutions": 5,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 12.64,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前に温かいお茶を買い窓の外の景色を眺めながら今日の出来事をゆっくり思い出したいと思います",
+              "hypothesis": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前にお高いお茶を買い窓の外の景色を眺めながら今日の出来事をゆっくり思い出したいと思います今日の出来事をゆっくり思い出したい",
+              "cer": 0.2714285714285714,
+              "reference_characters": 70,
+              "substitutions": 2,
+              "deletions": 0,
+              "insertions": 17
+            },
+            "seconds": 17.44,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": -3,
+            "deletions": 0,
+            "insertions": 17
+          }
+        },
+        {
+          "file": "trainer_ema_cfg2_eos-4_held_00_number.wav",
+          "voice": "held_00",
+          "case_id": "number",
+          "baseline": {
+            "score": {
+              "reference": "料金は1234円です3人分の合計は3702円です",
+              "hypothesis": "料金は1日に3人円です3人分の合計は3972円です",
+              "cer": 0.20833333333333334,
+              "reference_characters": 24,
+              "substitutions": 2,
+              "deletions": 1,
+              "insertions": 2
+            },
+            "seconds": 6.56,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "料金は1234円です3人分の合計は3702円です",
+              "hypothesis": "ローキンは1組34円です3人分の合計は3人分72円です",
+              "cer": 0.3333333333333333,
+              "reference_characters": 24,
+              "substitutions": 3,
+              "deletions": 1,
+              "insertions": 4
+            },
+            "seconds": 6.48,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 2
+          }
+        },
+        {
+          "file": "trainer_ema_cfg2_eos-4_held_00_place.wav",
+          "voice": "held_00",
+          "case_id": "place",
+          "baseline": {
+            "score": {
+              "reference": "東京駅の近くで温かいお茶を飲みました",
+              "hypothesis": "東京駅の近くで温かいお茶を飲みました",
+              "cer": 0.0,
+              "reference_characters": 18,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 4.16,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "東京駅の近くで温かいお茶を飲みました",
+              "hypothesis": "東京駅の近くで温かいお茶を飲みました",
+              "cer": 0.0,
+              "reference_characters": 18,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 4.08,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_ema_cfg2_eos-4_held_00_request.wav",
+          "voice": "held_00",
+          "case_id": "request",
+          "baseline": {
+            "score": {
+              "reference": "すみませんこの近くにコンビニはありますか",
+              "hypothesis": "すみませんこの近くにコンビニはありますか",
+              "cer": 0.0,
+              "reference_characters": 20,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 3.44,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "すみませんこの近くにコンビニはありますか",
+              "hypothesis": "すみませんこの近くにコンビニはありますか",
+              "cer": 0.0,
+              "reference_characters": 20,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 4.0,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_ema_cfg2_eos-4_held_01_daily.wav",
+          "voice": "held_01",
+          "case_id": "daily",
+          "baseline": {
+            "score": {
+              "reference": "こんにちは今日はいい天気ですね",
+              "hypothesis": "こんにちは今日はいい天気ですね",
+              "cer": 0.0,
+              "reference_characters": 15,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 1.84,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "こんにちは今日はいい天気ですね",
+              "hypothesis": "こんにちは今日はいい天気ですね",
+              "cer": 0.0,
+              "reference_characters": 15,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 2.24,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_ema_cfg2_eos-4_held_01_date.wav",
+          "voice": "held_01",
+          "case_id": "date",
+          "baseline": {
+            "score": {
+              "reference": "今日は十月六日午後三時です",
+              "hypothesis": "今日は十月六日午後三時です",
+              "cer": 0.0,
+              "reference_characters": 13,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 2.72,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "今日は十月六日午後三時です",
+              "hypothesis": "今日は10月6日午後3時です",
+              "cer": 0.3076923076923077,
+              "reference_characters": 13,
+              "substitutions": 3,
+              "deletions": 0,
+              "insertions": 1
+            },
+            "seconds": 2.4,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 3,
+            "deletions": 0,
+            "insertions": 1
+          }
+        },
+        {
+          "file": "trainer_ema_cfg2_eos-4_held_01_long.wav",
+          "voice": "held_01",
+          "case_id": "long",
+          "baseline": {
+            "score": {
+              "reference": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前に温かいお茶を買い窓の外の景色を眺めながら今日の出来事をゆっくり思い出したいと思います",
+              "hypothesis": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前に温かいお茶を買い窓の外のケジを眺めながら今日の出来事をゆっくり思い出したいと思います",
+              "cer": 0.02857142857142857,
+              "reference_characters": 70,
+              "substitutions": 2,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 11.6,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前に温かいお茶を買い窓の外の景色を眺めながら今日の出来事をゆっくり思い出したいと思います",
+              "hypothesis": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前に温かいお茶を買い窓の外の景色を眺めながら今日の出来事をゆっくり思い出したいと思います",
+              "cer": 0.0,
+              "reference_characters": 70,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 10.96,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": -2,
+            "deletions": 0,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_ema_cfg2_eos-4_held_01_number.wav",
+          "voice": "held_01",
+          "case_id": "number",
+          "baseline": {
+            "score": {
+              "reference": "料金は1234円です3人分の合計は3702円です",
+              "hypothesis": "料金は一応に3人分です3人分の合計は3972円です",
+              "cer": 0.2916666666666667,
+              "reference_characters": 24,
+              "substitutions": 4,
+              "deletions": 1,
+              "insertions": 2
+            },
+            "seconds": 5.44,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "料金は1234円です3人分の合計は3702円です",
+              "hypothesis": "料金は1人に234円です3人分の画形は3人分72円です",
+              "cer": 0.2916666666666667,
+              "reference_characters": 24,
+              "substitutions": 2,
+              "deletions": 1,
+              "insertions": 4
+            },
+            "seconds": 5.68,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": -2,
+            "deletions": 0,
+            "insertions": 2
+          }
+        },
+        {
+          "file": "trainer_ema_cfg2_eos-4_held_01_place.wav",
+          "voice": "held_01",
+          "case_id": "place",
+          "baseline": {
+            "score": {
+              "reference": "東京駅の近くで温かいお茶を飲みました",
+              "hypothesis": "東京駅の近くで大高いお茶を飲みました",
+              "cer": 0.1111111111111111,
+              "reference_characters": 18,
+              "substitutions": 2,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 2.88,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "東京駅の近くで温かいお茶を飲みました",
+              "hypothesis": "東京駅の近くで温かいお茶を飲みました",
+              "cer": 0.0,
+              "reference_characters": 18,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 3.04,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": -2,
+            "deletions": 0,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_ema_cfg2_eos-4_held_01_request.wav",
+          "voice": "held_01",
+          "case_id": "request",
+          "baseline": {
+            "score": {
+              "reference": "すみませんこの近くにコンビニはありますか",
+              "hypothesis": "すみませんこの近くにコンビニはありますか",
+              "cer": 0.0,
+              "reference_characters": 20,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 2.56,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "すみませんこの近くにコンビニはありますか",
+              "hypothesis": "すみませんこの近くにコンビニはありますか",
+              "cer": 0.0,
+              "reference_characters": 20,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 2.48,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_ema_cfg2_eos-4_seen_daily.wav",
+          "voice": "seen",
+          "case_id": "daily",
+          "baseline": {
+            "score": {
+              "reference": "こんにちは今日はいい天気ですね",
+              "hypothesis": "こんにちは今日はいい元気ですね",
+              "cer": 0.06666666666666667,
+              "reference_characters": 15,
+              "substitutions": 1,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 3.12,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "こんにちは今日はいい天気ですね",
+              "hypothesis": "こんにちは今日はいい天気ですね",
+              "cer": 0.0,
+              "reference_characters": 15,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 2.56,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": -1,
+            "deletions": 0,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_ema_cfg2_eos-4_seen_date.wav",
+          "voice": "seen",
+          "case_id": "date",
+          "baseline": {
+            "score": {
+              "reference": "今日は十月六日午後三時です",
+              "hypothesis": "今日は10日6日午後3時です",
+              "cer": 0.38461538461538464,
+              "reference_characters": 13,
+              "substitutions": 4,
+              "deletions": 0,
+              "insertions": 1
+            },
+            "seconds": 3.2,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "今日は十月六日午後三時です",
+              "hypothesis": "今日は10月6日午後3時です",
+              "cer": 0.3076923076923077,
+              "reference_characters": 13,
+              "substitutions": 3,
+              "deletions": 0,
+              "insertions": 1
+            },
+            "seconds": 3.12,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": -1,
+            "deletions": 0,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_ema_cfg2_eos-4_seen_long.wav",
+          "voice": "seen",
+          "case_id": "long",
+          "baseline": {
+            "score": {
+              "reference": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前に温かいお茶を買い窓の外の景色を眺めながら今日の出来事をゆっくり思い出したいと思います",
+              "hypothesis": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前にお高いお茶を買い窓の外の鍵を眺めながら今日の出来事をゆっくり思い出したいと思います",
+              "cer": 0.05714285714285714,
+              "reference_characters": 70,
+              "substitutions": 3,
+              "deletions": 1,
+              "insertions": 0
+            },
+            "seconds": 12.4,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前に温かいお茶を買い窓の外の景色を眺めながら今日の出来事をゆっくり思い出したいと思います",
+              "hypothesis": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前にお高いお茶を買い窓の外の景色を眺めながら今日の出来事をゆっくり思い出したいと思います",
+              "cer": 0.02857142857142857,
+              "reference_characters": 70,
+              "substitutions": 2,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 12.96,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": -1,
+            "deletions": -1,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_ema_cfg2_eos-4_seen_number.wav",
+          "voice": "seen",
+          "case_id": "number",
+          "baseline": {
+            "score": {
+              "reference": "料金は1234円です3人分の合計は3702円です",
+              "hypothesis": "料金は1週に34円です3人分の合計は3件72円です",
+              "cer": 0.16666666666666666,
+              "reference_characters": 24,
+              "substitutions": 1,
+              "deletions": 1,
+              "insertions": 2
+            },
+            "seconds": 5.36,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "料金は1234円です3人分の合計は3702円です",
+              "hypothesis": "料金は1無2004円です3人分の合計は3年無72円です",
+              "cer": 0.25,
+              "reference_characters": 24,
+              "substitutions": 1,
+              "deletions": 1,
+              "insertions": 4
+            },
+            "seconds": 5.84,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 2
+          }
+        },
+        {
+          "file": "trainer_ema_cfg2_eos-4_seen_place.wav",
+          "voice": "seen",
+          "case_id": "place",
+          "baseline": {
+            "score": {
+              "reference": "東京駅の近くで温かいお茶を飲みました",
+              "hypothesis": "東京駅の近くで温かいお茶を飲みました",
+              "cer": 0.0,
+              "reference_characters": 18,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 3.84,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "東京駅の近くで温かいお茶を飲みました",
+              "hypothesis": "東京駅の近くで温かいお茶を飲みました",
+              "cer": 0.0,
+              "reference_characters": 18,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 3.2,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_ema_cfg2_eos-4_seen_request.wav",
+          "voice": "seen",
+          "case_id": "request",
+          "baseline": {
+            "score": {
+              "reference": "すみませんこの近くにコンビニはありますか",
+              "hypothesis": "すみませんこの近くにコンビニはありますか",
+              "cer": 0.0,
+              "reference_characters": 20,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 3.44,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "すみませんこの近くにコンビニはありますか",
+              "hypothesis": "すみませんこの近くにコンビニはありますか",
+              "cer": 0.0,
+              "reference_characters": 20,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 3.44,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0
+          }
+        }
+      ]
+    },
+    "trainer_raw_cfg1_eos-1": {
+      "baseline": {
+        "items": 18,
+        "reference_characters": 480,
+        "cer": 0.41041666666666665,
+        "substitutions": 100,
+        "deletions": 25,
+        "insertions": 72,
+        "under_one_second": 0,
+        "median_seconds": 5.08,
+        "termination": {
+          "eos": 14,
+          "max_length_without_eos": 4
+        }
+      },
+      "candidate": {
+        "items": 18,
+        "reference_characters": 480,
+        "cer": 0.44583333333333336,
+        "substitutions": 82,
+        "deletions": 12,
+        "insertions": 120,
+        "under_one_second": 0,
+        "median_seconds": 4.4399999999999995,
+        "termination": {
+          "eos": 16,
+          "max_length_without_eos": 2
+        }
+      },
+      "all_profile_rows": [
+        {
+          "file": "trainer_raw_cfg1_eos-1_held_00_daily.wav",
+          "voice": "held_00",
+          "case_id": "daily",
+          "baseline": {
+            "score": {
+              "reference": "こんにちは今日はいい天気ですね",
+              "hypothesis": "こんにちは今日はいい天気ですね",
+              "cer": 0.0,
+              "reference_characters": 15,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 5.12,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "こんにちは今日はいい天気ですね",
+              "hypothesis": "こんにちは今日はいい天気ですね",
+              "cer": 0.0,
+              "reference_characters": 15,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 3.6,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_raw_cfg1_eos-1_held_00_date.wav",
+          "voice": "held_00",
+          "case_id": "date",
+          "baseline": {
+            "score": {
+              "reference": "今日は十月六日午後三時です",
+              "hypothesis": "しょうじゅうくひふぅふぅふぅふぅふぅふぅふぅ",
+              "cer": 1.6923076923076923,
+              "reference_characters": 13,
+              "substitutions": 13,
+              "deletions": 0,
+              "insertions": 9
+            },
+            "seconds": 30.0,
+            "termination": "max_length_without_eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "今日は十月六日午後三時です",
+              "hypothesis": "今日は中別6月午後3時です",
+              "cer": 0.38461538461538464,
+              "reference_characters": 13,
+              "substitutions": 5,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 4.72,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": -8,
+            "deletions": 0,
+            "insertions": -9
+          }
+        },
+        {
+          "file": "trainer_raw_cfg1_eos-1_held_00_long.wav",
+          "voice": "held_00",
+          "case_id": "long",
+          "baseline": {
+            "score": {
+              "reference": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前に温かいお茶を買い窓の外の景色を眺めながら今日の出来事をゆっくり思い出したいと思います",
+              "hypothesis": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前に戦いますのそのカイトの今日の出来事思い出したいと思い出したい",
+              "cer": 0.37142857142857144,
+              "reference_characters": 70,
+              "substitutions": 10,
+              "deletions": 14,
+              "insertions": 2
+            },
+            "seconds": 24.88,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前に温かいお茶を買い窓の外の景色を眺めながら今日の出来事をゆっくり思い出したいと思います",
+              "hypothesis": "今日の出来を着て駅まで歩く予定です電車に乗る前に温かいお茶を買い窓の外の景色を眺めながら今日の出来を着て今日の出来事をゆっくり思い出したいと思うに今日の出来事をゆっくり思い出したい",
+              "cer": 0.5,
+              "reference_characters": 70,
+              "substitutions": 7,
+              "deletions": 4,
+              "insertions": 24
+            },
+            "seconds": 22.48,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": -3,
+            "deletions": -10,
+            "insertions": 22
+          }
+        },
+        {
+          "file": "trainer_raw_cfg1_eos-1_held_00_number.wav",
+          "voice": "held_00",
+          "case_id": "number",
+          "baseline": {
+            "score": {
+              "reference": "料金は1234円です3人分の合計は3702円です",
+              "hypothesis": "料金は地形に三振四円です千輪分の光景は千輪七十貫です",
+              "cer": 0.625,
+              "reference_characters": 24,
+              "substitutions": 13,
+              "deletions": 0,
+              "insertions": 2
+            },
+            "seconds": 9.2,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "料金は1234円です3人分の合計は3702円です",
+              "hypothesis": "病気は時間人間が見えんですが他人物の合計は三年七年で見えんですなぁなななぁうううううううううううううううううううううううううううううううううううううううううううううううううう",
+              "cer": 3.2083333333333335,
+              "reference_characters": 24,
+              "substitutions": 14,
+              "deletions": 0,
+              "insertions": 63
+            },
+            "seconds": 30.0,
+            "termination": "max_length_without_eos"
+          },
+          "edit_delta": {
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 61
+          }
+        },
+        {
+          "file": "trainer_raw_cfg1_eos-1_held_00_place.wav",
+          "voice": "held_00",
+          "case_id": "place",
+          "baseline": {
+            "score": {
+              "reference": "東京駅の近くで温かいお茶を飲みました",
+              "hypothesis": "東京駅の近くで温かいお茶を飲みました",
+              "cer": 0.0,
+              "reference_characters": 18,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 4.8,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "東京駅の近くで温かいお茶を飲みました",
+              "hypothesis": "東京駅の近くで温かいお茶を飲みました",
+              "cer": 0.0,
+              "reference_characters": 18,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 4.8,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_raw_cfg1_eos-1_held_00_request.wav",
+          "voice": "held_00",
+          "case_id": "request",
+          "baseline": {
+            "score": {
+              "reference": "すみませんこの近くにコンビニはありますか",
+              "hypothesis": "すみませんこの近くにコンビニはありますか",
+              "cer": 0.0,
+              "reference_characters": 20,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 4.72,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "すみませんこの近くにコンビニはありますか",
+              "hypothesis": "すみませんこの近くにコンビニはありますか",
+              "cer": 0.0,
+              "reference_characters": 20,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 3.92,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_raw_cfg1_eos-1_held_01_daily.wav",
+          "voice": "held_01",
+          "case_id": "daily",
+          "baseline": {
+            "score": {
+              "reference": "こんにちは今日はいい天気ですね",
+              "hypothesis": "こんにちは今日はいい天気ですね",
+              "cer": 0.0,
+              "reference_characters": 15,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 2.72,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "こんにちは今日はいい天気ですね",
+              "hypothesis": "こんにちは今日はいい天気ですね",
+              "cer": 0.0,
+              "reference_characters": 15,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 2.32,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_raw_cfg1_eos-1_held_01_date.wav",
+          "voice": "held_01",
+          "case_id": "date",
+          "baseline": {
+            "score": {
+              "reference": "今日は十月六日午後三時です",
+              "hypothesis": "超音のうつうつる枠午後も三安寺です三しゅうしゅうしゅうしゅうしゅうしゅう",
+              "cer": 2.3846153846153846,
+              "reference_characters": 13,
+              "substitutions": 8,
+              "deletions": 0,
+              "insertions": 23
+            },
+            "seconds": 30.0,
+            "termination": "max_length_without_eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "今日は十月六日午後三時です",
+              "hypothesis": "今日は10月6日午後3時です",
+              "cer": 0.3076923076923077,
+              "reference_characters": 13,
+              "substitutions": 3,
+              "deletions": 0,
+              "insertions": 1
+            },
+            "seconds": 2.96,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": -5,
+            "deletions": 0,
+            "insertions": -22
+          }
+        },
+        {
+          "file": "trainer_raw_cfg1_eos-1_held_01_long.wav",
+          "voice": "held_01",
+          "case_id": "long",
+          "baseline": {
+            "score": {
+              "reference": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前に温かいお茶を買い窓の外の景色を眺めながら今日の出来事をゆっくり思い出したいと思います",
+              "hypothesis": "明日の朝は少し早く起きて駅まで歩く予定です冷車に乗る前にお互いまだ外の端の化石を森の中から今日の出来事に燃え出したいと思います君の死を",
+              "cer": 0.38571428571428573,
+              "reference_characters": 70,
+              "substitutions": 16,
+              "deletions": 7,
+              "insertions": 4
+            },
+            "seconds": 30.0,
+            "termination": "max_length_without_eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前に温かいお茶を買い窓の外の景色を眺めながら今日の出来事をゆっくり思い出したいと思います",
+              "hypothesis": "今日の出来を着て駅まで歩く予定です電車に乗る前に温かいお茶を買い窓の外の軽食を眺めながら今日の出来事ということを言われたら今日のためにまた死ぬのだ",
+              "cer": 0.45714285714285713,
+              "reference_characters": 70,
+              "substitutions": 21,
+              "deletions": 4,
+              "insertions": 7
+            },
+            "seconds": 30.0,
+            "termination": "max_length_without_eos"
+          },
+          "edit_delta": {
+            "substitutions": 5,
+            "deletions": -3,
+            "insertions": 3
+          }
+        },
+        {
+          "file": "trainer_raw_cfg1_eos-1_held_01_number.wav",
+          "voice": "held_01",
+          "case_id": "number",
+          "baseline": {
+            "score": {
+              "reference": "料金は1234円です3人分の合計は3702円です",
+              "hypothesis": "要求はじくそに尊嚴を得んです尊人分の後継は尊嚴尊心尊心ご視聴ありがとうございました",
+              "cer": 1.4166666666666667,
+              "reference_characters": 24,
+              "substitutions": 17,
+              "deletions": 0,
+              "insertions": 17
+            },
+            "seconds": 30.0,
+            "termination": "max_length_without_eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "料金は1234円です3人分の合計は3702円です",
+              "hypothesis": "料金は一抜き四円です三人分の合計は三分がなら二円でなら",
+              "cer": 0.5416666666666666,
+              "reference_characters": 24,
+              "substitutions": 10,
+              "deletions": 0,
+              "insertions": 3
+            },
+            "seconds": 8.88,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": -7,
+            "deletions": 0,
+            "insertions": -14
+          }
+        },
+        {
+          "file": "trainer_raw_cfg1_eos-1_held_01_place.wav",
+          "voice": "held_01",
+          "case_id": "place",
+          "baseline": {
+            "score": {
+              "reference": "東京駅の近くで温かいお茶を飲みました",
+              "hypothesis": "十日渓地の近くで渡ったお茶を飲みました",
+              "cer": 0.3888888888888889,
+              "reference_characters": 18,
+              "substitutions": 6,
+              "deletions": 0,
+              "insertions": 1
+            },
+            "seconds": 3.68,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "東京駅の近くで温かいお茶を飲みました",
+              "hypothesis": "東京駅の近くで温かいお茶を飲みました",
+              "cer": 0.0,
+              "reference_characters": 18,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 3.92,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": -6,
+            "deletions": 0,
+            "insertions": -1
+          }
+        },
+        {
+          "file": "trainer_raw_cfg1_eos-1_held_01_request.wav",
+          "voice": "held_01",
+          "case_id": "request",
+          "baseline": {
+            "score": {
+              "reference": "すみませんこの近くにコンビニはありますか",
+              "hypothesis": "すみませんこの近くにコンビニはありますか",
+              "cer": 0.0,
+              "reference_characters": 20,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 2.96,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "すみませんこの近くにコンビニはありますか",
+              "hypothesis": "すみませんこの近くにコンビニはありますか",
+              "cer": 0.0,
+              "reference_characters": 20,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 2.96,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_raw_cfg1_eos-1_seen_daily.wav",
+          "voice": "seen",
+          "case_id": "daily",
+          "baseline": {
+            "score": {
+              "reference": "こんにちは今日はいい天気ですね",
+              "hypothesis": "こんにちは今日はいい天気ですね",
+              "cer": 0.0,
+              "reference_characters": 15,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 2.56,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "こんにちは今日はいい天気ですね",
+              "hypothesis": "こんにちは今日はいい天気ですね",
+              "cer": 0.0,
+              "reference_characters": 15,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 2.56,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_raw_cfg1_eos-1_seen_date.wav",
+          "voice": "seen",
+          "case_id": "date",
+          "baseline": {
+            "score": {
+              "reference": "今日は十月六日午後三時です",
+              "hypothesis": "今日は終結6午後も3時ですまたなか",
+              "cer": 0.7692307692307693,
+              "reference_characters": 13,
+              "substitutions": 4,
+              "deletions": 1,
+              "insertions": 5
+            },
+            "seconds": 5.04,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "今日は十月六日午後三時です",
+              "hypothesis": "今日は10月6日午後3時です",
+              "cer": 0.3076923076923077,
+              "reference_characters": 13,
+              "substitutions": 3,
+              "deletions": 0,
+              "insertions": 1
+            },
+            "seconds": 4.0,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": -1,
+            "deletions": -1,
+            "insertions": -4
+          }
+        },
+        {
+          "file": "trainer_raw_cfg1_eos-1_seen_long.wav",
+          "voice": "seen",
+          "case_id": "long",
+          "baseline": {
+            "score": {
+              "reference": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前に温かいお茶を買い窓の外の景色を眺めながら今日の出来事をゆっくり思い出したいと思います",
+              "hypothesis": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前にお会いお茶を買い和田の帆との歌詞の景色を眺めながら今日の出来事をゆっくり思い出したい思いません",
+              "cer": 0.17142857142857143,
+              "reference_characters": 70,
+              "substitutions": 5,
+              "deletions": 1,
+              "insertions": 6
+            },
+            "seconds": 15.76,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "明日の朝は少し早く起きて駅まで歩く予定です電車に乗る前に温かいお茶を買い窓の外の景色を眺めながら今日の出来事をゆっくり思い出したいと思います",
+              "hypothesis": "今日のだけを着て駅まで歩く予定です電車に乗る前におとかいお茶を買い窓の外の消し替えを眺めながら今日の出来事の消し替えが思い出したいと思います今日の出来事を思い出したい",
+              "cer": 0.4857142857142857,
+              "reference_characters": 70,
+              "substitutions": 13,
+              "deletions": 4,
+              "insertions": 17
+            },
+            "seconds": 19.04,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 8,
+            "deletions": 3,
+            "insertions": 11
+          }
+        },
+        {
+          "file": "trainer_raw_cfg1_eos-1_seen_number.wav",
+          "voice": "seen",
+          "case_id": "number",
+          "baseline": {
+            "score": {
+              "reference": "料金は1234円です3人分の合計は3702円です",
+              "hypothesis": "医療金は1週に3円です先陣弾の後継は1972円です",
+              "cer": 0.5416666666666666,
+              "reference_characters": 24,
+              "substitutions": 8,
+              "deletions": 2,
+              "insertions": 3
+            },
+            "seconds": 7.2,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "料金は1234円です3人分の合計は3702円です",
+              "hypothesis": "料金は1円にして4円です3円満を合計は3円を7に2円です",
+              "cer": 0.4166666666666667,
+              "reference_characters": 24,
+              "substitutions": 6,
+              "deletions": 0,
+              "insertions": 4
+            },
+            "seconds": 6.96,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": -2,
+            "deletions": -2,
+            "insertions": 1
+          }
+        },
+        {
+          "file": "trainer_raw_cfg1_eos-1_seen_place.wav",
+          "voice": "seen",
+          "case_id": "place",
+          "baseline": {
+            "score": {
+              "reference": "東京駅の近くで温かいお茶を飲みました",
+              "hypothesis": "東京駅の近くで温かいお茶を飲みました",
+              "cer": 0.0,
+              "reference_characters": 18,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 3.68,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "東京駅の近くで温かいお茶を飲みました",
+              "hypothesis": "東京駅の近くで温かいお茶を飲みました",
+              "cer": 0.0,
+              "reference_characters": 18,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 4.16,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0
+          }
+        },
+        {
+          "file": "trainer_raw_cfg1_eos-1_seen_request.wav",
+          "voice": "seen",
+          "case_id": "request",
+          "baseline": {
+            "score": {
+              "reference": "すみませんこの近くにコンビニはありますか",
+              "hypothesis": "すみませんこの近くにコンビニはありますか",
+              "cer": 0.0,
+              "reference_characters": 20,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 3.12,
+            "termination": "eos"
+          },
+          "candidate": {
+            "score": {
+              "reference": "すみませんこの近くにコンビニはありますか",
+              "hypothesis": "すみませんこの近くにコンビニはありますか",
+              "cer": 0.0,
+              "reference_characters": 20,
+              "substitutions": 0,
+              "deletions": 0,
+              "insertions": 0
+            },
+            "seconds": 4.8,
+            "termination": "eos"
+          },
+          "edit_delta": {
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0
+          }
+        }
+      ]
+    }
+  },
+  "source_sha256": {
+    "runs/japanese-m2a-eval-00010000-early/scores.json": "bdb0e3831641c91bb278c57400684946e3fe04e0090ebeda5321d7628b5be61e",
+    "runs/japanese-m2a-eval-00020000-early/scores.json": "dfc903f574b05999c0c91200bfd0a7924bab6d0ebc8f54b77a86ec5e794a0cf2",
+    "runs/japanese-m2a-eval-00010000-early/evaluation_context.json": "b7f02321e8932489ef650efb26dbfcd399a27098d687888bc9fa33daf8de65ff",
+    "runs/japanese-m2a-eval-00020000-early/evaluation_context.json": "c2d57766b17c1b422e79cab16d2cbc0e1b05cf3b37c16036afc54b33c61cb321",
+    "/workspace/pocket-tts/runs/m2a-control/compare_evaluations.py": "d0199728ec70c564df5a1ce8a7bf4cd4cbbafaca94e1df75789f7f4abb6bfcbb",
+    "/workspace/pocket-tts/runs/m2a-control/diagnose_early_regressions.py": "be49fcb444c3e51e9c06d0519cf6cf1b20e9c3a8ce1c7a3d5af55f034b4c3996"
+  },
+  "human_listening_completed": false,
+  "teacher_selected": false,
+  "limits": [
+    "ASR insertions do not establish audible repetition; listening is required.",
+    "This early matrix does not substitute for the full 3024-condition comparison."
+  ]
+}

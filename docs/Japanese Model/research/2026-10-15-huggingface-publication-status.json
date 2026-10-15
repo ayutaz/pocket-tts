@@ -1,0 +1,28 @@
+{
+  "repo_id": "tts-dataset/pocket-tts-ja-experiments",
+  "url": "https://huggingface.co/tts-dataset/pocket-tts-ja-experiments",
+  "status": "publication_verified",
+  "checked_utc": "2026-10-15T01:11:57.864844+00:00",
+  "final_revision": "9cf5427bda9ccf18a9dadb736fa686a4bc990785",
+  "private": false,
+  "gated": "manual",
+  "uploaded_models": [
+    "gol/student/5000/model.safetensors",
+    "gol/teacher/10000/checkpoint_00010000.pt",
+    "gol/teacher/2000/checkpoint_00002000.pt",
+    "gol/teacher/20000/checkpoint_00020000.pt",
+    "gol/teacher/5000/checkpoint_00005000.pt",
+    "legacy/smoke220/model.safetensors"
+  ],
+  "pending_models": [],
+  "file_count": 31,
+  "total_uploaded_bytes": 12062580944,
+  "controller_pid": null,
+  "waiting_job_running": false,
+  "upload_job_running": false,
+  "publisher_exit_code": 0,
+  "previous_wait_session_id": 70058,
+  "completed_upload_session_id": 61135,
+  "previous_wait_controller_stopped": true,
+  "training_or_inference_performed": false
+}

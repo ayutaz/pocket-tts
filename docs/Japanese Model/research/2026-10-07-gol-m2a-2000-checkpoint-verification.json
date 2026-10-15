@@ -1,0 +1,69 @@
+{
+  "checkpoint_step": 2000,
+  "optimizer_steps": [
+    2000
+  ],
+  "fresh_start_event": {
+    "time": "2026-10-06 20:41:46+0000",
+    "type": "run_start",
+    "step": 0,
+    "config": "runs/m2a-control/m2a-to2000.yaml",
+    "world_size": 1,
+    "max_steps": 2000,
+    "commit": "ce123ec-dirty"
+  },
+  "run_starts": [
+    {
+      "time": "2026-10-06 20:41:46+0000",
+      "type": "run_start",
+      "step": 0,
+      "config": "runs/m2a-control/m2a-to2000.yaml",
+      "world_size": 1,
+      "max_steps": 2000,
+      "commit": "ce123ec-dirty"
+    }
+  ],
+  "validation": [
+    {
+      "time": "2026-10-06 20:45:32+0000",
+      "type": "valid",
+      "step": 1000,
+      "metrics": {
+        "flow_diag": 22.01466323852539,
+        "flow_distill": 0.33532342851161956,
+        "flow_loss": 0.47622856199741365,
+        "eos_loss": 0.03245418506674468,
+        "loss": 0.479473979473114
+      }
+    },
+    {
+      "time": "2026-10-06 20:48:37+0000",
+      "type": "valid",
+      "step": 2000,
+      "metrics": {
+        "flow_diag": 20.59938907623291,
+        "flow_distill": 0.28705092817544936,
+        "flow_loss": 0.36413656145334244,
+        "eos_loss": 0.028601026386022566,
+        "loss": 0.36699666261672975
+      }
+    }
+  ],
+  "finite_saved_raw_ema_optimizer": true,
+  "embedding_shape": [
+    8001,
+    1024
+  ],
+  "inputs": {
+    "runs/finetune_language_ja_m2a/checkpoint_00002000.pt": "296f388855a63bdc20b0a59d9b10fd0161b57d1c06208cabf0bab0b435951432",
+    "runs/finetune_language_ja_m2a/optim_00002000.pt": "ad3b639f793ced264385be32ffb4d26990e1028ece7d29af81cb0250be70924e",
+    "runs/finetune_language_ja_m2a/args.yaml": "5c2bd73a6790f9346cceb8345cf32e4f5f461480e6a76279348c0d6e153e50f1",
+    "runs/finetune_language_ja_m2a/progress.jsonl": "91288ae3fe214720eb43776c89ad0141501cbcfc69c47e7b14e91f9d1d66ba23",
+    "runs/m2a-control/final-data-audit.json": "0acf7a4d1b6be4b3054c9e67c2a822939dd204367b8cc9b0870a81c28bcd6ea4"
+  },
+  "human_listening_completed": false,
+  "limits": [
+    "Checkpoint/update evidence does not establish Japanese speech quality.",
+    "Logged metrics cover logged steps; optimizer sidecar establishes final update counter."
+  ]
+}

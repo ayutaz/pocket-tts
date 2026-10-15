@@ -1,0 +1,7 @@
+{
+  "repo_id": "tts-dataset/pocket-tts-ja-experiments",
+  "private": false,
+  "gated": "manual",
+  "anonymous_weight_http_status": 401,
+  "student_config_uses_organization_urls": true
+}

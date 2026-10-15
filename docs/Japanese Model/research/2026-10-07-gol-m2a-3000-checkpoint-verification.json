@@ -1,0 +1,90 @@
+{
+  "checkpoint_step": 3000,
+  "optimizer_steps": [
+    3000
+  ],
+  "fresh_start_event": {
+    "time": "2026-10-06 20:41:46+0000",
+    "type": "run_start",
+    "step": 0,
+    "config": "runs/m2a-control/m2a-to2000.yaml",
+    "world_size": 1,
+    "max_steps": 2000,
+    "commit": "ce123ec-dirty"
+  },
+  "run_starts": [
+    {
+      "time": "2026-10-06 20:41:46+0000",
+      "type": "run_start",
+      "step": 0,
+      "config": "runs/m2a-control/m2a-to2000.yaml",
+      "world_size": 1,
+      "max_steps": 2000,
+      "commit": "ce123ec-dirty"
+    },
+    {
+      "time": "2026-10-06 20:57:43+0000",
+      "type": "run_start",
+      "step": 2000,
+      "config": "runs/m2a-control/m2a-to3000.yaml",
+      "world_size": 1,
+      "max_steps": 3000,
+      "commit": "ce123ec-dirty"
+    }
+  ],
+  "validation": [
+    {
+      "time": "2026-10-06 20:45:32+0000",
+      "type": "valid",
+      "step": 1000,
+      "metrics": {
+        "flow_diag": 22.01466323852539,
+        "flow_distill": 0.33532342851161956,
+        "flow_loss": 0.47622856199741365,
+        "eos_loss": 0.03245418506674468,
+        "loss": 0.479473979473114
+      }
+    },
+    {
+      "time": "2026-10-06 20:48:37+0000",
+      "type": "valid",
+      "step": 2000,
+      "metrics": {
+        "flow_diag": 20.59938907623291,
+        "flow_distill": 0.28705092817544936,
+        "flow_loss": 0.36413656145334244,
+        "eos_loss": 0.028601026386022566,
+        "loss": 0.36699666261672975
+      }
+    },
+    {
+      "time": "2026-10-06 21:01:04+0000",
+      "type": "valid",
+      "step": 3000,
+      "metrics": {
+        "flow_diag": 19.883290271759034,
+        "flow_distill": 0.286010117828846,
+        "flow_loss": 0.2856139717437327,
+        "eos_loss": 0.026994902268052103,
+        "loss": 0.28831346187740564
+      }
+    }
+  ],
+  "finite_saved_raw_ema_optimizer": true,
+  "embedding_shape": [
+    8001,
+    1024
+  ],
+  "inputs": {
+    "runs/finetune_language_ja_m2a/checkpoint_00003000.pt": "1512fb6f108741e97990270219ff47418748b35fc9a54eb06875fb9a20eb49c2",
+    "runs/finetune_language_ja_m2a/optim_00003000.pt": "9e399dcdc6dcb948630492ffd23667dea2f872e36cd48479e18b5f7d23aed67e",
+    "runs/finetune_language_ja_m2a/args.yaml": "ee9799d78b625889770c2248cc3290be6dd0a4f604d7e85f56728d17cff69518",
+    "runs/finetune_language_ja_m2a/progress.jsonl": "8f3f5eb524759d6c840e59148a46c00898d980b153f09856bdc66098b37e3e04",
+    "runs/m2a-control/final-data-audit.json": "0acf7a4d1b6be4b3054c9e67c2a822939dd204367b8cc9b0870a81c28bcd6ea4"
+  },
+  "human_listening_completed": false,
+  "limits": [
+    "Checkpoint/update evidence does not establish Japanese speech quality.",
+    "Logged metrics cover logged steps; optimizer sidecar establishes final update counter."
+  ]
+}

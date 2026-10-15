@@ -1,0 +1,168 @@
+{
+  "review_date": "2026-10-06",
+  "base_main": "41cbc84af539ea78a804ffca5f9c6edc1a22ce44",
+  "topic_head": "5073bba",
+  "initial_ruff": {
+    "version": "0.12.7",
+    "total": 585,
+    "codes": {
+      "ANN201": 2,
+      "ANN001": 480,
+      "ANN202": 61,
+      "ANN204": 1,
+      "ANN003": 27,
+      "ANN002": 14
+    }
+  },
+  "initial_ty_windows": 85,
+  "initial_ty_linux_after_small_fixes": 77,
+  "initial_portable_pytest": {
+    "passed": 507,
+    "warnings": 12,
+    "seconds": 81.46
+  },
+  "english_runtime_pytest": {
+    "passed": 13,
+    "warnings": 110,
+    "seconds": 150.83
+  },
+  "config_pytest_after_checkpoint_fix": {
+    "passed": 58,
+    "seconds": 14.88
+  },
+  "not_run": [
+    "Linux GPU training",
+    "real Japanese CTC alignment",
+    "M2a",
+    "Japanese depth distillation",
+    "Japanese quality and CPU speed",
+    "actual Japanese Phase1 checkpoint inference on current main"
+  ],
+  "final_environment": {
+    "platform": "Windows-11-10.0.22631-SP0",
+    "python": "3.12.13",
+    "torch": "2.14.0+cpu",
+    "torchaudio": "2.11.0",
+    "ty": "0.0.81",
+    "pytest": "9.1.1",
+    "fugashi": "1.5.2",
+    "unidic_lite": "1.0.8"
+  },
+  "final_pytest_runs": [
+    {
+      "artifact": "2026-10-06-core-results.xml",
+      "passed": 333,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "console_seconds": 91.44
+    },
+    {
+      "artifact": "2026-10-06-ingestion-results.xml",
+      "passed": 233,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "console_seconds": 61.43
+    },
+    {
+      "artifact": "2026-10-06-examples-results.xml",
+      "passed": 10,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "console_seconds": 64.97
+    },
+    {
+      "artifact": "2026-10-06-alignment-readiness-results.xml",
+      "passed": 19,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "console_seconds": 17.84
+    }
+  ],
+  "final_unique_pytest_passed": 576,
+  "final_pytest_excluded": [
+    "training/tests/test_loader_signals.py (Linux SIGUSR1)"
+  ],
+  "core_run_separate_files": [
+    "training/tests/test_prepare_gol.py",
+    "training/tests/test_prepare_moespeech.py",
+    "tests/test_documentation_examples.py"
+  ],
+  "final_static_checks": {
+    "ruff_0_12_7_all": "pass",
+    "ruff_import_order_all": "pass",
+    "ruff_format_changed_python_files": {
+      "passed": 25
+    },
+    "ty_0_0_81_linux_3_10": "pass",
+    "ty_0_0_81_linux_3_14": "pass",
+    "ty_windows": {
+      "diagnostics": 3,
+      "reason": "unsupported signal.SIGUSR1",
+      "files": [
+        "training/dataloader/subproc.py",
+        "training/tests/test_loader_signals.py",
+        "training/train.py"
+      ]
+    },
+    "github_jobs_executed": false
+  },
+  "ctc_exhaustive_oracle": {
+    "cases": 25,
+    "frames": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "classes": 3,
+    "seed": 7,
+    "targets": [
+      [
+        1
+      ],
+      [
+        2
+      ],
+      [
+        1,
+        1
+      ],
+      [
+        1,
+        2
+      ],
+      [
+        2,
+        1,
+        2
+      ]
+    ],
+    "tolerance": 2e-06,
+    "result": "pass"
+  },
+  "mimi_actual_bundle_load": {
+    "revision": "492522650173a0653b7575cdc25ae09810e5d741",
+    "path": "languages/english_2026-04_24l/model.safetensors",
+    "source_bytes": 1304206614,
+    "mimi_keys": 87,
+    "missing_keys": 0,
+    "unexpected_keys": 0,
+    "synthetic_flow_checkpoint_with_actual_mimi_load": "pass",
+    "actual_japanese_phase1_checkpoint_load": "not tested"
+  },
+  "remaining_constraints": [
+    "unpunctuated long Japanese input may exceed max_tokens",
+    "training raw CFG2 samples differ from normal EMA CFG1 inference",
+    "wheel omits Japanese tokenizer; publishing Hub artifacts pending",
+    "same-path audio byte replacement requires manifest revision/cache invalidation",
+    "same-name remote alignment model update requires identifier/cache invalidation",
+    "distributed precompute assumes shared filesystem and torchrun supervisor"
+  ],
+  "changes_committed_at_review": false,
+  "ci_japanese_dependency_wiring": "verified YAML; live GitHub jobs not run"
+}

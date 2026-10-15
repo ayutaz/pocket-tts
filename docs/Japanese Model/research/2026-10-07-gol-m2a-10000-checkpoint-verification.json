@@ -1,0 +1,192 @@
+{
+  "checkpoint_step": 10000,
+  "optimizer_steps": [
+    10000
+  ],
+  "fresh_start_event": {
+    "time": "2026-10-06 20:41:46+0000",
+    "type": "run_start",
+    "step": 0,
+    "config": "runs/m2a-control/m2a-to2000.yaml",
+    "world_size": 1,
+    "max_steps": 2000,
+    "commit": "ce123ec-dirty"
+  },
+  "run_starts": [
+    {
+      "time": "2026-10-06 20:41:46+0000",
+      "type": "run_start",
+      "step": 0,
+      "config": "runs/m2a-control/m2a-to2000.yaml",
+      "world_size": 1,
+      "max_steps": 2000,
+      "commit": "ce123ec-dirty"
+    },
+    {
+      "time": "2026-10-06 20:57:43+0000",
+      "type": "run_start",
+      "step": 2000,
+      "config": "runs/m2a-control/m2a-to3000.yaml",
+      "world_size": 1,
+      "max_steps": 3000,
+      "commit": "ce123ec-dirty"
+    },
+    {
+      "time": "2026-10-06 21:09:12+0000",
+      "type": "run_start",
+      "step": 3000,
+      "config": "runs/m2a-control/m2a-to5000.yaml",
+      "world_size": 1,
+      "max_steps": 5000,
+      "commit": "ce123ec-dirty"
+    },
+    {
+      "time": "2026-10-06 22:25:00+0000",
+      "type": "run_start",
+      "step": 5000,
+      "config": "runs/m2a-control/m2a-to10000.yaml",
+      "world_size": 1,
+      "max_steps": 10000,
+      "commit": "ce123ec-dirty"
+    }
+  ],
+  "validation": [
+    {
+      "time": "2026-10-06 20:45:32+0000",
+      "type": "valid",
+      "step": 1000,
+      "metrics": {
+        "flow_diag": 22.01466323852539,
+        "flow_distill": 0.33532342851161956,
+        "flow_loss": 0.47622856199741365,
+        "eos_loss": 0.03245418506674468,
+        "loss": 0.479473979473114
+      }
+    },
+    {
+      "time": "2026-10-06 20:48:37+0000",
+      "type": "valid",
+      "step": 2000,
+      "metrics": {
+        "flow_diag": 20.59938907623291,
+        "flow_distill": 0.28705092817544936,
+        "flow_loss": 0.36413656145334244,
+        "eos_loss": 0.028601026386022566,
+        "loss": 0.36699666261672975
+      }
+    },
+    {
+      "time": "2026-10-06 21:01:04+0000",
+      "type": "valid",
+      "step": 3000,
+      "metrics": {
+        "flow_diag": 19.883290271759034,
+        "flow_distill": 0.286010117828846,
+        "flow_loss": 0.2856139717437327,
+        "eos_loss": 0.026994902268052103,
+        "loss": 0.28831346187740564
+      }
+    },
+    {
+      "time": "2026-10-06 21:12:33+0000",
+      "type": "valid",
+      "step": 4000,
+      "metrics": {
+        "flow_diag": 19.52990526199341,
+        "flow_distill": 0.27763289630413057,
+        "flow_loss": 0.23774244036525488,
+        "eos_loss": 0.024500333666801453,
+        "loss": 0.24019247300922872
+      }
+    },
+    {
+      "time": "2026-10-06 21:15:39+0000",
+      "type": "valid",
+      "step": 5000,
+      "metrics": {
+        "flow_diag": 19.32251962661743,
+        "flow_distill": 0.2628497493267059,
+        "flow_loss": 0.2135749132046476,
+        "eos_loss": 0.025113692292943596,
+        "loss": 0.21608628116548062
+      }
+    },
+    {
+      "time": "2026-10-06 22:28:19+0000",
+      "type": "valid",
+      "step": 6000,
+      "metrics": {
+        "flow_diag": 19.13268253326416,
+        "flow_distill": 0.3072268575429916,
+        "flow_loss": 0.20395064195618035,
+        "eos_loss": 0.025000342172570526,
+        "loss": 0.20645067580044268
+      }
+    },
+    {
+      "time": "2026-10-06 22:31:40+0000",
+      "type": "valid",
+      "step": 7000,
+      "metrics": {
+        "flow_diag": 18.957292079925537,
+        "flow_distill": 0.23423184871673583,
+        "flow_loss": 0.19581918318755925,
+        "eos_loss": 0.025826089894399048,
+        "loss": 0.1984017913416028
+      }
+    },
+    {
+      "time": "2026-10-06 22:34:43+0000",
+      "type": "valid",
+      "step": 8000,
+      "metrics": {
+        "flow_diag": 18.92833055496216,
+        "flow_distill": 0.2534305876493454,
+        "flow_loss": 0.19665194317698478,
+        "eos_loss": 0.026470944564789534,
+        "loss": 0.19929903723299502
+      }
+    },
+    {
+      "time": "2026-10-06 22:37:47+0000",
+      "type": "valid",
+      "step": 9000,
+      "metrics": {
+        "flow_diag": 18.86041967391968,
+        "flow_distill": 0.25707133412361144,
+        "flow_loss": 0.19492817804217338,
+        "eos_loss": 0.025078650936484335,
+        "loss": 0.19743604458868502
+      }
+    },
+    {
+      "time": "2026-10-06 22:40:50+0000",
+      "type": "valid",
+      "step": 10000,
+      "metrics": {
+        "flow_diag": 18.599070072174072,
+        "flow_distill": 0.24697860360145568,
+        "flow_loss": 0.18012422296218575,
+        "eos_loss": 0.025279650771990417,
+        "loss": 0.18265218726359309
+      }
+    }
+  ],
+  "finite_saved_raw_ema_optimizer": true,
+  "embedding_shape": [
+    8001,
+    1024
+  ],
+  "inputs": {
+    "runs/finetune_language_ja_m2a/checkpoint_00010000.pt": "51f538a3fe5231e4b404f46c47ae49dc4f39a20b6a07ce2bb1cbec03976e17d1",
+    "runs/finetune_language_ja_m2a/optim_00010000.pt": "2dfb82fb507467335262897e31c3557d4d38331873f34fc9a1385cee37aecc64",
+    "runs/finetune_language_ja_m2a/args.yaml": "621ebede379d398f7f2ae9b038a95135560177f8adf5cff1af7d1ec4e970228a",
+    "runs/finetune_language_ja_m2a/progress.jsonl": "86407fd7702712759d28855607e7c114075fc383d6a39ab482b41783a38bbfb3",
+    "runs/m2a-control/final-data-audit.json": "0acf7a4d1b6be4b3054c9e67c2a822939dd204367b8cc9b0870a81c28bcd6ea4"
+  },
+  "human_listening_completed": false,
+  "limits": [
+    "Checkpoint/update evidence does not establish Japanese speech quality.",
+    "Logged metrics cover logged steps; optimizer sidecar establishes final update counter."
+  ]
+}

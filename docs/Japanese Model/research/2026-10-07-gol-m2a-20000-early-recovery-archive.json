@@ -1,0 +1,24 @@
+{
+  "instance_id": 54521683,
+  "checkpoint_step": 20000,
+  "baseline_step": 10000,
+  "matrix_rows": 216,
+  "checkpoint_sha256": "499c037ab2cc63f506592d4203e53d72a68914a4f5eb0025b2efc418c93e417d",
+  "scores_sha256": "dfc903f574b05999c0c91200bfd0a7924bab6d0ebc8f54b77a86ec5e794a0cf2",
+  "archived_context_verified": true,
+  "all_fixed_conditions_match": true,
+  "human_listening_completed": false,
+  "teacher_selected": false,
+  "limits": [
+    "Duplicate shard directories and checkpoint/optimizer weights are excluded.",
+    "Baseline artifacts are preserved in their separate recovery archive.",
+    "This archive preserves the actual early WAV headers and identities."
+  ],
+  "archive": "runs/m2a-control/m2a-20000-early-recovery.tar.gz",
+  "bytes": 132032429,
+  "sha256": "c5c2afac150774345fcbcd56f9a1b7f4cbf8e66553665846d2c62400d2d04bab",
+  "files": 241,
+  "archive_contents_verified": true,
+  "embedded_manifest_verified": true,
+  "helper_sha256": "20ec23db3635c4b3ec084840ece7caa333af404446c22d53e3288ea4be9a5746"
+}

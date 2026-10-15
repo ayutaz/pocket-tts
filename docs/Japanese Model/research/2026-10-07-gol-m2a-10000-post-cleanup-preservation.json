@@ -1,0 +1,18 @@
+{
+  "observed_utc": "2026-10-06T23:57:28.960129+00:00",
+  "preserved_checkpoint_step": 10000,
+  "original_optimizer_removed": true,
+  "preserved_optimizer_sha256": "2dfb82fb507467335262897e31c3557d4d38331873f34fc9a1385cee37aecc64",
+  "preserved_optimizer_hash_matches": true,
+  "current_optimizer_file": "runs/finetune_language_ja_m2a/optim_00012000.pt",
+  "current_optimizer_steps": [
+    12000
+  ],
+  "helper_sha256": "b1fcbba2585a96be94fb3886d76b281c36b9c923d89fe6d716d98de9efa70e8e",
+  "human_listening_completed": false,
+  "teacher_selected": false,
+  "limits": [
+    "The newer optimizer counter is inspected directly; its full tensor finiteness is checked at the stage stop.",
+    "This is restart/update evidence, not speech quality approval."
+  ]
+}

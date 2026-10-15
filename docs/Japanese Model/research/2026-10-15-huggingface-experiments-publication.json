@@ -1,0 +1,214 @@
+{
+  "checked_utc": "2026-10-15T01:11:57.864844+00:00",
+  "repo_id": "tts-dataset/pocket-tts-ja-experiments",
+  "url": "https://huggingface.co/tts-dataset/pocket-tts-ja-experiments",
+  "revision": "9cf5427bda9ccf18a9dadb736fa686a4bc990785",
+  "private": false,
+  "gated": "manual",
+  "files_verified": [
+    {
+      "file": "README.md",
+      "bytes": 9028,
+      "content_exact": true
+    },
+    {
+      "file": ".gitattributes",
+      "bytes": 181,
+      "content_exact": true
+    },
+    {
+      "file": "ARTIFACTS.json",
+      "bytes": 4715,
+      "content_exact": true
+    },
+    {
+      "file": "LICENSE",
+      "bytes": 1046,
+      "content_exact": true
+    },
+    {
+      "file": "configs/depth_distill_ja_5000.yaml",
+      "bytes": 1626,
+      "content_exact": true
+    },
+    {
+      "file": "configs/finetune_language_ja_m2a.yaml",
+      "bytes": 8874,
+      "content_exact": true
+    },
+    {
+      "file": "configs/finetune_language_ja_smoke.yaml",
+      "bytes": 1319,
+      "content_exact": true
+    },
+    {
+      "file": "configs/student5000-resolved-training-args.yaml",
+      "bytes": 1854,
+      "content_exact": true
+    },
+    {
+      "file": "configs/teacher10000-resolved-training-args.yaml",
+      "bytes": 1888,
+      "content_exact": true
+    },
+    {
+      "file": "configs/teacher20000-resolved-training-args.yaml",
+      "bytes": 1888,
+      "content_exact": true
+    },
+    {
+      "file": "evaluation/2026-10-07-gol-m2a-10000-local-recovery.json",
+      "bytes": 880,
+      "content_exact": true
+    },
+    {
+      "file": "evaluation/2026-10-07-gol-m2a-10000-vs-20000-full.json",
+      "bytes": 225467,
+      "content_exact": true
+    },
+    {
+      "file": "evaluation/2026-10-07-gol-m2a-20000-local-recovery.json",
+      "bytes": 874,
+      "content_exact": true
+    },
+    {
+      "file": "evaluation/2026-10-07-japanese-distillation-and-cpu-results.md",
+      "bytes": 18416,
+      "content_exact": true
+    },
+    {
+      "file": "evaluation/2026-10-07-japanese-student5000-export-verification.json",
+      "bytes": 844,
+      "content_exact": true
+    },
+    {
+      "file": "evaluation/2026-10-07-japanese-student5000-isolated-archive-replay.json",
+      "bytes": 987,
+      "content_exact": true
+    },
+    {
+      "file": "evaluation/2026-10-07-japanese-student5000-pair-local-recovery.json",
+      "bytes": 770,
+      "content_exact": true
+    },
+    {
+      "file": "evaluation/2026-10-07-japanese-student5000-resume-verification.json",
+      "bytes": 910,
+      "content_exact": true
+    },
+    {
+      "file": "evaluation/2026-10-07-teacher10000-vs-student5000-full.json",
+      "bytes": 91872,
+      "content_exact": true
+    },
+    {
+      "file": "evaluation/2026-10-08-japanese-teacher-student-listening-notes.json",
+      "bytes": 2762,
+      "content_exact": true
+    },
+    {
+      "file": "gol/student/5000/model.yaml",
+      "bytes": 1549,
+      "content_exact": true
+    },
+    {
+      "file": "source/source-manifest.json",
+      "bytes": 14572,
+      "content_exact": true
+    },
+    {
+      "file": "source/stage4-source.tar",
+      "bytes": 2508800,
+      "sha256": "7ae41c0a2b474b622e0386a1b00d6953f8428b81183f04abb82f7370e3d6d229"
+    },
+    {
+      "file": "student5000.yaml",
+      "bytes": 1736,
+      "content_exact": true
+    },
+    {
+      "file": "tokenizer/japanese_8000.model",
+      "bytes": 118234,
+      "sha256": "4549ee1be7a484cbfd0cc38e3277e7fc91141f42a897152c81238eedb692d25f"
+    },
+    {
+      "file": "gol/student/5000/model.safetensors",
+      "bytes": 454417328,
+      "sha256": "a1b27310b7daf6a09f3a5289f0477ec2f20217d53d6438b5bea9c0bdd5ba01ae"
+    },
+    {
+      "file": "gol/teacher/10000/checkpoint_00010000.pt",
+      "bytes": 2561110827,
+      "sha256": "51f538a3fe5231e4b404f46c47ae49dc4f39a20b6a07ce2bb1cbec03976e17d1"
+    },
+    {
+      "file": "gol/teacher/2000/checkpoint_00002000.pt",
+      "bytes": 2561110827,
+      "sha256": "296f388855a63bdc20b0a59d9b10fd0161b57d1c06208cabf0bab0b435951432"
+    },
+    {
+      "file": "gol/teacher/20000/checkpoint_00020000.pt",
+      "bytes": 2561110827,
+      "sha256": "499c037ab2cc63f506592d4203e53d72a68914a4f5eb0025b2efc418c93e417d"
+    },
+    {
+      "file": "gol/teacher/5000/checkpoint_00005000.pt",
+      "bytes": 2561110827,
+      "sha256": "0aa9c549a68011d6b1a7bb8e7b508ecb11c7053fb565af7c0f682116324d672f"
+    },
+    {
+      "file": "legacy/smoke220/model.safetensors",
+      "bytes": 1360699216,
+      "sha256": "ecc71eb63341c812b96d5ea5996ca8976d71f821a1c960e64a4e3cd71b03eaac"
+    }
+  ],
+  "file_count": 31,
+  "total_bytes": 12062580944,
+  "prior_phase1_revision_unchanged": "2c3c1a7dab2ff066b5069c30e7951a980ff6e914",
+  "quality_approved": false,
+  "training_or_inference_performed": false,
+  "local_activity": "Existing artifact retrieval and sequential upload only",
+  "raw_audio_or_latents_uploaded": false,
+  "development_status": "Ended; archival publication authorized on 2026-10-15",
+  "models_only_due_to_storage_quota": true,
+  "optimizer_sidecars_retained_locally_only": true,
+  "quota_recovery": {
+    "initial_error": "HTTP403 public storage quota exceeded",
+    "strategy": "Model weights only; local resume state preserved",
+    "removed_task_uploaded_optional_files": {
+      "gol/teacher/10000/optim_00010000.pt": {
+        "bytes": 2561133510,
+        "sha256": "2dfb82fb507467335262897e31c3557d4d38331873f34fc9a1385cee37aecc64",
+        "commit": "5accc2c74c262d1a344b9c453ed8e0e4398b42b5"
+      },
+      "gol/teacher/2000/optim_00002000.pt": {
+        "bytes": 2561133510,
+        "sha256": "ad3b639f793ced264385be32ffb4d26990e1028ece7d29af81cb0250be70924e",
+        "commit": "f15f905c554908288e7ba88f72225fb4b6e063b8"
+      },
+      "gol/student/5000/checkpoint_00005000.pt": {
+        "bytes": 709394483,
+        "sha256": "f9dee3bc786fbcc1358a74a35d1885e7084700eb9d4d5b40d3875a3d9a7d41a8",
+        "commit": "18bef4271c4717740b217c547855ecdd9e66df30"
+      },
+      "gol/student/5000/optim_00005000.pt": {
+        "bytes": 670318242,
+        "sha256": "5334737c97b1ed61568aefbf896404042cf6e6b7f5774a62a773ce569b3b06c4",
+        "commit": "19ee00e8eabf04df15a5a68c3f9dffed4c176167"
+      }
+    },
+    "prune_commit": "e8615433e02f196289ad41cad47b07bf8285245f",
+    "scope": "Only this newly created task-owned repository; no Phase1 or other repositories modified",
+    "history_prune_started_utc": "2026-10-14T18:28:09.784297+00:00",
+    "remaining_models_verified_unchanged": true,
+    "squashed_revision": "11bf3a00a73b767a2f6c8b531281ec2a900b3ef0",
+    "direct_lfs_cleanup": {
+      "documented_api": "https://huggingface.co/.well-known/openapi.json",
+      "sha256_requested": [],
+      "active_sha256_disjoint": true,
+      "original_local_files_present": true,
+      "remaining_files_verified_unchanged": true,
+      "used_storage_after": 12081245761
+    }
+  }
+}

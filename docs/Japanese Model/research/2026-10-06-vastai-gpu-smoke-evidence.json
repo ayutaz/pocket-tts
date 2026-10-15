@@ -1,0 +1,496 @@
+{
+  "verified_date": "2026-10-06",
+  "source_head": "ce123ec119f56cfb4b01b3cb92c269c5d57fd133",
+  "source_includes_uncommitted_changes": true,
+  "scope": "functional Japanese GPU smoke; listening and Japanese accuracy not established",
+  "environment": {
+    "torch": "2.14.0+cu130",
+    "torch_cuda": "13.0",
+    "gpu": "NVIDIA A100-SXM4-40GB",
+    "driver": "580.178.04",
+    "source_files_checked": 126,
+    "source_hashes_match": true
+  },
+  "image_digest": "sha256:384c89f43928ce4c9e96fb0a1127a7d6ec04aae6571c5cb25c98e3b395e25937",
+  "pinned_models": {
+    "english_teacher": "492522650173a0653b7575cdc25ae09810e5d741",
+    "japanese_ctc": "017225bb128a6b1c6de9d58391f891908d69bc7b"
+  },
+  "preparation": {
+    "scope": "functional smoke, not M2a quality evaluation",
+    "sources": [
+      {
+        "dataset_repo": "midralab/gol-dataset",
+        "metadata_revision": "3548e28b35705caf2b9b8abd8f5b791ed040cfed",
+        "metadata_sha256": "63579272de945e77fb6296e4c2d5806550253bb0ce77b643f184472541c97ec0",
+        "kind": "gol",
+        "archives": [
+          {
+            "file": "8033C44F19A5DF6EAC6536386A44A92C.tar",
+            "bytes": 83589120
+          },
+          {
+            "file": "6383B2B661C1019C3189D6660043DA18.tar",
+            "bytes": 131328000
+          }
+        ],
+        "usable_clips": 241,
+        "usable_seconds": 1099.7586
+      },
+      {
+        "dataset_repo": "ayousanz/moe-speech-plus",
+        "metadata_revision": "b63eb1c7353deaf83dcb506ea212b695280af1c9",
+        "metadata_sha256": "a576bcb3c5c2f0990c2008194b05720bd21e0110b2a4a0aac87ddc271a165c18",
+        "kind": "moe",
+        "archives": [
+          {
+            "file": "fd6ca23b.zip",
+            "bytes": 52711027
+          },
+          {
+            "file": "18563891.zip",
+            "bytes": 52994148
+          }
+        ],
+        "usable_clips": 197,
+        "usable_seconds": 1458.0560317460317
+      }
+    ],
+    "train_rows": 332,
+    "valid_rows": 106,
+    "train_speakers": [
+      "18563891",
+      "6383B2B661C1019C3189D6660043DA18:E7D3C64111E331AFB704846249B3E532",
+      "fd6ca23b"
+    ],
+    "valid_speakers": [
+      "8033C44F19A5DF6EAC6536386A44A92C:16A3A1FB7CB79BFB23CFAB61143AD920"
+    ],
+    "elapsed_seconds": 84.65188926598057
+  },
+  "alignment": {
+    "train": {
+      "input_rows": 332,
+      "aligned_rows": 330,
+      "skipped_rows": 2,
+      "filtered_rows": 313,
+      "cuttable_rows": 275,
+      "cuttable_fraction": 0.8785942492012779,
+      "input_seconds": 2140.689167,
+      "aligned_seconds": 2137.618376,
+      "filtered_seconds": 2043.863313
+    },
+    "valid": {
+      "input_rows": 106,
+      "aligned_rows": 105,
+      "skipped_rows": 1,
+      "filtered_rows": 90,
+      "cuttable_rows": 69,
+      "cuttable_fraction": 0.7666666666666667,
+      "input_seconds": 417.124851,
+      "aligned_seconds": 416.01783,
+      "filtered_seconds": 379.848475
+    }
+  },
+  "aligned_summary": {
+    "train": {
+      "rows": 313,
+      "seconds": 2043.863313,
+      "speakers": [
+        "18563891",
+        "6383B2B661C1019C3189D6660043DA18:E7D3C64111E331AFB704846249B3E532",
+        "fd6ca23b"
+      ]
+    },
+    "valid": {
+      "rows": 90,
+      "seconds": 379.848475,
+      "speakers": [
+        "8033C44F19A5DF6EAC6536386A44A92C:16A3A1FB7CB79BFB23CFAB61143AD920"
+      ]
+    }
+  },
+  "score_cutoff": {
+    "min_score": -0.989123787305742,
+    "normalization": "per_frame",
+    "rule": "trial-only train p5"
+  },
+  "training": {
+    "run_start_steps": [
+      0,
+      200
+    ],
+    "update_interval_start_steps": [
+      0,
+      200
+    ],
+    "no_op_restarts": [],
+    "finite_training_metrics": true,
+    "finite_validation_metrics": true,
+    "final_step": 220,
+    "optimizer_steps": [
+      220
+    ],
+    "public_api_checkpoint_load": true,
+    "public_api_export_load": true
+  },
+  "validation_events": [
+    {
+      "time": "2026-10-06 11:33:13+0000",
+      "type": "valid",
+      "step": 100,
+      "metrics": {
+        "flow_diag": 34.043357849121094,
+        "flow_distill": 0.5239565372467041,
+        "flow_loss": 0.7985836565494537,
+        "eos_loss": 0.13997109234333038,
+        "loss": 0.8125807642936707
+      }
+    },
+    {
+      "time": "2026-10-06 11:34:58+0000",
+      "type": "valid",
+      "step": 200,
+      "metrics": {
+        "flow_diag": 42.72773361206055,
+        "flow_distill": 0.7885942757129669,
+        "flow_loss": 1.008598804473877,
+        "eos_loss": 0.20133108645677567,
+        "loss": 1.0287319421768188
+      }
+    }
+  ],
+  "performance": {
+    "job_seconds": 514,
+    "reused_caches": true,
+    "steady_step_rate": {
+      "median": 1.3317309079652788,
+      "min": 0.9225105512469816,
+      "max": 1.5134837878808107,
+      "excluded": "steps below 20; 110 includes sampling/validation/checkpoint overhead; 201 includes resume compilation"
+    },
+    "cuda_peak_allocated_gib": [
+      11.9,
+      11.6
+    ],
+    "first_step_seconds_including_compile": [
+      20,
+      20
+    ],
+    "pipeline_exit_code": 0
+  },
+  "public_api_audio": {
+    "weights": "EMA",
+    "cfg": 1,
+    "temperature": 0.3,
+    "eos_threshold": -4,
+    "voice_prompt_seconds": 5,
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "generated": [
+      {
+        "file": "public_api_ema_cfg1_0.wav",
+        "text": "こんにちは、今日はいい天気ですね。",
+        "sample_rate": 24000,
+        "duration_seconds": 0.96,
+        "generation_seconds": 0.6389292660169303,
+        "peak": 0.6333760619163513,
+        "rms": 0.10672624409198761
+      },
+      {
+        "file": "public_api_ema_cfg1_1.wav",
+        "text": "今日は十月六日、午後三時です。",
+        "sample_rate": 24000,
+        "duration_seconds": 0.88,
+        "generation_seconds": 0.521183555945754,
+        "peak": 0.6285841464996338,
+        "rms": 0.06912854313850403
+      },
+      {
+        "file": "public_api_ema_cfg1_2.wav",
+        "text": "東京駅の近くで、温かいお茶を飲みました。",
+        "sample_rate": 24000,
+        "duration_seconds": 0.96,
+        "generation_seconds": 0.5699095400050282,
+        "peak": 0.7582955956459045,
+        "rms": 0.09480759501457214
+      }
+    ],
+    "listening_verified": false,
+    "cer_measured": false
+  },
+  "controlled_eos_comparison": {
+    "change_only": "public API eos_threshold -4.0 to -1.0",
+    "weights": "same EMA export at step 220",
+    "cfg": 1,
+    "temperature": 0.3,
+    "reference_voice": "same held-out 5-second prompt",
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "quality": "listening and Japanese accuracy not established",
+    "generated": [
+      {
+        "file": "ema_cfg1_eos_minus1_0.wav",
+        "text": "こんにちは、今日はいい天気ですね。",
+        "baseline_seconds": 0.96,
+        "seconds": 1.12,
+        "generation_seconds": 0.7354008089751005,
+        "peak": 0.6333760619163513,
+        "rms": 0.09880929440259933
+      },
+      {
+        "file": "ema_cfg1_eos_minus1_1.wav",
+        "text": "今日は十月六日、午後三時です。",
+        "baseline_seconds": 0.88,
+        "seconds": 6.0,
+        "generation_seconds": 3.133655834943056,
+        "peak": 0.7300659418106079,
+        "rms": 0.08043955266475677
+      },
+      {
+        "file": "ema_cfg1_eos_minus1_2.wav",
+        "text": "東京駅の近くで、温かいお茶を飲みました。",
+        "baseline_seconds": 0.96,
+        "seconds": 7.04,
+        "generation_seconds": 3.6152109731920063,
+        "peak": 0.7582955956459045,
+        "rms": 0.06713460385799408
+      }
+    ],
+    "max_length_without_eos_warning_count": 2,
+    "waveforms_finite_nonzero": true
+  },
+  "retrieval": {
+    "all_required_files_verified": true,
+    "file_hashes_checked": 400,
+    "expected_files": 400,
+    "source_files_verified": 126,
+    "gpu_host_tests": 101,
+    "run_start_steps": [
+      0,
+      200
+    ],
+    "optimizer_steps": [
+      220
+    ],
+    "audio": [
+      {
+        "file": "public_api_ema_cfg1_0.wav",
+        "seconds": 0.96
+      },
+      {
+        "file": "public_api_ema_cfg1_1.wav",
+        "seconds": 0.88
+      },
+      {
+        "file": "public_api_ema_cfg1_2.wav",
+        "seconds": 0.96
+      },
+      {
+        "file": "public_api_voice_prompt.wav",
+        "seconds": 5.0
+      },
+      {
+        "file": "samples/step00000100_0.wav",
+        "seconds": 8.08
+      },
+      {
+        "file": "samples/step00000100_1.wav",
+        "seconds": 11.36
+      },
+      {
+        "file": "samples/step00000100_2.wav",
+        "seconds": 9.52
+      },
+      {
+        "file": "samples/step00000200_0.wav",
+        "seconds": 14.64
+      },
+      {
+        "file": "samples/step00000200_1.wav",
+        "seconds": 11.04
+      },
+      {
+        "file": "samples/step00000200_2.wav",
+        "seconds": 11.2
+      }
+    ],
+    "metadata_archive_sha256": "52dc1feb837736a1c5de405cbc5c449ff3aa9f50e3c67761609ddb5a80a49b7e"
+  },
+  "archive": {
+    "archive_bytes": 248627200,
+    "archive_sha256": "52dc1feb837736a1c5de405cbc5c449ff3aa9f50e3c67761609ddb5a80a49b7e",
+    "file_count": 400,
+    "large_files": {
+      "runs/finetune_language_ja_smoke/checkpoint_00000220.pt": {
+        "bytes": 2561110827,
+        "sha256": "f777fb50f9b94b123012b94e712d2b362b867c43795abacecd619f48c5dacff9"
+      },
+      "runs/finetune_language_ja_smoke/model.safetensors": {
+        "bytes": 1360699216,
+        "sha256": "ecc71eb63341c812b96d5ea5996ca8976d71f821a1c960e64a4e3cd71b03eaac"
+      },
+      "runs/finetune_language_ja_smoke/optim_00000220.pt": {
+        "bytes": 2561133510,
+        "sha256": "5a6a372d0e30f8822f4bc9f68673acbc41bfa95de47b983ad11f98e4373484c4"
+      }
+    },
+    "total_file_bytes": 6730776347
+  },
+  "eos_retrieval": {
+    "verified": true,
+    "archive": {
+      "bytes": 696320,
+      "sha256": "2ed407684374bad4ed53ef2c3ab2b541174bb54bc2b90205ce1a0ae9c25b354d"
+    },
+    "files": [
+      {
+        "path": "ema_cfg1_eos_minus1_0.wav",
+        "sha256": "9ce590355a220ee4c912603fda16250c4d88ff2665c1d540010b4620ed84dc2c",
+        "bytes": 53804
+      },
+      {
+        "path": "ema_cfg1_eos_minus1_1.wav",
+        "sha256": "8be9d2fb3de7f1f39136b8c182fc13e178974494a60d7a3d6fb7c3d227b972ff",
+        "bytes": 288044
+      },
+      {
+        "path": "ema_cfg1_eos_minus1_2.wav",
+        "sha256": "1fe8b101c784c25792167c378037868964be8e8602a6baddfb26c3cd745fd6ef",
+        "bytes": 337964
+      },
+      {
+        "path": "eos_comparison.json",
+        "sha256": "140194035857432c2cb2e2ecb87999c822c3f472ad6fdfde9fd5a3d191aeddd0",
+        "bytes": 1204
+      }
+    ]
+  },
+  "disk": {
+    "usage_text": "931709673\tdata/ja-smoke\n9047915621\truns/finetune_language_ja_smoke\n6459019071\t.venv\n5826519708\t/root/.cache/huggingface\n",
+    "df_text": "Filesystem        1B-blocks        Used    Available Use% Mounted on\noverlay        161061273600 48021352448 113039921152  30% /\n",
+    "df_includes_old_debug_run_and_archive": true,
+    "m2a_1_6tb_operation_verified": false
+  },
+  "billing": {
+    "queried_at_epoch": 1791287572.1517694,
+    "currency": "USD",
+    "scope": "API-returned charge amounts; billing may update after query",
+    "attempts": [
+      {
+        "attempt": 1,
+        "instance_id": 54467081,
+        "created_at": 1791281748.4969573,
+        "destroyed_at": 1791283157.451796,
+        "rental_hours": 0.39137634409798516,
+        "quoted_dph": 0.4555555555555555,
+        "charge_amount_usd": "0.023",
+        "charge_line_count": 1,
+        "charges": [
+          {
+            "amount": "0.023",
+            "description": "Instance 54467081 storage charge: hours * $/hr",
+            "quantity": "0.423",
+            "rate": "0.0556",
+            "type": "charge"
+          }
+        ]
+      },
+      {
+        "attempt": 2,
+        "instance_id": 54469888,
+        "created_at": 1791283230.2089891,
+        "destroyed_at": 1791284228.3430114,
+        "rental_hours": 0.2772594506210751,
+        "quoted_dph": 0.4555555555555555,
+        "charge_amount_usd": "0.108",
+        "charge_line_count": 2,
+        "charges": [
+          {
+            "amount": "0.092",
+            "description": "Instance 54469888 GPU  charge:    hours * $/hr",
+            "quantity": "0.230",
+            "rate": "0.4000",
+            "type": "charge"
+          },
+          {
+            "amount": "0.016",
+            "description": "Instance 54469888 storage charge: hours * $/hr",
+            "quantity": "0.294",
+            "rate": "0.0556",
+            "type": "charge"
+          }
+        ]
+      },
+      {
+        "attempt": 3,
+        "instance_id": 54471610,
+        "created_at": 1791284274.0295331,
+        "destroyed_at": 1791287533.8598394,
+        "rental_hours": 0.9055084184143278,
+        "quoted_dph": 0.7223111111111111,
+        "charge_amount_usd": "0.679",
+        "charge_line_count": 4,
+        "charges": [
+          {
+            "amount": "0.614",
+            "description": "Instance 54471610 GPU  charge:    hours * $/hr",
+            "quantity": "0.884",
+            "rate": "0.6945",
+            "type": "charge"
+          },
+          {
+            "amount": "0.025",
+            "description": "Instance 54471610 storage charge: hours * $/hr",
+            "quantity": "0.897",
+            "rate": "0.0278",
+            "type": "charge"
+          },
+          {
+            "amount": "0.017",
+            "description": "Instance 54471610 download charge",
+            "quantity": "7.230",
+            "rate": "0.002",
+            "type": "charge"
+          },
+          {
+            "amount": "0.023",
+            "description": "Instance 54471610 upload charge",
+            "quantity": "9.690",
+            "rate": "0.002",
+            "type": "charge"
+          }
+        ]
+      }
+    ],
+    "total_charge_amount_usd": "0.810"
+  },
+  "cleanup": {
+    "verified_at_epoch": 1791287572.1467676,
+    "owned_instances_destroyed": true,
+    "owned_instance_ids": [
+      54467081,
+      54469888,
+      54471610
+    ],
+    "remaining_instance_count": 4,
+    "remaining_running_count": 2
+  },
+  "not_started": [
+    "large_corpus_m2a",
+    "six_layer_distillation",
+    "model_publication"
+  ],
+  "windows_cpu_export_load": {
+    "local_export_load": true,
+    "device": "cpu",
+    "scope": "load only; speech quality not evaluated"
+  },
+  "local_inference_config": "runs/vast-smoke-artifacts/final/runs/finetune_language_ja_smoke/inference.local.yaml"
+}

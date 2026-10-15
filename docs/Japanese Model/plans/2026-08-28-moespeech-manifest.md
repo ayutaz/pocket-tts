@@ -1,5 +1,10 @@
 # MoeSpeech マニフェスト構築 実装計画
 
+> **2026-10-15 最終状態:** 日本語モデル開発は終了し、全6モデルのpublic/manual gateでのHF保存公開と専用Vast.ai環境の削除を完了しました。本文は当時の設計・計画・測定の履歴です。現在の状態は[終了・保存公開サマリ](../index.md)を参照してください。
+
+> 2026-10-07追記: 本文は8月の設計・実装履歴です。現在の実行順・担当範囲・判断条件は[最新計画](2026-10-07-next-training-and-release.md)を参照してください。GOL取り込みは実装と小規模実データでの確認まで完了し、M2a全量と蒸留は未実行です。今後の計算処理はすべてVast.aiで行います。本文中の当時の手元実行・担当者・費用の記述を現在の指示として使わないでください。
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** MoeSpeech の zip から `data/ja/train_aligned.jsonl` と `valid_aligned.jsonl` を作る、再開可能な1本のスクリプトを完成させる。これが無いと検証ラン（フェーズ1）は開始できない。

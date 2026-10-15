@@ -1,0 +1,15 @@
+{
+  "source_root": "/workspace/pocket-tts",
+  "isolated_source_root": "/workspace/pocket-tts-stage4",
+  "frozen_files_verified": 136,
+  "teacher_step": 10000,
+  "teacher_sha256": "51f538a3fe5231e4b404f46c47ae49dc4f39a20b6a07ce2bb1cbec03976e17d1",
+  "teacher_status": "provisional; human listening pending",
+  "original_source_modified": false,
+  "shared_directories": [
+    "data",
+    "runs",
+    ".venv"
+  ],
+  "publication_authorized": false
+}

@@ -1,0 +1,17 @@
+{
+  "observed_at": "2026-10-07T10:39:21.079486+09:00",
+  "instance_id": 54521683,
+  "label": "pocket-ja-gol-only-m2a-20261007",
+  "actual_status": "exited",
+  "cur_state": "stopped",
+  "intended_status": "stopped",
+  "source": "Read-only Vast.ai show instances; credentials and other-instance details omitted",
+  "data_preserved": true,
+  "destroyed": false,
+  "storage_billing_continues": true,
+  "documentation_update_started_compute": false,
+  "human_listening_completed": false,
+  "teacher_selected": false,
+  "quality_state_source": "2026-10-07-gol-m2a-20000-review-gate.json",
+  "training_30000_started": false
+}

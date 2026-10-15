@@ -1,0 +1,21 @@
+{
+  "scope": "Pinned English initializer and Japanese tokenizer retained outside the Vast instance",
+  "initializer": {
+    "file": "runs/vast-m2a-control/english_2026-04_24l-pinned.safetensors",
+    "revision": "hf://kyutai/pocket-tts/languages/english_2026-04_24l/model.safetensors@492522650173a0653b7575cdc25ae09810e5d741",
+    "bytes": 1304206614,
+    "sha256": "8fecefe7206ccfb02fe61a1bd1496d3238f534056f19e5dc0421049cbfbfa4df",
+    "matches_pinned_vast_source": true,
+    "retained_by_hardlink": true
+  },
+  "tokenizer": {
+    "file": "training/tokenizers/japanese_8000.model",
+    "bytes": 118234,
+    "sha256": "4549ee1be7a484cbfd0cc38e3277e7fc91141f42a897152c81238eedb692d25f",
+    "matches_pinned_vast_source": true
+  },
+  "verification_scope": "Artifact identity checks only; model/tokenizer processing remains on Vast.ai",
+  "observed_utc": "2026-10-07T01:09:01.3995472Z",
+  "human_listening_completed": false,
+  "teacher_selected": false
+}

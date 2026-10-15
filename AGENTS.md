@@ -2,6 +2,22 @@
 
 This file provides guidance to AI agents when working with code in this repository.
 
+## Execution Location (User Instruction, 2026-10-07)
+
+- Run training, inference, ASR, data processing, aggregation, evaluation, and compute-intensive tests/builds on Vast.ai, including CPU benchmarks.
+- Do not run these workloads on the local PC: the user needs to avoid local CPU/GPU load.
+- Use the local PC only for editing, cloud control, SSH, file transfer, and reading results.
+- This applies to future work as well. The CPU-based model architecture does not authorize local execution.
+- Preserve completed artifacts before moving an experiment; stop only processes owned by this project.
+- Retrieve and verify results, then destroy instances created for the task to stop billing.
+
+## Japanese Project Status (2026-10-15)
+
+- Japanese adaptation development has ended at the user's request. Do not infer authorization to resume training or final quality selection from historical plans.
+- The six retained model artifacts and supporting records are archived at `https://huggingface.co/tts-dataset/pocket-tts-ja-experiments`, public with a manual gate. The final publication receipt records 31 files and revision `9cf5427bda9ccf18a9dadb736fa686a4bc990785`.
+- The owned Vast.ai instance was destroyed after recovery. Large-corpus GOL audio/latents were not retained externally; optimizer sidecars and duplicate training states remain local.
+- The archive does not establish production quality. Use `docs/Japanese Model/index.md` as the current status and treat dated plans and reports as history.
+
 ## Project Overview
 
 pocket-tts is a CPU-based text-to-speech (TTS) model. The project uses a flow-based language model architecture with a neural audio codec (Mimi) for efficient speech synthesis.
@@ -15,7 +31,7 @@ pocket-tts is a CPU-based text-to-speech (TTS) model. The project uses a flow-ba
 
 ## Common Commands
 
-### Setup and Development
+### Setup and Development (Vast.ai SSH Session)
 ```bash
 # Install pre-commit hooks
 uvx pre-commit install
@@ -26,7 +42,7 @@ uv run pytest -n 3 -v
 # Run a single test
 uv run pytest tests/test_python_api.py -v
 
-# Run CLI locally (editable install)
+# Run CLI on Vast.ai (editable install)
 uv run pocket-tts generate
 uv run pocket-tts serve
 ```
@@ -118,7 +134,8 @@ This is a pure Python package with Rust extensions in `training/rust_exts/audio_
   "Running on GPU" section for details.
 - **Torch Threads**: `torch.set_num_threads(1)` in `tts_model.py` for optimal CPU performance
 - **dtype**: Models use float32 by default (configurable in YAML)
-- **Beartype**: Runtime type checking is enabled via beartype claw in `__init__.py`
+- **Type checking**: `ty` checks the whole repo statically (`uv run ty check`, also run in CI).
+  There is no runtime type checking.
 
 ### Adding Features
 
@@ -142,5 +159,5 @@ The `download_if_necessary()` utility handles `hf://` URLs and caches locally.
 1. **PyTorch Version**: Requires PyTorch 2.5+. Version 2.4.0 produces incorrect audio.
 2. **Python Version**: Supports Python 3.10 through 3.14 (>= 3.10,<3.15).
 3. **uv Python Preference**: Set to "only-managed" in pyproject.toml because system Python may lack headers.
-4. **CPU-Only PyTorch**: Uses PyTorch CPU index from `download.pytorch.org/whl/cpu` in uv config.
+4. **PyTorch Build**: No CPU-only index is pinned in uv config. On Linux, verify that the installed PyTorch build supports CUDA and the host GPU driver before training.
 5. **Web Dependencies**: FastAPI and Uvicorn are included for server functionality.

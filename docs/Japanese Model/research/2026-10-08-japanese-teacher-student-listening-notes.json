@@ -1,0 +1,60 @@
+{
+  "record_type": "human_listening_observation",
+  "date": "2026-10-08",
+  "timezone": "Asia/Tokyo",
+  "provenance": "user_conversation",
+  "user_statement": "はasr通りに読めていますよ",
+  "statement_context": "ユーザーが以下のteacher／studentの秒数・条件・ASRを引用し、実際の発話がASRどおりと報告した。",
+  "source_scores": "runs/vast-m2a-control/offline-review/japanese-teacher10000-student5000-paired-review/scores.json",
+  "sample_identification": "引用された条件・秒数・ASRに一致するheld_00 / dailyの組へ対応づけた。",
+  "voice": "held_00",
+  "case_id": "daily",
+  "input_text": "こんにちは、今日はいい天気ですね。",
+  "samples": [
+    {
+      "model_role": "teacher10000",
+      "condition": "teacher10000_trainer_ema_cfg2_eos-4",
+      "file": "teacher10000_trainer_ema_cfg2_eos-4_held_00_daily.wav",
+      "sha256": "7184e82aeb96205772709bfd5add4faa6eb1a1626cb72198f27e8e898a60e027",
+      "machine_result": {
+        "seconds": 3.68,
+        "termination": "eos",
+        "cer": 0.0,
+        "asr": "こんにちは今日はいい天気ですね"
+      },
+      "human_listened": true,
+      "human_confirms_asr_content": true,
+      "interpretation": "この通常文の発話内容は入力文と一致する。",
+      "naturalness_assessment": null,
+      "ending_position_assessment": null
+    },
+    {
+      "model_role": "student5000",
+      "condition": "student5000_trainer_ema_cfg1_eos-4",
+      "file": "student5000_trainer_ema_cfg1_eos-4_held_00_daily.wav",
+      "sha256": "8df22ec6a885b7a4fbe9697c75996b77d4451efb05cbb879576b1da3875b8a3e",
+      "machine_result": {
+        "seconds": 5.12,
+        "termination": "eos",
+        "cer": 0.2,
+        "asr": "こんにちは。今日はいい天気っすね。きっ"
+      },
+      "human_listened": true,
+      "human_confirms_asr_content": true,
+      "interpretation": "「ですね」から「っすね」への変化と末尾の「きっ」は、ASRだけの誤認ではなく実際の発話に含まれる。",
+      "naturalness_assessment": null,
+      "ending_position_assessment": null
+    }
+  ],
+  "scope": "held_00の通常文1組の発話内容だけを確認。秒数・EOS・CERは既存の機械評価値であり、人手による再測定ではない。",
+  "human_listening_completed": false,
+  "teacher_selected": false,
+  "quality_approved": false,
+  "publication_performed": false,
+  "remaining": [
+    "held_00 / longおよびlong_sequenceのteacher／student試聴",
+    "読み落とし・反復・発音・自然さ・終了位置の所見",
+    "teacher10k／20k候補の比較とteacher選定",
+    "studentの次の限定学習区間または設定変更の判断"
+  ]
+}

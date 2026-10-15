@@ -1,0 +1,15 @@
+{
+  "source": "ayousanz/pocket-tts-ja-experiments",
+  "destination": "tts-dataset/pocket-tts-ja-experiments",
+  "before_revision": "ebbd331bc9abedde76d8dac799b8cd0caece4cbd",
+  "requested_by_user": true,
+  "requested_utc": "2026-10-15T01:05:44.994808+00:00",
+  "organization_role_verified": "admin",
+  "source_file_count": 28,
+  "after_revision": "ebbd331bc9abedde76d8dac799b8cd0caece4cbd",
+  "destination_private": false,
+  "destination_gated": "manual",
+  "all_preexisting_files_preserved": true,
+  "phase1_revision_unchanged": "2c3c1a7dab2ff066b5069c30e7951a980ff6e914",
+  "used_storage": 12081245761
+}

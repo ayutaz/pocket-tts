@@ -1,0 +1,10 @@
+{
+  "archive": "runs/m2a-control/m2a-offline-and-resume-controls.tar",
+  "bytes": 143360,
+  "sha256": "c7d00117771b52daa9da082ec6aa23ce5ed91ef2e26a41f48a2c469e33fdf4fc",
+  "payload_files": 12,
+  "archive_contents_and_manifest_verified": true,
+  "scope": "Review transfer and restart identity controllers; no weights or audio",
+  "human_listening_completed": false,
+  "teacher_selected": false
+}

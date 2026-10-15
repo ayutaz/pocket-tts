@@ -1,0 +1,32 @@
+{
+  "instance_id": 54521683,
+  "checkpoint_step": 10000,
+  "optimizer_steps": [
+    10000
+  ],
+  "files": {
+    "checkpoint_00010000.pt": {
+      "source": "runs/finetune_language_ja_m2a/checkpoint_00010000.pt",
+      "preserved_file": "runs/m2a-control/preserved-restart-state/00010000/checkpoint_00010000.pt",
+      "sha256": "51f538a3fe5231e4b404f46c47ae49dc4f39a20b6a07ce2bb1cbec03976e17d1",
+      "bytes": 2561110827,
+      "hardlinked_to_source": true
+    },
+    "optim_00010000.pt": {
+      "source": "runs/finetune_language_ja_m2a/optim_00010000.pt",
+      "preserved_file": "runs/m2a-control/preserved-restart-state/00010000/optim_00010000.pt",
+      "sha256": "2dfb82fb507467335262897e31c3557d4d38331873f34fc9a1385cee37aecc64",
+      "bytes": 2561133510,
+      "hardlinked_to_source": true
+    }
+  },
+  "archived_context_verified": true,
+  "helper_sha256": "5af430353f45aba2773ca429a70c9fff61bf86e06c1a5c2ab74dba68041d7876",
+  "human_listening_completed": false,
+  "teacher_selected": false,
+  "limits": [
+    "The trainer retains only its newest optimizer sidecar.",
+    "These paths are outside the trainer cleanup glob and survive source unlink.",
+    "Protection on this instance is separate from off-instance recovery."
+  ]
+}

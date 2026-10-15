@@ -1,5 +1,10 @@
 # GOL 取り込みとフェーズ2a 実装計画
 
+> **2026-10-15 最終状態:** 日本語モデル開発は終了し、全6モデルのpublic/manual gateでのHF保存公開と専用Vast.ai環境の削除を完了しました。本文は当時の設計・計画・測定の履歴です。現在の状態は[終了・保存公開サマリ](../index.md)を参照してください。
+
+> 2026-10-07追記: 本文は8月の設計・実装履歴です。現在の実行順・担当範囲・判断条件は[最新計画](2026-10-07-next-training-and-release.md)を参照してください。GOL取り込みは実装と小規模実データでの確認まで完了し、M2a全量と蒸留は未実行です。今後の計算処理はすべてVast.aiで行います。本文中の当時の手元実行・担当者・費用の記述を現在の指示として使わないでください。
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** `midralab/gol-dataset` を取り込み、MoeSpeech と合流した学習マニフェストを作る。あわせて、相互 CER の代わりになる品質指標（アライメントスコア）を実装する。
@@ -201,8 +206,7 @@ def _metadata(tmp_path, rows):
 def test_largest_first_reaches_the_target_with_fewest_tars(tmp_path):
     """Measured on the real metadata: 1,000 hours is 18 tars taken largest-first.
     A tar is 11 GB on average, so the ordering decides hours of download."""
-    md = _metadata(tmp_path, [("big", "s1", 7200.0), ("big", "s2", 7200.0),
-                              ("small", "s3", 60.0)])
+    md = _metadata(tmp_path, [("big", "s1", 7200.0), ("big", "s2", 7200.0), ("small", "s3", 60.0)])
     (chosen,) = select_games(md, hours=1.0)
     assert chosen["game_id"] == "big"
 
@@ -304,8 +308,10 @@ def test_selection_is_bounded_to_the_games_that_were_taken(tmp_path):
     """The extract root accumulates. Asking for fewer games later has to mean
     fewer speakers, or the flag does nothing -- the same failure the MoeSpeech
     pipeline had to be corrected for."""
-    md = _metadata(tmp_path, [("kept", "a", 60.0), ("kept", "a", 60.0),
-                              ("dropped", "b", 60.0), ("dropped", "b", 60.0)])
+    md = _metadata(
+        tmp_path,
+        [("kept", "a", 60.0), ("kept", "a", 60.0), ("dropped", "b", 60.0), ("dropped", "b", 60.0)],
+    )
     assert select_speakers(md, ["kept"], min_utterances=2, min_seconds=0.0) == ["a"]
 ```
 
@@ -457,7 +463,8 @@ def test_no_default_threshold(tmp_path):
 |---|---|---|---|
 | `max_steps` | 15,000 | **40,000** | valid が turn するかを見る。745k発話なら3.4エポックで、フェーズ1が壊れた19.5には遠い |
 | `valid_freq` | 2,500 | **1,000** | turn を捉える解像度 |
-| `num_ckpt_keep` | 3 | **20** | フェーズ1では valid 最良の step が記録を見る前に消えていた |
+| `ckpt_freq` | 2,500 | **1,000** | 全検証点を保存する（2026-10-06のレビューで修正） |
+| `num_ckpt_keep` | 3 | **40** | 40kまでの全検証点を保持する。約100 GiBを別途見込む |
 | `--valid-hours` | 1.0 | **10.0** | 20話者以上を確保する |
 
 - [ ] **Step 1: 失敗するテストを書く**
@@ -497,7 +504,4 @@ M2a を実際に回すのはユーザーであり、私はインスタンスに�
 `.bak.json` の双子と3階層の入れ子という2つの欠陥を暴いた。GOL でも同種のものが出ると
 考えるべきである。
 
-そして M2a が答えるべき問いは1つに絞られている —— **フェーズ1の過学習は、19.5エポックの
-せいだったのか、27話者のせいだったのか。** 2,451話者・3.4エポックで valid が turn しなければ
-話者数が原因であり、1,000時間で足りる。turn するならエポック数が原因であり、
-M2b は 5,000時間以上を要する。**この1点で M2b の規模と費用が決まる。**
+**2026-10-06のレビュー訂正:** M2aが答えるのは、GOL取り込みが成立し、コーパス拡大で未知話者品質が改善するかです。2,451話者・3.4エポックへの変更は複数要因を同時に変えるため、validの折返しだけでPhase 1の過学習原因やM2bの必要時間を断定できません。必要なら条件を揃えた比較実験を追加します。

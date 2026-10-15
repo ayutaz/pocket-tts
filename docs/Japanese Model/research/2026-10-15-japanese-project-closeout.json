@@ -1,0 +1,117 @@
+{
+  "date": "2026-10-15",
+  "project_status": "ended_by_user",
+  "reason": "User ended development after takuma104/pocket-tts-ja was released; retain existing Hugging Face repository unchanged.",
+  "released_model": {
+    "id": "takuma104/pocket-tts-ja",
+    "sha": "119685fd7a51356429c6d25e37d570b423c17663",
+    "lastModified": "2026-10-14T14:26:35Z",
+    "private": false,
+    "gated": false
+  },
+  "retained_huggingface_before": {
+    "id": "ayousanz/pocket-tts-ja-phase1",
+    "sha": "2c3c1a7dab2ff066b5069c30e7951a980ff6e914",
+    "lastModified": "2026-08-29T08:07:50Z",
+    "private": false,
+    "gated": "manual"
+  },
+  "retained_artifacts": [
+    {
+      "file": "runs\\vast-m2a-control\\checkpoint_00010000.pt",
+      "bytes": 2561110827,
+      "previously_verified_sha256": "51f538a3fe5231e4b404f46c47ae49dc4f39a20b6a07ce2bb1cbec03976e17d1"
+    },
+    {
+      "file": "runs\\vast-m2a-control\\optim_00010000.pt",
+      "bytes": 2561133510,
+      "previously_verified_sha256": "2dfb82fb507467335262897e31c3557d4d38331873f34fc9a1385cee37aecc64"
+    },
+    {
+      "file": "runs/vast-m2a-control/checkpoint_00020000.pt",
+      "bytes": 2561110827,
+      "previously_verified_sha256": "499c037ab2cc63f506592d4203e53d72a68914a4f5eb0025b2efc418c93e417d"
+    },
+    {
+      "file": "runs/vast-m2a-control/optim_00020000.pt",
+      "bytes": 2561133510,
+      "previously_verified_sha256": "abee657cebac6a22b67616345294b345fd101e2db8b56e06a364e443097883b0"
+    },
+    {
+      "file": "runs/vast-m2a-control/student5000-restart-state/checkpoint_00005000.pt",
+      "bytes": 709394483,
+      "previously_verified_sha256": "f9dee3bc786fbcc1358a74a35d1885e7084700eb9d4d5b40d3875a3d9a7d41a8"
+    },
+    {
+      "file": "runs/vast-m2a-control/student5000-restart-state/optim_00005000.pt",
+      "bytes": 670318242,
+      "previously_verified_sha256": "5334737c97b1ed61568aefbf896404042cf6e6b7f5774a62a773ce569b3b06c4"
+    },
+    {
+      "file": "runs/vast-m2a-control/student5000-recovery.tar",
+      "bytes": 4448563200,
+      "previously_verified_sha256": "93cf11e71de8a6ecf34242ca469d79cc95e512e2589c9300d8b6c5c86238a296"
+    },
+    {
+      "file": "runs/vast-m2a-control/cpu-full5000-recovery.tar",
+      "bytes": 83804160,
+      "previously_verified_sha256": "5765bb593771a62a1dec013741f1cbf9d34faff1172c4fcbde5c6205f0af8e29"
+    },
+    {
+      "file": "runs/vast-m2a-control/teacher-student-paired-review.tar",
+      "bytes": 51660800,
+      "previously_verified_sha256": "db7b1d8e561323aec00060542360fe3ffb4f9a5e2fb2d0f943290979b05dcb6f"
+    },
+    {
+      "file": "runs/vast-m2a-control/student5000-final-controls.tar",
+      "bytes": 3809280,
+      "previously_verified_sha256": "55d94bbff7bf83a5918033ae35fc9f657681f24264a4d01a7e0ed499aba73ebd"
+    }
+  ],
+  "verification_scope": "Current existence and size checked; SHA256 values are the previous completed transfer verification, not a fresh local rehash.",
+  "owned_instance_id": 54521683,
+  "instance_before": {
+    "id": 54521683,
+    "label": "pocket-ja-gol-only-m2a-20261007",
+    "actual_status": "exited",
+    "cur_state": "stopped",
+    "intended_status": "stopped"
+  },
+  "destroy_request_sent": true,
+  "huggingface_mutation_performed": false,
+  "new_model_upload_performed": false,
+  "quality_approved": false,
+  "human_listening_completed": false,
+  "teacher_selected": false,
+  "unrecovered_data_policy": "GOL raw audio and derived latents on the ended instance may be removed; recreating experiments requires retrieval and preprocessing again. The 5005 technical resume probe is not a quality candidate.",
+  "request_utc": "2026-10-15T03:02:24.759465+09:00",
+  "destroy_response_note": "Vast.ai CLI returned no valid result (exit 0).",
+  "owned_instance_absent_verified": true,
+  "retained_huggingface_after": {
+    "id": "ayousanz/pocket-tts-ja-phase1",
+    "sha": "2c3c1a7dab2ff066b5069c30e7951a980ff6e914",
+    "lastModified": "2026-08-29T08:07:50Z",
+    "private": false,
+    "gated": "manual"
+  },
+  "huggingface_sha_unchanged": true,
+  "checked_utc": "2026-10-15T03:04:34.22833+09:00",
+  "owned_instance_after": [],
+  "initial_destroy_attempt": {
+    "response_note": "Vast.ai CLI returned no valid result (exit 0).",
+    "instance_still_present_verified": true,
+    "diagnosis": "Installed CLI help requires -y/--yes to skip its confirmation prompt. The initial invocation omitted it and exited without confirmed deletion."
+  },
+  "confirmed_destroy_request_utc": "2026-10-15T03:04:28.199318+09:00",
+  "confirmed_destroy_response_note": "Vast.ai CLI returned no valid result (exit 0).",
+  "owned_instance_storage_retained": false,
+  "hf_checked_after_confirmed_deletion_utc": "2026-10-14T18:06:31.6968496Z",
+  "publication_redactions": {
+    "fields": [
+      "other_instances_before",
+      "other_instances_after"
+    ],
+    "original_record_retained_locally": true,
+    "scope": "Public documentation copy only; experiment results and artifact checksums unchanged"
+  }
+}

@@ -2,11 +2,23 @@
 
 調査日: 2026-08-27
 
+**2026-10-15：開発終了。** ユーザーは他者の日本語モデル公開を受け、既存HFモデルを残して現在の成果物のまま終了することを指定した。以下の学習戦略・継続手順は過去の記録であり、実行しない。[公開モデルの確認と終了記録](research/2026-10-15-project-end-and-released-model-check.md)を参照。
+
+## 終了時点の結果（2026-10-15）
+
+GOL単独で24層teacherを20kまで学習し、暫定teacher10k EMAから6層studentを5kまで蒸留しました。全3,024条件、Vast.ai CPUでのFP32/INT8の96回測定、exportの隔離ロード、5000→5005の保存再開と成果物回収を実行しました。主要条件CERはteacher10k 12.24%、teacher20k 15.01%、student5k 51.22%。通常文1組の人手所見は受領しましたが、長文等の品質確認と最終teacher選定は未完了のまま開発終了です。
+
+残存する全6モデルと設定・SP8000・固定ソース・評価記録を[tts-dataset/pocket-tts-ja-experiments](https://huggingface.co/tts-dataset/pocket-tts-ja-experiments)へpublic/manual gateで保存公開し、31ファイル・約12.06GBを照合しました。optimizerと重複するtraining stateはローカル保持です。専用Vast.ai環境は削除済みで、大規模GOLの生音声・latentsは環境とともに削除しました。待機・転送ジョブも終了しています。
+
+[終了サマリ](index.md)、[保存公開の完了記録](research/2026-10-15-huggingface-archive-publication.md)、[蒸留とCPU測定](research/2026-10-07-japanese-distillation-and-cpu-results.md)を現在の参照先とします。以下は8月から10月7日までの戦略・見積り・手順の履歴です。費用の推定を実際の請求額に置き換えたり、未達品質を合格扱いしたりしません。
+
+実行時は学習・推論・ASR・データ処理・集計・評価・CPU測定・負荷の高いテスト/ビルドをすべてVast.aiで行い、ローカルPCを編集・クラウド操作・転送・結果閲覧に限定しました。この方針をローカル実行の許可へ読み替えません。追加学習の計画はありません。
+
 ## 事前学習 vs 継続学習
 
-**結論: 継続学習（finetune）を採用します。** 到達品質は事前学習（scratch）と変わらず、コストとリスクだけが下がるためです。
+**結論: 継続学習（finetune）を採用します。** チェコ語の先行実験ではscratchと同程度の品質へ速く到達しました。日本語でも費用とデバッグ上の利点を期待する方針であり、日本語で同品質になることはまだ実証していません。
 
-### 根拠1: 到達品質は変わらない
+### 根拠1: チェコ語の先行実験での到達品質
 
 [PR #254](https://github.com/kyutai-labs/pocket-tts/pull/254) のチェコ語 976h での実測値です。
 
@@ -17,7 +29,7 @@
 | 15k | 17.1% | 11.3% |
 | 25k | 16.2% | 10.7% |
 
-最終的に**どちらも WER 10〜12% に収束**し、finetune は約2.5倍速く到達するだけです。つまり scratch を選ぶ理由は「品質」ではありません。
+チェコ語では最終的に**どちらもWER 10〜12%に収束**し、finetuneは約2.5倍速く到達しました。日本語のscratch対finetune比較は未実施です。
 
 ### 根拠2: デバッグ可能性（最大の実利）
 
@@ -47,7 +59,7 @@
 さらに今回のデータはギャルゲ／アニメのキャラクター演技という偏ったドメインなので、英語重みが持つ汎用的な韻律・音響の事前分布は**むしろ有利に働く**と見ています。
 
 !!! warning "lr は 2e-4 を維持する"
-    PR #254 の実測では lr 2e-5 は全区間で遅く、プラトーでも改善しません。text embedding がランダムから始まるため、backbone がそれに合わせて動く必要があるからです。**scratch と同じ 2e-4 が正解**です。
+    PR #254のチェコ語実測ではlr 2e-5は全区間で遅く、プラトーでも改善しませんでした。日本語もtext embeddingを初期化し直すため、**同じ2e-4を初期設定として採用**します。日本語で最適なlrと確認したわけではありません。
 
 ### scratch が正解になる場合
 
@@ -257,16 +269,16 @@ MoeSpeech 平均5.7秒、GOL 平均4.4秒なので、ターゲットが2〜4秒�
 
 対応コミット: `a254dbb Split Japanese on its own sentence boundaries, and rejoin without spaces`
 
-### 範囲外として残るもの
+### 8月の修正範囲外だったものと、その後の対応
 
-- **日本語評価セットの構築** — 欠陥4への対応で CER を測る仕組みは用意しましたが、実際に評価に使う日本語の参照テキストと音声のペアはまだありません。
-- **ASR モデルの選定** — `training/README.md` が言うとおり、日本語に対応する ASR を選ぶ必要があります（上記「リスク2: ASR 転写の精度」参照）。
+- **日本語評価セットの構築** — 8月の欠陥4修正時には参照テキストと音声のペアがなかった。その後、旧220 stepの144条件とM2aの固定216/3,024条件を構築・実行し、入力と音声の識別を保存した。
+- **ASRモデルの選定** — 旧220 stepはkotoba-whisper-v2.0-faster、今回のM2aはfaster-whisper-large-v3を固定revision・設定で使用した。実音声の対照も確認済みである。別ASR・別参照のCERを直接比較しない。
 
-どちらも音声データの取得を伴うため、データ収集フェーズの範囲です。
+人手試聴とteacher選定は未達条件として残したまま開発を終了した。評価基盤の未構築ではない。[終了サマリ](index.md)を参照。
 
 ---
 
-## 段階的な進め方
+## 段階的な進め方（実行当時の計画）
 
 ### フェーズ0: トークナイザは最初に確定する
 
@@ -315,7 +327,7 @@ uv run python -m training.scripts.train_tokenizer data/ja/tokenizer \
 
 センチネルには私用領域ではなく**非文字**（`U+FDD0`〜）を使っています。私用領域にはキャリア絵文字が存在し、GOL には実際に `U+E63E` が405件含まれているためです。
 
-### フェーズ1: 検証（MoeSpeech のみ・$10・半日）
+### フェーズ1: 検証（MoeSpeechのみ、8月の設計・実行記録）
 
 **目的は「日本語が喋れるか」ではなく「パイプラインが正しいか」の切り分け**です。変数は少ないほど価値が上がるため、**MoeSpeech 単独**で行います。
 
@@ -389,8 +401,13 @@ uv sync --group japanese
     **カードが 24 GB 未満なら `batch_size` を下げてください。** 実効バッチ64は保ったまま
     `batch_size: 8` / `grad_accum_steps: 8` にします。16 GB では 16×4 が14倍遅くなりました。
 
-    Windows で回す場合だけ、`compile: false` と環境変数 `PYTHONUTF8=1` が要ります。理由は
-    設定ファイルのコメントにあります。Linux では両方とも不要です。
+    過去のWindows試験では`compile: false`と`PYTHONUTF8=1`が必要でしたが、この2つだけでWindows学習対応を保証しません。trainer/loaderはPOSIX signalも使い、学習は公式にLinuxのみです。今後はVast.aiのLinux環境で実行します。
+
+#### 8月の依存・再開・キャッシュ調査記録
+
+以下の再開判定と発見の記述は8月の実装を対象とした履歴です。**現行alignmentはファイルの存在だけでは再利用しません。** manifest SHA-256、model識別子、segmenter、shard数、phrase merge、algorithm versionのfingerprintが一致することを要求します。metadataのrepo・revision・内容が不一致、または旧cacheでidentity不明の場合は新しい出力先が必要です。Mimi latentsもmanifest SHA-256とMimi hashにより識別します。[10月6日の修正記録R3/R5/R8](research/2026-10-06-implementation-review.md)を参照してください。
+
+この履歴にある「align-model変更が黙って無視される」「出力を1つ消せば足りる」「完成済みなら必ずスキップ」の説明を現行の運用指示として使わないでください。旧成果物は新しいfingerprintが保証されていないため、別の出力先で監査・再処理してから使います。
 
 入れ忘れは高くつきます。`align_data._japanese_segmenter` は fugashi を遅延 import するため、
 ダウンロード・展開・probe・選定・連結・両マニフェストまで全部通り切ってから最後に落ち、しかも
@@ -588,9 +605,7 @@ CPU でアライメントすると同じ作業が **89時間**（2,590 秒/音�
 あと、step が進むにつれ 0.062 it/s まで落ちました（VRAM 15.5/16.4 GB での断片化。Windows は
 `expandable_segments` を使えません）。**16 GB のカードでフェーズ1を回すのは現実的ではありません。**
 
-インスタンスは preemption で消えるので、**落ちたら同じコマンドを打ち直す**のが正しい復帰手順
-です。完了済みのステージは上の条件で飛ばされ、途中で死んだ出力は `.partial` に残るだけなので
-「完成済み」と誤認されることはありません。
+接続断とジョブ停止を区別し、インスタンス・プロセス・保存済み成果物を確認してから同じ設定で再開します。接続が切れただけで重複ジョブを起動しないでください。再取得が必要なデータとキャッシュ再利用条件も確認します。現行の再開・キャッシュ判定は[10月の実装レビュー](research/2026-10-06-implementation-review.md)を参照してください。
 
 アライメントは日本語に固定されています（`--segmenter japanese`、`--align-model` の既定は
 `vumichien/wav2vec2-large-xlsr-japanese-hiragana`）。かなを語彙に持たないモデルを渡すと
@@ -681,7 +696,7 @@ HF キャッシュ: zip と同じ            ≈ 30 GB
     分かち書きの無い日本語では WER は実質的に文単位の誤り率になるため、PR #254 のチェコ語 WER（2k step で 29.5% など）を日本語の go/no-go 基準として流用できません。**判定基準は CER**です。ツール自体は用意できましたが、チェコ語の数値とは指標が違うので直接比較はできません。
 
 !!! tip "早期トリップワイヤ"
-    チェコ語は 2k step で WER 29.5%（PR #254、既に言語として成立と読める水準）でした。日本語は指標が異なるため同じ数字を目標にはできませんが、**2〜3k step（約25分・$1〜2）で「日本語らしい音韻」すら出ないならパイプラインのバグ**と判断してよいのは変わりません。これは指標ではなく耳で聞いた判断なので、CER に差し替えても成立します。ここで止めれば損失は $2 です。
+    日本語M2aは2〜3k stepで固定文章・複数参照・raw/EMA・EOSを早期診断します。改善が乏しければデータと転写、切り出し、学習更新、入力露出、推論条件を調べます。**音韻が出ないことだけでバグとは断定しません。** チェコ語WERを日本語の合格値に流用せず、所要時間と費用もVast.aiの実測で更新します。
 
 !!! success "トークナイザはリポジトリに入っています"
     以前ここには「`data/ja/` が丸ごと gitignore されているので、新規クローンにトークナイザが
@@ -774,30 +789,37 @@ HF キャッシュ: zip と同じ            ≈ 30 GB
     10,000 / 12,500 / 15,000 です。**最良は既に存在しません。** 保持数を増やすか、
     valid 最良を別に退避する仕組みが要ります。
 
-### フェーズ2a: 中間検証（GOL 1,000h + MoeSpeech 87h・約$43・約2日）
+### フェーズ2a: 中間検証（GOL単独、全量準備完了・M2aを継続中）
 
-**目的は「量か多様性か」を決めることです。** フェーズ1の過学習には 19.5エポックと
-27話者という2つの説明があり、どちらが支配的かで M2b に必要な GOL の量が変わります
-（[設計](specs/2026-08-30-gol-and-phase2-design.md)）。
+以下はGOL単独の方針に更新した準備手順です。`--moespeech`は全ての呼び出しで省略します。実行前の監査・見積り・品質判断は[最新計画](plans/2026-10-07-next-training-and-release.md)に従います。M2aの`data.precompute`は省略時も現行`DataArgs`既定値の`true`となるため、latent容量と事前計算時間も含めて見積もります。
+
+**目的はGOL取り込みと、コーパス拡大による未知話者品質の改善を検証することです。** フェーズ1からエポック数と話者数を同時に変えるため、この1回の学習では過学習の原因を分離できません。valid loss・CER・試聴を併せてteacherを評価し、追加データと蒸留への投資を判断します（[設計](specs/2026-08-30-gol-and-phase2-design.md)）。
+
+M2aは検証・保存をともに1,000 stepごとに行い、checkpointを最大40本保持する設定です。**optimizer sidecarは最新保存点の1本だけが自動保持され、次の保存で古いものが削除されます。** 実測の1k checkpoint＋optimizerは約5.122 GBで、40 checkpoint＋最新1 optimizerは約105.0 GB（97.8 GiB）。各停止点のoptimizerを別保存する分と、export・通常サンプル・評価結果・音声・latentsは別です。全40点をoptimizer込みで別保存する場合の約204.9 GB（190.8 GiB）は、自動保持量ではありません。次の学習区間へ進む前に停止点の組をcleanup対象外へ保存・ハッシュ照合します。上限40kへの継続は品質診断に基づいて判断します。
 
 #### インスタンスの要件
 
 | 項目 | 要件 | 理由 |
 |---|---|---|
-| VRAM | **24 GB 以上**、32 GB 推奨 | `batch_size: 16` × `grad_accum: 4`。16 GB は実測で破綻（0.022 it/s） |
-| ディスク | **1.6 TB** | 下の「ディスクは4重になります」参照 |
-| dlperf | **高いほど直接効く** | 通し時間の8割がアライメント。dlperf 半分なら時間も費用も倍 |
+| VRAM | 24〜32 GB以上を候補に、実データで確認 | 8月の16 GB Windows測定は低速。10月の小規模A100測定だけでは全量のbatch/長さ分布を保証しない |
+| ディスク | ピーク容量＋余裕を実測で決定 | 旧1.6 TB案は整理・再開手順が未検証。音声、latents、checkpointを含める |
+| dlperf | 選定の参考指標 | alignment・latent事前計算・学習・I/Oをそれぞれ測り、全体時間を見積もる |
 | ネットワーク | 速いほどよい | 660 GB を落とす |
 | 課金 | **on-demand（中断なし）** | 660 GB の再取得は避ける |
 
-2026-08-30 時点の最良は **RTX 5090 / 32 GB / dlperf 199 / store $0.067 per GB month /
+現在はRTX PRO 6000 Blackwell Workstation Edition（約96 GB）・4,000 GB指定を確保し、全量latents、本番batchと最長64行の負荷、optimizer再開を検証しました。GPU＋ストレージは選定時約2.0963 USD/hです。32 GBで同じ全量処理を運用できるかは未確認で、96 GBを最低要件と証明した結果でもありません。実行GPU・回線・容量・料金は[最新計画の選定結果](plans/2026-10-07-next-training-and-release.md)を参照してください。
+
+以下は以前の候補記録です。2026-08-30 時点の最良は **RTX 5090 / 32 GB / dlperf 199 / store $0.067 per GB month /
 7,972 Mbps** で、1.6 TB 込み **$0.92/h**。
 
 !!! danger "ディスクは4重になります"
     `hf_hub_download` のキャッシュ、`tars/`、`extracted/`、`audio/` が同時に存在し、
     660 GB × 4 = **2.6 TB がピーク**です。1.6 TB で走らせるには**段の合間に消します** ——
     `tars/` が揃ったらキャッシュ、展開が終わったら `tars/`、連結が終わったら `extracted/`。
-    どれも完了マーカーが残るので、再実行しても作り直しません。
+    削除後の再実行でアーカイブの再ダウンロードが起きる可能性があります。
+    この削除手順と1.6 TBでの運用は現行コードでは未検証です。現在は4,000 GB指定で、
+    全量latents終了時の実使用量は約2.15 TBでした。40 checkpoint＋最新1 optimizerの
+    約105.0 GB、停止点optimizerの別保存、評価結果等も含めて容量を管理します。
 
     **途中で溢れると走行ごと失います。**
 
@@ -812,31 +834,32 @@ HF キャッシュ: zip と同じ            ≈ 30 GB
 捨てかけた一件の直接の帰結で、**測ってから決める**という規律をスクリプトが強制しています。
 片方だけ渡した実行も止まります。
 
-#### 手順
+#### 手順（Vast.ai SSH、監査後に実行）
 
 ```bash
 # 0. 準備
-git clone -b japanese-model-training <repo> && cd pocket-tts && uv sync
-export HF_TOKEN=...          # MoeSpeech は gated
+git clone -b japanese-model-training <repo>
+cd pocket-tts
+# 固定ソースと記録済みCUDA版Torchの環境を用意する。
+# 現在の実行環境・来歴は全量準備の記録を参照。
+export UV_PYTHON=3.12 UV_NO_SYNC=1
 
-# 1. MoeSpeech 側（フェーズ1と同じ。閾値は probe を読んでから）
-uv run python training/scripts/prepare_moespeech.py --out data/ja --hours 124
-uv run python training/scripts/prepare_moespeech.py --out data/ja --hours 124     --max-cer <実測> --min-mos <実測>
+# 1. GOLのみ。ここで1度目の停止
+uv run --no-sync python training/scripts/prepare_gol.py --out data/ja-gol-only-m2a --hours 1000 --valid-hours 25
 
-# 2. GOL。ここで1度目の停止
-uv run python training/scripts/prepare_gol.py --out data/ja-gol --hours 1000     --moespeech data/ja --valid-hours 10
+# 2. speakers_probe.jsonを読んでfloorsを渡す。ここで2度目の停止
+uv run --no-sync python training/scripts/prepare_gol.py --out data/ja-gol-only-m2a --hours 1000 --valid-hours 25 --min-utterances <実測> --min-seconds <実測>
 
-# 3. speakers_probe.json を読んで floors を渡す。ここで2度目の停止（アライメント後）
-uv run python training/scripts/prepare_gol.py --out data/ja-gol --hours 1000     --moespeech data/ja --valid-hours 10     --min-utterances <実測> --min-seconds <実測>
+# 3. scores.jsonを読んでcutoffを渡す
+uv run --no-sync python training/scripts/prepare_gol.py --out data/ja-gol-only-m2a --hours 1000 --valid-hours 25 --min-utterances <実測> --min-seconds <実測> --min-score <実測> --score-normalization <表の列名>
 
-# 4. scores.json を読んで cutoff を渡す
-uv run python training/scripts/prepare_gol.py --out data/ja-gol --hours 1000     --moespeech data/ja --valid-hours 10     --min-utterances <実測> --min-seconds <実測>     --min-score <実測> --score-normalization <表の列名>
-
-# 5. 学習
-uv run python training/train.py --config training/configs/finetune_language_ja_m2a.yaml
+# 4. corpora.jsonがGOL entriesのみであることと、データ監査結果を確認して学習
+uv run --no-sync python -m training.train training/configs/finetune_language_ja_m2a.yaml
 ```
 
-#### 費用の内訳（RTX 5090・$0.92/h）
+#### 費用の内訳（2026-08-30の推定、RTX 5090・$0.92/h）
+
+以下はGOL＋MoeSpeechの旧案の記録で、現在のGOL単独M2aの見積りではありません。MoeSpeech前処理を除外し、GOLの実際の残存量と現行コードの実測から見積り直します。
 
 | 段 | 時間 | 根拠 |
 |---|---|---|
@@ -850,24 +873,19 @@ uv run python training/train.py --config training/configs/finetune_language_ja_m
 | 回収 | 0.5h | |
 | **合計** | **46.5h** | **約 $43** |
 
-**8割がアライメントです。** ここを速くする唯一の手段が dlperf の高いカードで、
-GPU 単価の差より効きます。
+上表ではアライメントを全体の約8割と推定していました。現行コードではlatent事前計算、I/O、validationと追加評価も含めて実測し直します。dlperfだけから時間や総額を比例計算しません。
 
 ### フェーズ2以降
 
 | フェーズ | データ | 内容 |
 |---|---|---|
-| **2a. 中間検証** | MoeSpeech 87h + **GOL 1,000h**（18 tar・2,451話者、valid は20話者以上） | `finetune_language_ja_m2a.yaml`、24層、**40k step**。**valid が turn するかを見る**のが目的 |
-| **2b. 本番 finetune** | 上の結果で決める量 | `finetune_language.yaml` ベース、24層、250k step |
-| **3. 仕上げ** | 低 lr | 音響品質の上限を引き上げる。**2026-08-30 訂正:** 当初「MoeSpeech のみ」としたのは GOL に話者ラベルが無いという誤認が理由で、GOL は 48 kHz（MoeSpeech の 44.1 kHz より高い）。どちらを使うかは改めて判断する |
+| **2a. 中間検証** | **GOLのみ、約1,000h**を目標。train/validともGOL、行数・時間・話者ラベル数はフィルタ後に実測、valid最低20ラベル | `finetune_language_ja_m2a.yaml`、24層、**上限40k step**。valid loss、CER、終了挙動、複数参照の人手試聴でteacherを判断 |
+| **2b. 本番 finetune** | 上の結果で決める量 | 24層、250k stepは候補。自動的には開始しない |
+| **3. 仕上げ** | GOL、低 lrを候補に結果から判断 | 音響品質の改善を測る |
 | **4. 蒸留** | 同上 | `depth_distill.yaml` で 24層 → 6層、CFG を焼き込む |
 | **5. 公開** | — | `model.safetensors` + `tokenizer.model` + `japanese.yaml` + 自前サンプルボイス |
 
-**2b の量は 2a の valid 曲線を見てから決めます。** フェーズ1の過学習には
-「エポックが多すぎる」と「話者が27人と少なすぎる」の2つの説明があり、どちらが支配的かで
-必要な GOL の量が変わるためです。話者数が効いているなら 124時間・数百話者で足り、
-エポック数が効いているなら GOL をほぼ全量取ることになります。**この分岐に 40k step を
-払う**のが 2a です。
+**2bの量は2aの未知話者評価と小規模蒸留の結果を見て再判断します。** 2aでデータ量・話者数・反復回数が同時に変わるため、validの折返しだけから必要時間数を導くことはできません。原因の切り分けが必要なら、比較条件を揃えた追加実験を行います。
 
 24層モデルのままでも pocket-tts は `--language italian_24l` のように動作するので、**蒸留は最後に一度だけ**でよく、それまでは 24L で評価を回せます。
 

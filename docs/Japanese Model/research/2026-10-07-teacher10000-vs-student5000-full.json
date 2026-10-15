@@ -1,0 +1,3281 @@
+{
+  "teacher_step": 10000,
+  "student_step": 5000,
+  "student_matrix_rows_verified": 3024,
+  "held_out_references": 20,
+  "fixed_reference_pcm_cases_asr_and_generation_settings_match": true,
+  "guidance_note": "Student bakes teacher CFG2; main trainer comparison is teacher CFG2/student CFG1. Public API CFG1 teacher has different guidance.",
+  "student_cfg2_note": "CFG2 student records are diagnostics of guidance applied again, not the main comparison.",
+  "profiles": [
+    {
+      "engine": "trainer",
+      "weights": "ema",
+      "eos_threshold": -4,
+      "teacher_cfg": 2,
+      "student_cfg": 1,
+      "teacher": {
+        "items": 240,
+        "reference_characters": 7220,
+        "cer": 0.12243767313019391,
+        "substitutions": 515,
+        "deletions": 183,
+        "insertions": 186,
+        "under_one_second": 13,
+        "median_seconds": 4.56,
+        "termination": {
+          "eos": 240
+        }
+      },
+      "student": {
+        "items": 240,
+        "reference_characters": 7220,
+        "cer": 0.5121883656509695,
+        "substitutions": 2076,
+        "deletions": 728,
+        "insertions": 894,
+        "under_one_second": 0,
+        "median_seconds": 6.36,
+        "termination": {
+          "eos": 235,
+          "max_length_without_eos": 5
+        }
+      },
+      "per_case": [
+        {
+          "case": "daily",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 300,
+            "cer": 0.0,
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "under_one_second": 0,
+            "median_seconds": 2.32,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 300,
+            "cer": 0.15,
+            "substitutions": 17,
+            "deletions": 18,
+            "insertions": 10,
+            "under_one_second": 0,
+            "median_seconds": 3.84,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "date",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 260,
+            "cer": 0.29615384615384616,
+            "substitutions": 58,
+            "deletions": 0,
+            "insertions": 19,
+            "under_one_second": 0,
+            "median_seconds": 2.88,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 260,
+            "cer": 0.43846153846153846,
+            "substitutions": 81,
+            "deletions": 2,
+            "insertions": 31,
+            "under_one_second": 0,
+            "median_seconds": 4.24,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "place",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 360,
+            "cer": 0.10833333333333334,
+            "substitutions": 27,
+            "deletions": 0,
+            "insertions": 12,
+            "under_one_second": 0,
+            "median_seconds": 3.56,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 360,
+            "cer": 0.09166666666666666,
+            "substitutions": 10,
+            "deletions": 0,
+            "insertions": 23,
+            "under_one_second": 0,
+            "median_seconds": 5.04,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "number",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 480,
+            "cer": 0.23541666666666666,
+            "substitutions": 48,
+            "deletions": 19,
+            "insertions": 46,
+            "under_one_second": 0,
+            "median_seconds": 5.68,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 480,
+            "cer": 0.8041666666666667,
+            "substitutions": 223,
+            "deletions": 28,
+            "insertions": 135,
+            "under_one_second": 0,
+            "median_seconds": 9.440000000000001,
+            "termination": {
+              "eos": 19,
+              "max_length_without_eos": 1
+            }
+          }
+        },
+        {
+          "case": "request",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 400,
+            "cer": 0.0,
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "under_one_second": 0,
+            "median_seconds": 3.04,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 400,
+            "cer": 0.095,
+            "substitutions": 6,
+            "deletions": 8,
+            "insertions": 24,
+            "under_one_second": 0,
+            "median_seconds": 4.4,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "long",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 1400,
+            "cer": 0.04285714285714286,
+            "substitutions": 36,
+            "deletions": 0,
+            "insertions": 24,
+            "under_one_second": 0,
+            "median_seconds": 12.24,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 1400,
+            "cer": 0.45357142857142857,
+            "substitutions": 322,
+            "deletions": 163,
+            "insertions": 150,
+            "under_one_second": 0,
+            "median_seconds": 14.64,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "proper_name",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 500,
+            "cer": 0.288,
+            "substitutions": 111,
+            "deletions": 13,
+            "insertions": 20,
+            "under_one_second": 0,
+            "median_seconds": 4.52,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 500,
+            "cer": 0.552,
+            "substitutions": 150,
+            "deletions": 38,
+            "insertions": 88,
+            "under_one_second": 0,
+            "median_seconds": 6.72,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "digits",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 520,
+            "cer": 0.31346153846153846,
+            "substitutions": 117,
+            "deletions": 19,
+            "insertions": 27,
+            "under_one_second": 0,
+            "median_seconds": 5.24,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 520,
+            "cer": 0.8461538461538461,
+            "substitutions": 302,
+            "deletions": 63,
+            "insertions": 75,
+            "under_one_second": 0,
+            "median_seconds": 6.88,
+            "termination": {
+              "eos": 17,
+              "max_length_without_eos": 3
+            }
+          }
+        },
+        {
+          "case": "units",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 580,
+            "cer": 0.23620689655172414,
+            "substitutions": 51,
+            "deletions": 84,
+            "insertions": 2,
+            "under_one_second": 0,
+            "median_seconds": 5.8,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 580,
+            "cer": 0.656896551724138,
+            "substitutions": 237,
+            "deletions": 39,
+            "insertions": 105,
+            "under_one_second": 0,
+            "median_seconds": 8.440000000000001,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "loanwords",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 560,
+            "cer": 0.03214285714285714,
+            "substitutions": 18,
+            "deletions": 0,
+            "insertions": 0,
+            "under_one_second": 0,
+            "median_seconds": 4.56,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 560,
+            "cer": 0.25892857142857145,
+            "substitutions": 79,
+            "deletions": 39,
+            "insertions": 27,
+            "under_one_second": 0,
+            "median_seconds": 6.0,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "short_question",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 100,
+            "cer": 0.0,
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "under_one_second": 13,
+            "median_seconds": 0.9199999999999999,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 100,
+            "cer": 0.6,
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 60,
+            "under_one_second": 0,
+            "median_seconds": 1.4,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "long_sequence",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 1760,
+            "cer": 0.07556818181818181,
+            "substitutions": 49,
+            "deletions": 48,
+            "insertions": 36,
+            "under_one_second": 0,
+            "median_seconds": 15.559999999999999,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 1760,
+            "cer": 0.6505681818181818,
+            "substitutions": 649,
+            "deletions": 330,
+            "insertions": 166,
+            "under_one_second": 0,
+            "median_seconds": 18.08,
+            "termination": {
+              "eos": 19,
+              "max_length_without_eos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "engine": "trainer",
+      "weights": "ema",
+      "eos_threshold": -1,
+      "teacher_cfg": 2,
+      "student_cfg": 1,
+      "teacher": {
+        "items": 240,
+        "reference_characters": 7220,
+        "cer": 0.17645429362880888,
+        "substitutions": 542,
+        "deletions": 171,
+        "insertions": 561,
+        "under_one_second": 13,
+        "median_seconds": 5.16,
+        "termination": {
+          "eos": 240
+        }
+      },
+      "student": {
+        "items": 240,
+        "reference_characters": 7220,
+        "cer": 0.6487534626038781,
+        "substitutions": 2220,
+        "deletions": 593,
+        "insertions": 1871,
+        "under_one_second": 0,
+        "median_seconds": 7.4399999999999995,
+        "termination": {
+          "eos": 195,
+          "max_length_without_eos": 45
+        }
+      },
+      "per_case": [
+        {
+          "case": "daily",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 300,
+            "cer": 0.0,
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "under_one_second": 0,
+            "median_seconds": 2.36,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 300,
+            "cer": 1.7366666666666666,
+            "substitutions": 18,
+            "deletions": 17,
+            "insertions": 486,
+            "under_one_second": 0,
+            "median_seconds": 5.08,
+            "termination": {
+              "eos": 16,
+              "max_length_without_eos": 4
+            }
+          }
+        },
+        {
+          "case": "date",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 260,
+            "cer": 0.3192307692307692,
+            "substitutions": 58,
+            "deletions": 0,
+            "insertions": 25,
+            "under_one_second": 0,
+            "median_seconds": 2.96,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 260,
+            "cer": 0.7038461538461539,
+            "substitutions": 83,
+            "deletions": 1,
+            "insertions": 99,
+            "under_one_second": 0,
+            "median_seconds": 5.28,
+            "termination": {
+              "eos": 14,
+              "max_length_without_eos": 6
+            }
+          }
+        },
+        {
+          "case": "place",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 360,
+            "cer": 0.11944444444444445,
+            "substitutions": 29,
+            "deletions": 0,
+            "insertions": 14,
+            "under_one_second": 0,
+            "median_seconds": 3.68,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 360,
+            "cer": 0.25,
+            "substitutions": 13,
+            "deletions": 1,
+            "insertions": 76,
+            "under_one_second": 0,
+            "median_seconds": 5.36,
+            "termination": {
+              "eos": 18,
+              "max_length_without_eos": 2
+            }
+          }
+        },
+        {
+          "case": "number",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 480,
+            "cer": 0.2708333333333333,
+            "substitutions": 49,
+            "deletions": 17,
+            "insertions": 64,
+            "under_one_second": 0,
+            "median_seconds": 5.92,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 480,
+            "cer": 1.175,
+            "substitutions": 217,
+            "deletions": 17,
+            "insertions": 330,
+            "under_one_second": 0,
+            "median_seconds": 21.44,
+            "termination": {
+              "eos": 10,
+              "max_length_without_eos": 10
+            }
+          }
+        },
+        {
+          "case": "request",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 400,
+            "cer": 0.04,
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 16,
+            "under_one_second": 0,
+            "median_seconds": 3.08,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 400,
+            "cer": 0.2075,
+            "substitutions": 5,
+            "deletions": 8,
+            "insertions": 70,
+            "under_one_second": 0,
+            "median_seconds": 4.48,
+            "termination": {
+              "eos": 17,
+              "max_length_without_eos": 3
+            }
+          }
+        },
+        {
+          "case": "long",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 1400,
+            "cer": 0.14357142857142857,
+            "substitutions": 43,
+            "deletions": 0,
+            "insertions": 158,
+            "under_one_second": 0,
+            "median_seconds": 12.56,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 1400,
+            "cer": 0.5,
+            "substitutions": 375,
+            "deletions": 121,
+            "insertions": 204,
+            "under_one_second": 0,
+            "median_seconds": 16.28,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "proper_name",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 500,
+            "cer": 0.562,
+            "substitutions": 113,
+            "deletions": 13,
+            "insertions": 155,
+            "under_one_second": 0,
+            "median_seconds": 6.68,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 500,
+            "cer": 0.628,
+            "substitutions": 154,
+            "deletions": 35,
+            "insertions": 125,
+            "under_one_second": 0,
+            "median_seconds": 6.92,
+            "termination": {
+              "eos": 18,
+              "max_length_without_eos": 2
+            }
+          }
+        },
+        {
+          "case": "digits",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 520,
+            "cer": 0.35,
+            "substitutions": 125,
+            "deletions": 20,
+            "insertions": 37,
+            "under_one_second": 0,
+            "median_seconds": 5.4,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 520,
+            "cer": 0.9461538461538461,
+            "substitutions": 304,
+            "deletions": 53,
+            "insertions": 135,
+            "under_one_second": 0,
+            "median_seconds": 8.440000000000001,
+            "termination": {
+              "max_length_without_eos": 7,
+              "eos": 13
+            }
+          }
+        },
+        {
+          "case": "units",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 580,
+            "cer": 0.2913793103448276,
+            "substitutions": 62,
+            "deletions": 73,
+            "insertions": 34,
+            "under_one_second": 0,
+            "median_seconds": 5.96,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 580,
+            "cer": 0.7448275862068966,
+            "substitutions": 236,
+            "deletions": 31,
+            "insertions": 165,
+            "under_one_second": 0,
+            "median_seconds": 9.52,
+            "termination": {
+              "eos": 18,
+              "max_length_without_eos": 2
+            }
+          }
+        },
+        {
+          "case": "loanwords",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 560,
+            "cer": 0.055357142857142855,
+            "substitutions": 14,
+            "deletions": 0,
+            "insertions": 17,
+            "under_one_second": 0,
+            "median_seconds": 4.88,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 560,
+            "cer": 0.30714285714285716,
+            "substitutions": 95,
+            "deletions": 31,
+            "insertions": 46,
+            "under_one_second": 0,
+            "median_seconds": 6.52,
+            "termination": {
+              "eos": 19,
+              "max_length_without_eos": 1
+            }
+          }
+        },
+        {
+          "case": "short_question",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 100,
+            "cer": 0.0,
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "under_one_second": 13,
+            "median_seconds": 0.9199999999999999,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 100,
+            "cer": 0.65,
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 65,
+            "under_one_second": 0,
+            "median_seconds": 1.44,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "long_sequence",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 1760,
+            "cer": 0.07840909090909091,
+            "substitutions": 49,
+            "deletions": 48,
+            "insertions": 41,
+            "under_one_second": 0,
+            "median_seconds": 15.559999999999999,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 1760,
+            "cer": 0.6068181818181818,
+            "substitutions": 720,
+            "deletions": 278,
+            "insertions": 70,
+            "under_one_second": 0,
+            "median_seconds": 20.96,
+            "termination": {
+              "max_length_without_eos": 8,
+              "eos": 12
+            }
+          }
+        }
+      ]
+    },
+    {
+      "engine": "trainer",
+      "weights": "raw",
+      "eos_threshold": -4,
+      "teacher_cfg": 2,
+      "student_cfg": 1,
+      "teacher": {
+        "items": 240,
+        "reference_characters": 7220,
+        "cer": 0.22700831024930748,
+        "substitutions": 912,
+        "deletions": 148,
+        "insertions": 579,
+        "under_one_second": 12,
+        "median_seconds": 5.04,
+        "termination": {
+          "eos": 240
+        }
+      },
+      "student": {
+        "items": 240,
+        "reference_characters": 7220,
+        "cer": 0.4236842105263158,
+        "substitutions": 1730,
+        "deletions": 648,
+        "insertions": 681,
+        "under_one_second": 0,
+        "median_seconds": 5.76,
+        "termination": {
+          "eos": 230,
+          "max_length_without_eos": 10
+        }
+      },
+      "per_case": [
+        {
+          "case": "daily",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 300,
+            "cer": 0.006666666666666667,
+            "substitutions": 1,
+            "deletions": 1,
+            "insertions": 0,
+            "under_one_second": 0,
+            "median_seconds": 2.36,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 300,
+            "cer": 0.24666666666666667,
+            "substitutions": 36,
+            "deletions": 23,
+            "insertions": 15,
+            "under_one_second": 0,
+            "median_seconds": 3.6,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "date",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 260,
+            "cer": 0.33076923076923076,
+            "substitutions": 64,
+            "deletions": 3,
+            "insertions": 19,
+            "under_one_second": 0,
+            "median_seconds": 3.16,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 260,
+            "cer": 0.36538461538461536,
+            "substitutions": 68,
+            "deletions": 1,
+            "insertions": 26,
+            "under_one_second": 0,
+            "median_seconds": 4.04,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "place",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 360,
+            "cer": 0.18611111111111112,
+            "substitutions": 46,
+            "deletions": 4,
+            "insertions": 17,
+            "under_one_second": 0,
+            "median_seconds": 3.36,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 360,
+            "cer": 0.21944444444444444,
+            "substitutions": 40,
+            "deletions": 6,
+            "insertions": 33,
+            "under_one_second": 0,
+            "median_seconds": 5.04,
+            "termination": {
+              "eos": 18,
+              "max_length_without_eos": 2
+            }
+          }
+        },
+        {
+          "case": "number",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 480,
+            "cer": 0.45416666666666666,
+            "substitutions": 134,
+            "deletions": 15,
+            "insertions": 69,
+            "under_one_second": 0,
+            "median_seconds": 6.4,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 480,
+            "cer": 0.7854166666666667,
+            "substitutions": 232,
+            "deletions": 24,
+            "insertions": 121,
+            "under_one_second": 0,
+            "median_seconds": 8.440000000000001,
+            "termination": {
+              "eos": 18,
+              "max_length_without_eos": 2
+            }
+          }
+        },
+        {
+          "case": "request",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 400,
+            "cer": 0.0525,
+            "substitutions": 0,
+            "deletions": 6,
+            "insertions": 15,
+            "under_one_second": 0,
+            "median_seconds": 2.96,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 400,
+            "cer": 0.025,
+            "substitutions": 3,
+            "deletions": 1,
+            "insertions": 6,
+            "under_one_second": 0,
+            "median_seconds": 4.28,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "long",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 1400,
+            "cer": 0.18928571428571428,
+            "substitutions": 78,
+            "deletions": 4,
+            "insertions": 183,
+            "under_one_second": 0,
+            "median_seconds": 12.36,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 1400,
+            "cer": 0.455,
+            "substitutions": 374,
+            "deletions": 117,
+            "insertions": 146,
+            "under_one_second": 0,
+            "median_seconds": 13.76,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "proper_name",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 500,
+            "cer": 0.522,
+            "substitutions": 170,
+            "deletions": 6,
+            "insertions": 85,
+            "under_one_second": 0,
+            "median_seconds": 5.16,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 500,
+            "cer": 0.476,
+            "substitutions": 137,
+            "deletions": 42,
+            "insertions": 59,
+            "under_one_second": 0,
+            "median_seconds": 5.92,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "digits",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 520,
+            "cer": 0.5019230769230769,
+            "substitutions": 186,
+            "deletions": 11,
+            "insertions": 64,
+            "under_one_second": 0,
+            "median_seconds": 5.72,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 520,
+            "cer": 0.55,
+            "substitutions": 183,
+            "deletions": 31,
+            "insertions": 72,
+            "under_one_second": 0,
+            "median_seconds": 6.92,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "units",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 580,
+            "cer": 0.32068965517241377,
+            "substitutions": 97,
+            "deletions": 38,
+            "insertions": 51,
+            "under_one_second": 0,
+            "median_seconds": 5.84,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 580,
+            "cer": 0.42586206896551726,
+            "substitutions": 145,
+            "deletions": 48,
+            "insertions": 54,
+            "under_one_second": 0,
+            "median_seconds": 7.24,
+            "termination": {
+              "eos": 19,
+              "max_length_without_eos": 1
+            }
+          }
+        },
+        {
+          "case": "loanwords",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 560,
+            "cer": 0.09464285714285714,
+            "substitutions": 37,
+            "deletions": 10,
+            "insertions": 6,
+            "under_one_second": 0,
+            "median_seconds": 4.84,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 560,
+            "cer": 0.2517857142857143,
+            "substitutions": 89,
+            "deletions": 34,
+            "insertions": 18,
+            "under_one_second": 0,
+            "median_seconds": 5.4,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "short_question",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 100,
+            "cer": 0.01,
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 1,
+            "under_one_second": 12,
+            "median_seconds": 0.9199999999999999,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 100,
+            "cer": 0.58,
+            "substitutions": 5,
+            "deletions": 0,
+            "insertions": 53,
+            "under_one_second": 0,
+            "median_seconds": 1.6,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "long_sequence",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 1760,
+            "cer": 0.12386363636363637,
+            "substitutions": 99,
+            "deletions": 50,
+            "insertions": 69,
+            "under_one_second": 0,
+            "median_seconds": 15.44,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 1760,
+            "cer": 0.4642045454545455,
+            "substitutions": 418,
+            "deletions": 321,
+            "insertions": 78,
+            "under_one_second": 0,
+            "median_seconds": 16.2,
+            "termination": {
+              "max_length_without_eos": 5,
+              "eos": 15
+            }
+          }
+        }
+      ]
+    },
+    {
+      "engine": "trainer",
+      "weights": "raw",
+      "eos_threshold": -1,
+      "teacher_cfg": 2,
+      "student_cfg": 1,
+      "teacher": {
+        "items": 240,
+        "reference_characters": 7220,
+        "cer": 0.29861495844875346,
+        "substitutions": 931,
+        "deletions": 143,
+        "insertions": 1082,
+        "under_one_second": 11,
+        "median_seconds": 5.68,
+        "termination": {
+          "eos": 239,
+          "max_length_without_eos": 1
+        }
+      },
+      "student": {
+        "items": 240,
+        "reference_characters": 7220,
+        "cer": 0.6228531855955679,
+        "substitutions": 1807,
+        "deletions": 591,
+        "insertions": 2099,
+        "under_one_second": 0,
+        "median_seconds": 8.72,
+        "termination": {
+          "max_length_without_eos": 76,
+          "eos": 164
+        }
+      },
+      "per_case": [
+        {
+          "case": "daily",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 300,
+            "cer": 0.006666666666666667,
+            "substitutions": 1,
+            "deletions": 1,
+            "insertions": 0,
+            "under_one_second": 0,
+            "median_seconds": 2.4,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 300,
+            "cer": 0.9633333333333334,
+            "substitutions": 40,
+            "deletions": 23,
+            "insertions": 226,
+            "under_one_second": 0,
+            "median_seconds": 17.759999999999998,
+            "termination": {
+              "max_length_without_eos": 10,
+              "eos": 10
+            }
+          }
+        },
+        {
+          "case": "date",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 260,
+            "cer": 0.5038461538461538,
+            "substitutions": 68,
+            "deletions": 3,
+            "insertions": 60,
+            "under_one_second": 0,
+            "median_seconds": 3.8,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 260,
+            "cer": 0.5538461538461539,
+            "substitutions": 70,
+            "deletions": 1,
+            "insertions": 73,
+            "under_one_second": 0,
+            "median_seconds": 4.24,
+            "termination": {
+              "max_length_without_eos": 5,
+              "eos": 15
+            }
+          }
+        },
+        {
+          "case": "place",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 360,
+            "cer": 0.26666666666666666,
+            "substitutions": 48,
+            "deletions": 4,
+            "insertions": 44,
+            "under_one_second": 0,
+            "median_seconds": 3.6,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 360,
+            "cer": 0.5416666666666666,
+            "substitutions": 43,
+            "deletions": 6,
+            "insertions": 146,
+            "under_one_second": 0,
+            "median_seconds": 30.0,
+            "termination": {
+              "max_length_without_eos": 12,
+              "eos": 8
+            }
+          }
+        },
+        {
+          "case": "number",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 480,
+            "cer": 0.50625,
+            "substitutions": 130,
+            "deletions": 16,
+            "insertions": 97,
+            "under_one_second": 0,
+            "median_seconds": 6.72,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 480,
+            "cer": 1.4208333333333334,
+            "substitutions": 230,
+            "deletions": 13,
+            "insertions": 439,
+            "under_one_second": 0,
+            "median_seconds": 30.0,
+            "termination": {
+              "eos": 8,
+              "max_length_without_eos": 12
+            }
+          }
+        },
+        {
+          "case": "request",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 400,
+            "cer": 0.1475,
+            "substitutions": 5,
+            "deletions": 6,
+            "insertions": 48,
+            "under_one_second": 0,
+            "median_seconds": 3.2,
+            "termination": {
+              "eos": 19,
+              "max_length_without_eos": 1
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 400,
+            "cer": 0.205,
+            "substitutions": 3,
+            "deletions": 1,
+            "insertions": 78,
+            "under_one_second": 0,
+            "median_seconds": 4.56,
+            "termination": {
+              "eos": 15,
+              "max_length_without_eos": 5
+            }
+          }
+        },
+        {
+          "case": "long",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 1400,
+            "cer": 0.29714285714285715,
+            "substitutions": 77,
+            "deletions": 5,
+            "insertions": 334,
+            "under_one_second": 0,
+            "median_seconds": 15.28,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 1400,
+            "cer": 0.46785714285714286,
+            "substitutions": 389,
+            "deletions": 106,
+            "insertions": 160,
+            "under_one_second": 0,
+            "median_seconds": 14.4,
+            "termination": {
+              "eos": 19,
+              "max_length_without_eos": 1
+            }
+          }
+        },
+        {
+          "case": "proper_name",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 500,
+            "cer": 0.672,
+            "substitutions": 172,
+            "deletions": 5,
+            "insertions": 159,
+            "under_one_second": 0,
+            "median_seconds": 6.28,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 500,
+            "cer": 0.528,
+            "substitutions": 133,
+            "deletions": 44,
+            "insertions": 87,
+            "under_one_second": 0,
+            "median_seconds": 6.6,
+            "termination": {
+              "eos": 19,
+              "max_length_without_eos": 1
+            }
+          }
+        },
+        {
+          "case": "digits",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 520,
+            "cer": 0.6173076923076923,
+            "substitutions": 197,
+            "deletions": 10,
+            "insertions": 114,
+            "under_one_second": 0,
+            "median_seconds": 6.16,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 520,
+            "cer": 0.8673076923076923,
+            "substitutions": 199,
+            "deletions": 33,
+            "insertions": 219,
+            "under_one_second": 0,
+            "median_seconds": 20.08,
+            "termination": {
+              "max_length_without_eos": 10,
+              "eos": 10
+            }
+          }
+        },
+        {
+          "case": "units",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 580,
+            "cer": 0.41379310344827586,
+            "substitutions": 102,
+            "deletions": 31,
+            "insertions": 107,
+            "under_one_second": 0,
+            "median_seconds": 7.08,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 580,
+            "cer": 0.9603448275862069,
+            "substitutions": 164,
+            "deletions": 29,
+            "insertions": 364,
+            "under_one_second": 0,
+            "median_seconds": 8.92,
+            "termination": {
+              "max_length_without_eos": 4,
+              "eos": 16
+            }
+          }
+        },
+        {
+          "case": "loanwords",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 560,
+            "cer": 0.13214285714285715,
+            "substitutions": 30,
+            "deletions": 9,
+            "insertions": 35,
+            "under_one_second": 0,
+            "median_seconds": 5.32,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 560,
+            "cer": 0.3982142857142857,
+            "substitutions": 97,
+            "deletions": 28,
+            "insertions": 98,
+            "under_one_second": 0,
+            "median_seconds": 6.12,
+            "termination": {
+              "max_length_without_eos": 7,
+              "eos": 13
+            }
+          }
+        },
+        {
+          "case": "short_question",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 100,
+            "cer": 0.01,
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 1,
+            "under_one_second": 11,
+            "median_seconds": 0.96,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 100,
+            "cer": 0.56,
+            "substitutions": 5,
+            "deletions": 0,
+            "insertions": 51,
+            "under_one_second": 0,
+            "median_seconds": 1.68,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "long_sequence",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 1760,
+            "cer": 0.13465909090909092,
+            "substitutions": 101,
+            "deletions": 53,
+            "insertions": 83,
+            "under_one_second": 0,
+            "median_seconds": 15.52,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 1760,
+            "cer": 0.5107954545454545,
+            "substitutions": 434,
+            "deletions": 307,
+            "insertions": 158,
+            "under_one_second": 0,
+            "median_seconds": 16.92,
+            "termination": {
+              "max_length_without_eos": 9,
+              "eos": 11
+            }
+          }
+        }
+      ]
+    },
+    {
+      "engine": "public_api",
+      "weights": "ema",
+      "eos_threshold": -4,
+      "teacher_cfg": 1,
+      "student_cfg": 1,
+      "teacher": {
+        "items": 240,
+        "reference_characters": 7220,
+        "cer": 0.1778393351800554,
+        "substitutions": 678,
+        "deletions": 419,
+        "insertions": 187,
+        "under_one_second": 0,
+        "median_seconds": 5.96,
+        "termination": {
+          "eos": 220,
+          "max_length_without_eos": 18,
+          "max_length_after_eos": 2
+        }
+      },
+      "student": {
+        "items": 240,
+        "reference_characters": 7220,
+        "cer": 0.5335180055401662,
+        "substitutions": 2277,
+        "deletions": 667,
+        "insertions": 908,
+        "under_one_second": 0,
+        "median_seconds": 6.76,
+        "termination": {
+          "max_length_after_eos": 3,
+          "eos": 215,
+          "max_length_without_eos": 22
+        }
+      },
+      "per_case": [
+        {
+          "case": "daily",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 300,
+            "cer": 0.03333333333333333,
+            "substitutions": 4,
+            "deletions": 6,
+            "insertions": 0,
+            "under_one_second": 0,
+            "median_seconds": 3.56,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 300,
+            "cer": 0.2633333333333333,
+            "substitutions": 33,
+            "deletions": 22,
+            "insertions": 24,
+            "under_one_second": 0,
+            "median_seconds": 4.36,
+            "termination": {
+              "max_length_after_eos": 2,
+              "eos": 16,
+              "max_length_without_eos": 2
+            }
+          }
+        },
+        {
+          "case": "date",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 260,
+            "cer": 0.3423076923076923,
+            "substitutions": 71,
+            "deletions": 3,
+            "insertions": 15,
+            "under_one_second": 0,
+            "median_seconds": 4.16,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 260,
+            "cer": 0.5230769230769231,
+            "substitutions": 86,
+            "deletions": 5,
+            "insertions": 45,
+            "under_one_second": 0,
+            "median_seconds": 4.64,
+            "termination": {
+              "eos": 18,
+              "max_length_after_eos": 1,
+              "max_length_without_eos": 1
+            }
+          }
+        },
+        {
+          "case": "place",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 360,
+            "cer": 0.06666666666666667,
+            "substitutions": 21,
+            "deletions": 2,
+            "insertions": 1,
+            "under_one_second": 0,
+            "median_seconds": 4.64,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 360,
+            "cer": 0.20555555555555555,
+            "substitutions": 28,
+            "deletions": 3,
+            "insertions": 43,
+            "under_one_second": 0,
+            "median_seconds": 5.36,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "number",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 480,
+            "cer": 0.35208333333333336,
+            "substitutions": 98,
+            "deletions": 20,
+            "insertions": 51,
+            "under_one_second": 0,
+            "median_seconds": 8.08,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 480,
+            "cer": 1.1333333333333333,
+            "substitutions": 296,
+            "deletions": 14,
+            "insertions": 234,
+            "under_one_second": 0,
+            "median_seconds": 9.399999999999999,
+            "termination": {
+              "eos": 17,
+              "max_length_without_eos": 3
+            }
+          }
+        },
+        {
+          "case": "request",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 400,
+            "cer": 0.005,
+            "substitutions": 1,
+            "deletions": 1,
+            "insertions": 0,
+            "under_one_second": 0,
+            "median_seconds": 3.88,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 400,
+            "cer": 0.0975,
+            "substitutions": 3,
+            "deletions": 12,
+            "insertions": 24,
+            "under_one_second": 0,
+            "median_seconds": 4.72,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "long",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 1400,
+            "cer": 0.2307142857142857,
+            "substitutions": 63,
+            "deletions": 203,
+            "insertions": 57,
+            "under_one_second": 0,
+            "median_seconds": 17.04,
+            "termination": {
+              "max_length_without_eos": 11,
+              "eos": 9
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 1400,
+            "cer": 0.4664285714285714,
+            "substitutions": 377,
+            "deletions": 138,
+            "insertions": 138,
+            "under_one_second": 0,
+            "median_seconds": 14.760000000000002,
+            "termination": {
+              "eos": 18,
+              "max_length_without_eos": 2
+            }
+          }
+        },
+        {
+          "case": "proper_name",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 500,
+            "cer": 0.31,
+            "substitutions": 139,
+            "deletions": 13,
+            "insertions": 3,
+            "under_one_second": 0,
+            "median_seconds": 5.92,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 500,
+            "cer": 0.596,
+            "substitutions": 163,
+            "deletions": 31,
+            "insertions": 104,
+            "under_one_second": 0,
+            "median_seconds": 7.08,
+            "termination": {
+              "eos": 19,
+              "max_length_without_eos": 1
+            }
+          }
+        },
+        {
+          "case": "digits",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 520,
+            "cer": 0.4,
+            "substitutions": 162,
+            "deletions": 25,
+            "insertions": 21,
+            "under_one_second": 0,
+            "median_seconds": 7.0,
+            "termination": {
+              "max_length_after_eos": 1,
+              "eos": 19
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 520,
+            "cer": 0.7980769230769231,
+            "substitutions": 337,
+            "deletions": 25,
+            "insertions": 53,
+            "under_one_second": 0,
+            "median_seconds": 7.2,
+            "termination": {
+              "max_length_without_eos": 3,
+              "eos": 17
+            }
+          }
+        },
+        {
+          "case": "units",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 580,
+            "cer": 0.27586206896551724,
+            "substitutions": 78,
+            "deletions": 64,
+            "insertions": 18,
+            "under_one_second": 0,
+            "median_seconds": 7.88,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 580,
+            "cer": 0.6517241379310345,
+            "substitutions": 201,
+            "deletions": 39,
+            "insertions": 138,
+            "under_one_second": 0,
+            "median_seconds": 8.84,
+            "termination": {
+              "eos": 19,
+              "max_length_without_eos": 1
+            }
+          }
+        },
+        {
+          "case": "loanwords",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 560,
+            "cer": 0.010714285714285714,
+            "substitutions": 4,
+            "deletions": 0,
+            "insertions": 2,
+            "under_one_second": 0,
+            "median_seconds": 6.36,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 560,
+            "cer": 0.2857142857142857,
+            "substitutions": 90,
+            "deletions": 38,
+            "insertions": 32,
+            "under_one_second": 0,
+            "median_seconds": 6.44,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "short_question",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 100,
+            "cer": 0.0,
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "under_one_second": 0,
+            "median_seconds": 1.68,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 100,
+            "cer": 0.0,
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "under_one_second": 0,
+            "median_seconds": 1.36,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "long_sequence",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 1760,
+            "cer": 0.07840909090909091,
+            "substitutions": 37,
+            "deletions": 82,
+            "insertions": 19,
+            "under_one_second": 0,
+            "median_seconds": 20.24,
+            "termination": {
+              "max_length_without_eos": 7,
+              "eos": 12,
+              "max_length_after_eos": 1
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 1760,
+            "cer": 0.6113636363636363,
+            "substitutions": 663,
+            "deletions": 340,
+            "insertions": 73,
+            "under_one_second": 0,
+            "median_seconds": 17.240000000000002,
+            "termination": {
+              "max_length_without_eos": 9,
+              "eos": 11
+            }
+          }
+        }
+      ]
+    },
+    {
+      "engine": "public_api",
+      "weights": "ema",
+      "eos_threshold": -1,
+      "teacher_cfg": 1,
+      "student_cfg": 1,
+      "teacher": {
+        "items": 240,
+        "reference_characters": 7220,
+        "cer": 0.17977839335180054,
+        "substitutions": 671,
+        "deletions": 419,
+        "insertions": 208,
+        "under_one_second": 0,
+        "median_seconds": 6.0,
+        "termination": {
+          "eos": 218,
+          "max_length_without_eos": 19,
+          "max_length_after_eos": 3
+        }
+      },
+      "student": {
+        "items": 240,
+        "reference_characters": 7220,
+        "cer": 0.5736842105263158,
+        "substitutions": 2350,
+        "deletions": 619,
+        "insertions": 1173,
+        "under_one_second": 0,
+        "median_seconds": 7.28,
+        "termination": {
+          "max_length_after_eos": 6,
+          "eos": 167,
+          "max_length_without_eos": 67
+        }
+      },
+      "per_case": [
+        {
+          "case": "daily",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 300,
+            "cer": 0.03333333333333333,
+            "substitutions": 4,
+            "deletions": 6,
+            "insertions": 0,
+            "under_one_second": 0,
+            "median_seconds": 3.56,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 300,
+            "cer": 0.2633333333333333,
+            "substitutions": 32,
+            "deletions": 23,
+            "insertions": 24,
+            "under_one_second": 0,
+            "median_seconds": 5.32,
+            "termination": {
+              "max_length_after_eos": 2,
+              "max_length_without_eos": 8,
+              "eos": 10
+            }
+          }
+        },
+        {
+          "case": "date",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 260,
+            "cer": 0.3384615384615385,
+            "substitutions": 70,
+            "deletions": 2,
+            "insertions": 16,
+            "under_one_second": 0,
+            "median_seconds": 4.2,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 260,
+            "cer": 0.5269230769230769,
+            "substitutions": 87,
+            "deletions": 6,
+            "insertions": 44,
+            "under_one_second": 0,
+            "median_seconds": 5.6,
+            "termination": {
+              "eos": 15,
+              "max_length_after_eos": 1,
+              "max_length_without_eos": 4
+            }
+          }
+        },
+        {
+          "case": "place",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 360,
+            "cer": 0.06666666666666667,
+            "substitutions": 21,
+            "deletions": 2,
+            "insertions": 1,
+            "under_one_second": 0,
+            "median_seconds": 4.68,
+            "termination": {
+              "eos": 19,
+              "max_length_without_eos": 1
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 360,
+            "cer": 0.21666666666666667,
+            "substitutions": 28,
+            "deletions": 3,
+            "insertions": 47,
+            "under_one_second": 0,
+            "median_seconds": 5.96,
+            "termination": {
+              "max_length_without_eos": 3,
+              "eos": 15,
+              "max_length_after_eos": 2
+            }
+          }
+        },
+        {
+          "case": "number",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 480,
+            "cer": 0.33958333333333335,
+            "substitutions": 92,
+            "deletions": 18,
+            "insertions": 53,
+            "under_one_second": 0,
+            "median_seconds": 8.08,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 480,
+            "cer": 1.38125,
+            "substitutions": 296,
+            "deletions": 13,
+            "insertions": 354,
+            "under_one_second": 0,
+            "median_seconds": 11.36,
+            "termination": {
+              "eos": 7,
+              "max_length_without_eos": 13
+            }
+          }
+        },
+        {
+          "case": "request",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 400,
+            "cer": 0.005,
+            "substitutions": 1,
+            "deletions": 1,
+            "insertions": 0,
+            "under_one_second": 0,
+            "median_seconds": 3.88,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 400,
+            "cer": 0.1025,
+            "substitutions": 3,
+            "deletions": 12,
+            "insertions": 26,
+            "under_one_second": 0,
+            "median_seconds": 4.8,
+            "termination": {
+              "eos": 19,
+              "max_length_without_eos": 1
+            }
+          }
+        },
+        {
+          "case": "long",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 1400,
+            "cer": 0.2307142857142857,
+            "substitutions": 63,
+            "deletions": 203,
+            "insertions": 57,
+            "under_one_second": 0,
+            "median_seconds": 17.04,
+            "termination": {
+              "max_length_without_eos": 11,
+              "eos": 9
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 1400,
+            "cer": 0.505,
+            "substitutions": 373,
+            "deletions": 128,
+            "insertions": 206,
+            "under_one_second": 0,
+            "median_seconds": 15.68,
+            "termination": {
+              "max_length_without_eos": 4,
+              "eos": 16
+            }
+          }
+        },
+        {
+          "case": "proper_name",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 500,
+            "cer": 0.324,
+            "substitutions": 138,
+            "deletions": 13,
+            "insertions": 11,
+            "under_one_second": 0,
+            "median_seconds": 5.92,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 500,
+            "cer": 0.652,
+            "substitutions": 163,
+            "deletions": 31,
+            "insertions": 132,
+            "under_one_second": 0,
+            "median_seconds": 7.4,
+            "termination": {
+              "eos": 17,
+              "max_length_without_eos": 3
+            }
+          }
+        },
+        {
+          "case": "digits",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 520,
+            "cer": 0.4,
+            "substitutions": 162,
+            "deletions": 25,
+            "insertions": 21,
+            "under_one_second": 0,
+            "median_seconds": 7.08,
+            "termination": {
+              "max_length_after_eos": 1,
+              "eos": 19
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 520,
+            "cer": 0.8365384615384616,
+            "substitutions": 361,
+            "deletions": 17,
+            "insertions": 57,
+            "under_one_second": 0,
+            "median_seconds": 8.440000000000001,
+            "termination": {
+              "max_length_without_eos": 9,
+              "eos": 11
+            }
+          }
+        },
+        {
+          "case": "units",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 580,
+            "cer": 0.27586206896551724,
+            "substitutions": 78,
+            "deletions": 64,
+            "insertions": 18,
+            "under_one_second": 0,
+            "median_seconds": 7.96,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 580,
+            "cer": 0.6689655172413793,
+            "substitutions": 218,
+            "deletions": 35,
+            "insertions": 135,
+            "under_one_second": 0,
+            "median_seconds": 9.239999999999998,
+            "termination": {
+              "eos": 14,
+              "max_length_without_eos": 6
+            }
+          }
+        },
+        {
+          "case": "loanwords",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 560,
+            "cer": 0.010714285714285714,
+            "substitutions": 4,
+            "deletions": 0,
+            "insertions": 2,
+            "under_one_second": 0,
+            "median_seconds": 6.4,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 560,
+            "cer": 0.30714285714285716,
+            "substitutions": 91,
+            "deletions": 36,
+            "insertions": 45,
+            "under_one_second": 0,
+            "median_seconds": 7.2,
+            "termination": {
+              "eos": 18,
+              "max_length_without_eos": 2
+            }
+          }
+        },
+        {
+          "case": "short_question",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 100,
+            "cer": 0.0,
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "under_one_second": 0,
+            "median_seconds": 1.68,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 100,
+            "cer": 0.22,
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 22,
+            "under_one_second": 0,
+            "median_seconds": 1.52,
+            "termination": {
+              "eos": 18,
+              "max_length_without_eos": 1,
+              "max_length_after_eos": 1
+            }
+          }
+        },
+        {
+          "case": "long_sequence",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 1760,
+            "cer": 0.08636363636363636,
+            "substitutions": 38,
+            "deletions": 85,
+            "insertions": 29,
+            "under_one_second": 0,
+            "median_seconds": 20.32,
+            "termination": {
+              "max_length_without_eos": 7,
+              "eos": 11,
+              "max_length_after_eos": 2
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 1760,
+            "cer": 0.6215909090909091,
+            "substitutions": 698,
+            "deletions": 315,
+            "insertions": 81,
+            "under_one_second": 0,
+            "median_seconds": 21.04,
+            "termination": {
+              "max_length_without_eos": 13,
+              "eos": 7
+            }
+          }
+        }
+      ]
+    },
+    {
+      "engine": "public_api",
+      "weights": "raw",
+      "eos_threshold": -4,
+      "teacher_cfg": 1,
+      "student_cfg": 1,
+      "teacher": {
+        "items": 240,
+        "reference_characters": 7220,
+        "cer": 0.3817174515235457,
+        "substitutions": 1504,
+        "deletions": 882,
+        "insertions": 370,
+        "under_one_second": 0,
+        "median_seconds": 6.72,
+        "termination": {
+          "max_length_after_eos": 7,
+          "eos": 194,
+          "max_length_without_eos": 39
+        }
+      },
+      "student": {
+        "items": 240,
+        "reference_characters": 7220,
+        "cer": 0.4390581717451524,
+        "substitutions": 1808,
+        "deletions": 660,
+        "insertions": 702,
+        "under_one_second": 0,
+        "median_seconds": 6.16,
+        "termination": {
+          "max_length_without_eos": 14,
+          "eos": 224,
+          "max_length_after_eos": 2
+        }
+      },
+      "per_case": [
+        {
+          "case": "daily",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 300,
+            "cer": 0.016666666666666666,
+            "substitutions": 3,
+            "deletions": 2,
+            "insertions": 0,
+            "under_one_second": 0,
+            "median_seconds": 3.44,
+            "termination": {
+              "max_length_after_eos": 1,
+              "eos": 19
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 300,
+            "cer": 0.42333333333333334,
+            "substitutions": 36,
+            "deletions": 20,
+            "insertions": 71,
+            "under_one_second": 0,
+            "median_seconds": 3.92,
+            "termination": {
+              "max_length_without_eos": 1,
+              "eos": 18,
+              "max_length_after_eos": 1
+            }
+          }
+        },
+        {
+          "case": "date",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 260,
+            "cer": 0.6538461538461539,
+            "substitutions": 123,
+            "deletions": 16,
+            "insertions": 31,
+            "under_one_second": 0,
+            "median_seconds": 4.44,
+            "termination": {
+              "max_length_without_eos": 3,
+              "eos": 17
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 260,
+            "cer": 0.4153846153846154,
+            "substitutions": 69,
+            "deletions": 3,
+            "insertions": 36,
+            "under_one_second": 0,
+            "median_seconds": 4.48,
+            "termination": {
+              "max_length_without_eos": 1,
+              "eos": 19
+            }
+          }
+        },
+        {
+          "case": "place",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 360,
+            "cer": 0.23055555555555557,
+            "substitutions": 60,
+            "deletions": 2,
+            "insertions": 21,
+            "under_one_second": 0,
+            "median_seconds": 5.0,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 360,
+            "cer": 0.19722222222222222,
+            "substitutions": 46,
+            "deletions": 9,
+            "insertions": 16,
+            "under_one_second": 0,
+            "median_seconds": 5.24,
+            "termination": {
+              "eos": 19,
+              "max_length_without_eos": 1
+            }
+          }
+        },
+        {
+          "case": "number",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 480,
+            "cer": 0.7708333333333334,
+            "substitutions": 258,
+            "deletions": 51,
+            "insertions": 61,
+            "under_one_second": 0,
+            "median_seconds": 10.0,
+            "termination": {
+              "eos": 14,
+              "max_length_without_eos": 3,
+              "max_length_after_eos": 3
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 480,
+            "cer": 0.7166666666666667,
+            "substitutions": 216,
+            "deletions": 12,
+            "insertions": 116,
+            "under_one_second": 0,
+            "median_seconds": 8.760000000000002,
+            "termination": {
+              "eos": 18,
+              "max_length_without_eos": 2
+            }
+          }
+        },
+        {
+          "case": "request",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 400,
+            "cer": 0.05,
+            "substitutions": 11,
+            "deletions": 7,
+            "insertions": 2,
+            "under_one_second": 0,
+            "median_seconds": 3.92,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 400,
+            "cer": 0.0325,
+            "substitutions": 0,
+            "deletions": 1,
+            "insertions": 12,
+            "under_one_second": 0,
+            "median_seconds": 4.64,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "long",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 1400,
+            "cer": 0.4928571428571429,
+            "substitutions": 209,
+            "deletions": 445,
+            "insertions": 36,
+            "under_one_second": 0,
+            "median_seconds": 17.04,
+            "termination": {
+              "max_length_without_eos": 16,
+              "eos": 4
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 1400,
+            "cer": 0.4714285714285714,
+            "substitutions": 351,
+            "deletions": 151,
+            "insertions": 158,
+            "under_one_second": 0,
+            "median_seconds": 14.440000000000001,
+            "termination": {
+              "eos": 18,
+              "max_length_without_eos": 1,
+              "max_length_after_eos": 1
+            }
+          }
+        },
+        {
+          "case": "proper_name",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 500,
+            "cer": 0.54,
+            "substitutions": 202,
+            "deletions": 50,
+            "insertions": 18,
+            "under_one_second": 0,
+            "median_seconds": 7.04,
+            "termination": {
+              "eos": 19,
+              "max_length_without_eos": 1
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 500,
+            "cer": 0.484,
+            "substitutions": 148,
+            "deletions": 38,
+            "insertions": 56,
+            "under_one_second": 0,
+            "median_seconds": 6.2,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "digits",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 520,
+            "cer": 0.9423076923076923,
+            "substitutions": 294,
+            "deletions": 83,
+            "insertions": 113,
+            "under_one_second": 0,
+            "median_seconds": 8.72,
+            "termination": {
+              "eos": 13,
+              "max_length_without_eos": 7
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 520,
+            "cer": 0.6423076923076924,
+            "substitutions": 215,
+            "deletions": 27,
+            "insertions": 92,
+            "under_one_second": 0,
+            "median_seconds": 7.28,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "units",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 580,
+            "cer": 0.5517241379310345,
+            "substitutions": 189,
+            "deletions": 65,
+            "insertions": 66,
+            "under_one_second": 0,
+            "median_seconds": 9.6,
+            "termination": {
+              "eos": 19,
+              "max_length_after_eos": 1
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 580,
+            "cer": 0.47413793103448276,
+            "substitutions": 179,
+            "deletions": 38,
+            "insertions": 58,
+            "under_one_second": 0,
+            "median_seconds": 7.96,
+            "termination": {
+              "eos": 19,
+              "max_length_without_eos": 1
+            }
+          }
+        },
+        {
+          "case": "loanwords",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 560,
+            "cer": 0.10535714285714286,
+            "substitutions": 43,
+            "deletions": 13,
+            "insertions": 3,
+            "under_one_second": 0,
+            "median_seconds": 6.8,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 560,
+            "cer": 0.275,
+            "substitutions": 79,
+            "deletions": 42,
+            "insertions": 33,
+            "under_one_second": 0,
+            "median_seconds": 5.8,
+            "termination": {
+              "eos": 19,
+              "max_length_without_eos": 1
+            }
+          }
+        },
+        {
+          "case": "short_question",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 100,
+            "cer": 0.0,
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "under_one_second": 0,
+            "median_seconds": 1.68,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 100,
+            "cer": 0.04,
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 4,
+            "under_one_second": 0,
+            "median_seconds": 1.36,
+            "termination": {
+              "eos": 20
+            }
+          }
+        },
+        {
+          "case": "long_sequence",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 1760,
+            "cer": 0.15852272727272726,
+            "substitutions": 112,
+            "deletions": 148,
+            "insertions": 19,
+            "under_one_second": 0,
+            "median_seconds": 21.92,
+            "termination": {
+              "max_length_without_eos": 9,
+              "eos": 9,
+              "max_length_after_eos": 2
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 1760,
+            "cer": 0.47613636363636364,
+            "substitutions": 469,
+            "deletions": 319,
+            "insertions": 50,
+            "under_one_second": 0,
+            "median_seconds": 17.64,
+            "termination": {
+              "max_length_without_eos": 6,
+              "eos": 14
+            }
+          }
+        }
+      ]
+    },
+    {
+      "engine": "public_api",
+      "weights": "raw",
+      "eos_threshold": -1,
+      "teacher_cfg": 1,
+      "student_cfg": 1,
+      "teacher": {
+        "items": 240,
+        "reference_characters": 7220,
+        "cer": 0.3813019390581717,
+        "substitutions": 1566,
+        "deletions": 740,
+        "insertions": 447,
+        "under_one_second": 0,
+        "median_seconds": 7.08,
+        "termination": {
+          "max_length_after_eos": 7,
+          "eos": 153,
+          "max_length_without_eos": 80
+        }
+      },
+      "student": {
+        "items": 240,
+        "reference_characters": 7220,
+        "cer": 0.4631578947368421,
+        "substitutions": 1831,
+        "deletions": 641,
+        "insertions": 872,
+        "under_one_second": 0,
+        "median_seconds": 7.2,
+        "termination": {
+          "max_length_without_eos": 78,
+          "eos": 159,
+          "max_length_after_eos": 3
+        }
+      },
+      "per_case": [
+        {
+          "case": "daily",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 300,
+            "cer": 0.016666666666666666,
+            "substitutions": 3,
+            "deletions": 2,
+            "insertions": 0,
+            "under_one_second": 0,
+            "median_seconds": 3.44,
+            "termination": {
+              "max_length_after_eos": 1,
+              "eos": 19
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 300,
+            "cer": 0.44666666666666666,
+            "substitutions": 38,
+            "deletions": 22,
+            "insertions": 74,
+            "under_one_second": 0,
+            "median_seconds": 5.36,
+            "termination": {
+              "max_length_without_eos": 9,
+              "eos": 9,
+              "max_length_after_eos": 2
+            }
+          }
+        },
+        {
+          "case": "date",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 260,
+            "cer": 0.6846153846153846,
+            "substitutions": 119,
+            "deletions": 16,
+            "insertions": 43,
+            "under_one_second": 0,
+            "median_seconds": 6.0,
+            "termination": {
+              "max_length_without_eos": 10,
+              "eos": 9,
+              "max_length_after_eos": 1
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 260,
+            "cer": 0.4269230769230769,
+            "substitutions": 70,
+            "deletions": 3,
+            "insertions": 38,
+            "under_one_second": 0,
+            "median_seconds": 5.279999999999999,
+            "termination": {
+              "max_length_without_eos": 7,
+              "eos": 13
+            }
+          }
+        },
+        {
+          "case": "place",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 360,
+            "cer": 0.23055555555555557,
+            "substitutions": 60,
+            "deletions": 2,
+            "insertions": 21,
+            "under_one_second": 0,
+            "median_seconds": 5.0,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 360,
+            "cer": 0.21666666666666667,
+            "substitutions": 44,
+            "deletions": 8,
+            "insertions": 26,
+            "under_one_second": 0,
+            "median_seconds": 6.800000000000001,
+            "termination": {
+              "max_length_without_eos": 10,
+              "eos": 10
+            }
+          }
+        },
+        {
+          "case": "number",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 480,
+            "cer": 0.8145833333333333,
+            "substitutions": 269,
+            "deletions": 44,
+            "insertions": 78,
+            "under_one_second": 0,
+            "median_seconds": 11.04,
+            "termination": {
+              "max_length_without_eos": 13,
+              "max_length_after_eos": 2,
+              "eos": 5
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 480,
+            "cer": 0.7604166666666666,
+            "substitutions": 211,
+            "deletions": 14,
+            "insertions": 140,
+            "under_one_second": 0,
+            "median_seconds": 11.36,
+            "termination": {
+              "max_length_without_eos": 11,
+              "eos": 9
+            }
+          }
+        },
+        {
+          "case": "request",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 400,
+            "cer": 0.0625,
+            "substitutions": 11,
+            "deletions": 7,
+            "insertions": 7,
+            "under_one_second": 0,
+            "median_seconds": 3.92,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 400,
+            "cer": 0.03,
+            "substitutions": 0,
+            "deletions": 1,
+            "insertions": 11,
+            "under_one_second": 0,
+            "median_seconds": 4.88,
+            "termination": {
+              "max_length_without_eos": 5,
+              "eos": 15
+            }
+          }
+        },
+        {
+          "case": "long",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 1400,
+            "cer": 0.4764285714285714,
+            "substitutions": 240,
+            "deletions": 387,
+            "insertions": 40,
+            "under_one_second": 0,
+            "median_seconds": 17.04,
+            "termination": {
+              "max_length_without_eos": 18,
+              "eos": 2
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 1400,
+            "cer": 0.48714285714285716,
+            "substitutions": 354,
+            "deletions": 147,
+            "insertions": 181,
+            "under_one_second": 0,
+            "median_seconds": 15.44,
+            "termination": {
+              "eos": 16,
+              "max_length_without_eos": 3,
+              "max_length_after_eos": 1
+            }
+          }
+        },
+        {
+          "case": "proper_name",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 500,
+            "cer": 0.562,
+            "substitutions": 216,
+            "deletions": 21,
+            "insertions": 44,
+            "under_one_second": 0,
+            "median_seconds": 8.600000000000001,
+            "termination": {
+              "eos": 12,
+              "max_length_without_eos": 7,
+              "max_length_after_eos": 1
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 500,
+            "cer": 0.5,
+            "substitutions": 148,
+            "deletions": 38,
+            "insertions": 64,
+            "under_one_second": 0,
+            "median_seconds": 6.92,
+            "termination": {
+              "eos": 16,
+              "max_length_without_eos": 4
+            }
+          }
+        },
+        {
+          "case": "digits",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 520,
+            "cer": 0.9461538461538461,
+            "substitutions": 303,
+            "deletions": 77,
+            "insertions": 112,
+            "under_one_second": 0,
+            "median_seconds": 9.04,
+            "termination": {
+              "max_length_without_eos": 12,
+              "eos": 8
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 520,
+            "cer": 0.6923076923076923,
+            "substitutions": 222,
+            "deletions": 26,
+            "insertions": 112,
+            "under_one_second": 0,
+            "median_seconds": 8.280000000000001,
+            "termination": {
+              "eos": 13,
+              "max_length_without_eos": 7
+            }
+          }
+        },
+        {
+          "case": "units",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 580,
+            "cer": 0.5258620689655172,
+            "substitutions": 199,
+            "deletions": 27,
+            "insertions": 79,
+            "under_one_second": 0,
+            "median_seconds": 10.56,
+            "termination": {
+              "eos": 15,
+              "max_length_without_eos": 5
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 580,
+            "cer": 0.5310344827586206,
+            "substitutions": 183,
+            "deletions": 40,
+            "insertions": 85,
+            "under_one_second": 0,
+            "median_seconds": 9.719999999999999,
+            "termination": {
+              "max_length_without_eos": 5,
+              "eos": 15
+            }
+          }
+        },
+        {
+          "case": "loanwords",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 560,
+            "cer": 0.10357142857142858,
+            "substitutions": 41,
+            "deletions": 10,
+            "insertions": 7,
+            "under_one_second": 0,
+            "median_seconds": 7.28,
+            "termination": {
+              "eos": 14,
+              "max_length_without_eos": 6
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 560,
+            "cer": 0.30178571428571427,
+            "substitutions": 82,
+            "deletions": 40,
+            "insertions": 47,
+            "under_one_second": 0,
+            "median_seconds": 7.2,
+            "termination": {
+              "eos": 14,
+              "max_length_without_eos": 6
+            }
+          }
+        },
+        {
+          "case": "short_question",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 100,
+            "cer": 0.0,
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "under_one_second": 0,
+            "median_seconds": 1.68,
+            "termination": {
+              "eos": 20
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 100,
+            "cer": 0.17,
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 17,
+            "under_one_second": 0,
+            "median_seconds": 1.72,
+            "termination": {
+              "eos": 19,
+              "max_length_without_eos": 1
+            }
+          }
+        },
+        {
+          "case": "long_sequence",
+          "teacher": {
+            "items": 20,
+            "reference_characters": 1760,
+            "cer": 0.15227272727272728,
+            "substitutions": 105,
+            "deletions": 147,
+            "insertions": 16,
+            "under_one_second": 0,
+            "median_seconds": 21.8,
+            "termination": {
+              "max_length_without_eos": 9,
+              "eos": 9,
+              "max_length_after_eos": 2
+            }
+          },
+          "student": {
+            "items": 20,
+            "reference_characters": 1760,
+            "cer": 0.4875,
+            "substitutions": 479,
+            "deletions": 302,
+            "insertions": 77,
+            "under_one_second": 0,
+            "median_seconds": 20.0,
+            "termination": {
+              "max_length_without_eos": 10,
+              "eos": 10
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "human_listening_completed": false,
+  "quality_approved": false,
+  "teacher_is_provisional": true,
+  "publication_performed": false,
+  "teacher_context": {
+    "checkpoint_step": 10000,
+    "checkpoint_sha256": "51f538a3fe5231e4b404f46c47ae49dc4f39a20b6a07ce2bb1cbec03976e17d1",
+    "evaluation_identity_sha256": "ef1de076842c53e5612c6dcae8f1e4c51fdc13cb6e94c9435397da7e5684e257",
+    "scores_sha256": "607064d21e2803bd5277c4b8aef56faf647d6cad7fa4848c57856c4f11be8627",
+    "files": {
+      "training_args": {
+        "source": "runs/finetune_language_ja_m2a/args.yaml",
+        "archived_file": "input_snapshot/training_args.yaml",
+        "sha256": "621ebede379d398f7f2ae9b038a95135560177f8adf5cff1af7d1ec4e970228a"
+      },
+      "training_progress": {
+        "source": "runs/finetune_language_ja_m2a/progress.jsonl",
+        "archived_file": "input_snapshot/training_progress.jsonl",
+        "sha256": "86407fd7702712759d28855607e7c114075fc383d6a39ab482b41783a38bbfb3"
+      },
+      "checkpoint_verification": {
+        "source": "runs/m2a-control/m2a-10000-checkpoint-verified.json",
+        "archived_file": "input_snapshot/checkpoint_verification.json",
+        "sha256": "b9097c17f575ee8ff783481207fe44e79fce95fd66908a4c47b7f5013da99205"
+      },
+      "evaluation_reference_identity": {
+        "source": "runs/m2a-control/m2a-evaluation-reference-identity.json",
+        "archived_file": "input_snapshot/evaluation_reference_identity.json",
+        "sha256": "a78870405c4898a778080c1291dd1f6de3c8021d5acd898960345788c261c9ab"
+      },
+      "source_manifest": {
+        "source": "runs/m2a-control/stage7-evaluation-source-manifest.json",
+        "archived_file": "input_snapshot/source_manifest.json",
+        "sha256": "61a1ef0ac6fab3e00781b627df5568d81d3904280470c7a4158b121da3dfddf5"
+      }
+    },
+    "context_archiver_sha256": "0a831cae344b156be19189a45dae0aea6dcd33216820eaa55979012fe26ec684",
+    "human_listening_completed": false
+  },
+  "student_context": {
+    "checkpoint_step": 5000,
+    "checkpoint_sha256": "f9dee3bc786fbcc1358a74a35d1885e7084700eb9d4d5b40d3875a3d9a7d41a8",
+    "evaluation_identity_sha256": "d8206faa463f78d621bb4c85795cb93ed236ac99b0d9b48972110ebb53a07f0c",
+    "scores_sha256": "395539fc46ebd41bfe18349bf704d4d5cf811b002ccc287dbba53474d55bf771",
+    "files": {
+      "training_args": {
+        "source": "runs/depth_distill_ja_teacher10000_to5000/args.yaml",
+        "archived_file": "input_snapshot/training_args.yaml",
+        "sha256": "0e0f14db0103ea99f9898e75acc97eb29c7472916b963d5f87dbdef0ec9af917"
+      },
+      "training_progress": {
+        "source": "runs/depth_distill_ja_teacher10000_to5000/progress.jsonl",
+        "archived_file": "input_snapshot/training_progress.jsonl",
+        "sha256": "0eae52602fa9baeaea217d44a85607293b3517ce4bc5e3e408118ac9c902e06b"
+      },
+      "checkpoint_verification": {
+        "source": "runs/stage4-control/distill-5000-verified.json",
+        "archived_file": "input_snapshot/checkpoint_verification.json",
+        "sha256": "ade18ef6a84df5ce46d4d389f69f8affd7b4ba1f9dc636a6ac82e4c08441222e"
+      },
+      "source_preflight": {
+        "source": "runs/stage4-control/distill-5000-preflight.json",
+        "archived_file": "input_snapshot/source_preflight.json",
+        "sha256": "425bfadccce93f4d7c2f63eeee083ee3909a0f9db1c7e8af8cfe8bdbe731d7a4"
+      },
+      "reference_identity": {
+        "source": "runs/m2a-control/m2a-evaluation-reference-identity.json",
+        "archived_file": "input_snapshot/reference_identity.json",
+        "sha256": "a78870405c4898a778080c1291dd1f6de3c8021d5acd898960345788c261c9ab"
+      }
+    },
+    "context_archiver_sha256": "e28dd4b0c030ff31d1c540e983f0aa8f8105fa841276af7ce1b4eefb31030a10",
+    "human_listening_completed": false
+  }
+}

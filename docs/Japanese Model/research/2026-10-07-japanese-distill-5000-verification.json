@@ -1,0 +1,123 @@
+{
+  "actual_student_optimizer_step": 5000,
+  "student_layers": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "raw_ema_optimizer_finite": true,
+  "teacher_heads_exactly_preserved": 70,
+  "changed_backbone_tensors": 48,
+  "teacher_is_provisional": true,
+  "run_start_step": 0,
+  "files": {
+    "checkpoint_00005000.pt": {
+      "bytes": 709394483,
+      "sha256": "f9dee3bc786fbcc1358a74a35d1885e7084700eb9d4d5b40d3875a3d9a7d41a8"
+    },
+    "optim_00005000.pt": {
+      "bytes": 670318242,
+      "sha256": "5334737c97b1ed61568aefbf896404042cf6e6b7f5774a62a773ce569b3b06c4"
+    }
+  },
+  "protected_restart_pair": "runs/stage4-control/distill-preserved/5000",
+  "validation": [
+    {
+      "time": "2026-10-07 04:16:44+0000",
+      "type": "valid",
+      "step": 500,
+      "metrics": {
+        "distill_mse": 0.09778170354664326,
+        "loss": 0.09778170354664326
+      }
+    },
+    {
+      "time": "2026-10-07 04:18:07+0000",
+      "type": "valid",
+      "step": 1000,
+      "metrics": {
+        "distill_mse": 0.09378614984452724,
+        "loss": 0.09378614984452724
+      }
+    },
+    {
+      "time": "2026-10-07 04:19:30+0000",
+      "type": "valid",
+      "step": 1500,
+      "metrics": {
+        "distill_mse": 0.08323943451046943,
+        "loss": 0.08323943451046943
+      }
+    },
+    {
+      "time": "2026-10-07 04:20:53+0000",
+      "type": "valid",
+      "step": 2000,
+      "metrics": {
+        "distill_mse": 0.07297780118882656,
+        "loss": 0.07297780118882656
+      }
+    },
+    {
+      "time": "2026-10-07 04:22:16+0000",
+      "type": "valid",
+      "step": 2500,
+      "metrics": {
+        "distill_mse": 0.06546177543699741,
+        "loss": 0.06546177543699741
+      }
+    },
+    {
+      "time": "2026-10-07 04:23:39+0000",
+      "type": "valid",
+      "step": 3000,
+      "metrics": {
+        "distill_mse": 0.0583893758058548,
+        "loss": 0.0583893758058548
+      }
+    },
+    {
+      "time": "2026-10-07 04:25:03+0000",
+      "type": "valid",
+      "step": 3500,
+      "metrics": {
+        "distill_mse": 0.051905751042068,
+        "loss": 0.051905751042068
+      }
+    },
+    {
+      "time": "2026-10-07 04:26:26+0000",
+      "type": "valid",
+      "step": 4000,
+      "metrics": {
+        "distill_mse": 0.047790099754929545,
+        "loss": 0.047790099754929545
+      }
+    },
+    {
+      "time": "2026-10-07 04:27:51+0000",
+      "type": "valid",
+      "step": 4500,
+      "metrics": {
+        "distill_mse": 0.045286251604557036,
+        "loss": 0.045286251604557036
+      }
+    },
+    {
+      "time": "2026-10-07 04:29:14+0000",
+      "type": "valid",
+      "step": 5000,
+      "metrics": {
+        "distill_mse": 0.04255462873727083,
+        "loss": 0.04255462873727083
+      }
+    }
+  ],
+  "num_valid_batches": 50,
+  "human_listening_completed": false,
+  "quality_approved": false,
+  "publication_performed": false
+}

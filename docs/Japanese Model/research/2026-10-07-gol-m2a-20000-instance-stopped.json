@@ -1,0 +1,16 @@
+{
+  "observed_utc": "2026-10-07T10:34:04.219193+09:00",
+  "instance_id": 54521683,
+  "label": "pocket-ja-gol-only-m2a-20261007",
+  "actual_status": "exited",
+  "cur_state": "stopped",
+  "intended_status": "stopped",
+  "action": "stop_compute_preserve_disk",
+  "verification": "Stop command returned exit 0 with non-JSON output; subsequent independent show instances verified stopped. No repeated stop request.",
+  "storage_billing_continues": true,
+  "destroyed": false,
+  "teacher_selected": false,
+  "human_listening_completed": false,
+  "other_instance_mutations": [],
+  "billing_reference": "https://github.com/vast-ai/docs/blob/main/guides/reference/billing.mdx"
+}

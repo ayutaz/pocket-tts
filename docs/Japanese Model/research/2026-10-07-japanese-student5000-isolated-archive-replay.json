@@ -1,0 +1,16 @@
+{
+  "archived_export_loaded_without_checkpoint": true,
+  "isolated_package_source": "/workspace/pocket-tts-student5000-replay/pocket_tts/__init__.py",
+  "pcm_matches_verified_checkpoint_generation": true,
+  "isolated_empty_hf_home_and_offline_mode": true,
+  "actual_audio_seconds": 5.36,
+  "human_listening_completed": false,
+  "quality_approved": false,
+  "publication_performed": false,
+  "weights_sha256": "a1b27310b7daf6a09f3a5289f0477ec2f20217d53d6438b5bea9c0bdd5ba01ae",
+  "tokenizer_sha256": "4549ee1be7a484cbfd0cc38e3277e7fc91141f42a897152c81238eedb692d25f",
+  "replay_config_sha256": "012b87b266dc60a8f6d92aa103b84ec12ed30d17e149ffbf466c69ba26733ad1",
+  "replay_script_sha256": "bb14ee15f5fa51534fe9fd1eea6aeef1d5130a92c4941837bf5fd64ed51e2f19",
+  "source_archive_sha256": "3e2cecf39c6168b39e8c944899e2f20ac20d66cfd27bd6aa30caf2d05b419129",
+  "limitation": "Same installed dependencies and Vast Linux host; this is not a fresh dependency installation or native Windows test."
+}

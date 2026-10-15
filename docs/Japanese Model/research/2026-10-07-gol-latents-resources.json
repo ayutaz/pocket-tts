@@ -1,0 +1,24 @@
+{
+  "scope": "Full 447090-row training latent preparation, not validation or model quality",
+  "instance_id": 54521683,
+  "rows": 447090,
+  "started_utc": "2026-10-06T20:28:39+00:00",
+  "finished_utc": "2026-10-06T20:39:23+00:00",
+  "seconds": 644.0,
+  "batch_size": 32,
+  "decode_workers": 8,
+  "cache": "data/ja-gol-only-m2a/latents/29335a056899c615-6860ac299c4652cb",
+  "cache_apparent_bytes_including_directory_entries": 4174555040,
+  "maximum_observed_gpu_memory_mib": 76692,
+  "gpu_samples": 132,
+  "gpu_observation_interval_seconds": 5,
+  "disk_end_df_bytes": "Filesystem         1B-blocks          Used     Available Use% Mounted on\noverlay        4294967296000 2150279368704 2144687927296  51% /\n",
+  "manifest_sha256": "6860ac299c4652cb36b0c8cfa74382bbc66f5c3d433bbb4271358e1fd2e3d6ae",
+  "mimi_encode_sha256": "29335a056899c615a95664894c691222d4eb3b2c060009bacbaf0f676cb8ce2b",
+  "all_headers_verified": true,
+  "limitations": [
+    "Five-second observations may miss a transient GPU memory peak.",
+    "Cache apparent size and whole-filesystem allocation are different measurements.",
+    "Complete end-to-end peak disk use requires later checkpoint/evaluation measurements."
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "checked_utc": "2026-10-07T05:25:20.619160+00:00",
+  "archive_sha256": "55d94bbff7bf83a5918033ae35fc9f657681f24264a4d01a7e0ed499aba73ebd",
+  "files_verified": 90,
+  "all_transferred_bytes_and_sha256_verified": true,
+  "recovered_off_instance": true,
+  "directory": "<workspace>\\runs\\vast-m2a-control\\student5000-final-controls-artifacts",
+  "human_listening_completed": false,
+  "quality_approved": false,
+  "publication_performed": false,
+  "publication_redactions": {
+    "fields": [
+      "directory (host/path normalized)"
+    ],
+    "original_record_retained_locally": true,
+    "scope": "Public documentation copy only; experiment results and artifact checksums unchanged"
+  }
+}

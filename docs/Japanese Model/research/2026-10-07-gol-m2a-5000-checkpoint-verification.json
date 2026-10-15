@@ -1,0 +1,123 @@
+{
+  "checkpoint_step": 5000,
+  "optimizer_steps": [
+    5000
+  ],
+  "fresh_start_event": {
+    "time": "2026-10-06 20:41:46+0000",
+    "type": "run_start",
+    "step": 0,
+    "config": "runs/m2a-control/m2a-to2000.yaml",
+    "world_size": 1,
+    "max_steps": 2000,
+    "commit": "ce123ec-dirty"
+  },
+  "run_starts": [
+    {
+      "time": "2026-10-06 20:41:46+0000",
+      "type": "run_start",
+      "step": 0,
+      "config": "runs/m2a-control/m2a-to2000.yaml",
+      "world_size": 1,
+      "max_steps": 2000,
+      "commit": "ce123ec-dirty"
+    },
+    {
+      "time": "2026-10-06 20:57:43+0000",
+      "type": "run_start",
+      "step": 2000,
+      "config": "runs/m2a-control/m2a-to3000.yaml",
+      "world_size": 1,
+      "max_steps": 3000,
+      "commit": "ce123ec-dirty"
+    },
+    {
+      "time": "2026-10-06 21:09:12+0000",
+      "type": "run_start",
+      "step": 3000,
+      "config": "runs/m2a-control/m2a-to5000.yaml",
+      "world_size": 1,
+      "max_steps": 5000,
+      "commit": "ce123ec-dirty"
+    }
+  ],
+  "validation": [
+    {
+      "time": "2026-10-06 20:45:32+0000",
+      "type": "valid",
+      "step": 1000,
+      "metrics": {
+        "flow_diag": 22.01466323852539,
+        "flow_distill": 0.33532342851161956,
+        "flow_loss": 0.47622856199741365,
+        "eos_loss": 0.03245418506674468,
+        "loss": 0.479473979473114
+      }
+    },
+    {
+      "time": "2026-10-06 20:48:37+0000",
+      "type": "valid",
+      "step": 2000,
+      "metrics": {
+        "flow_diag": 20.59938907623291,
+        "flow_distill": 0.28705092817544936,
+        "flow_loss": 0.36413656145334244,
+        "eos_loss": 0.028601026386022566,
+        "loss": 0.36699666261672975
+      }
+    },
+    {
+      "time": "2026-10-06 21:01:04+0000",
+      "type": "valid",
+      "step": 3000,
+      "metrics": {
+        "flow_diag": 19.883290271759034,
+        "flow_distill": 0.286010117828846,
+        "flow_loss": 0.2856139717437327,
+        "eos_loss": 0.026994902268052103,
+        "loss": 0.28831346187740564
+      }
+    },
+    {
+      "time": "2026-10-06 21:12:33+0000",
+      "type": "valid",
+      "step": 4000,
+      "metrics": {
+        "flow_diag": 19.52990526199341,
+        "flow_distill": 0.27763289630413057,
+        "flow_loss": 0.23774244036525488,
+        "eos_loss": 0.024500333666801453,
+        "loss": 0.24019247300922872
+      }
+    },
+    {
+      "time": "2026-10-06 21:15:39+0000",
+      "type": "valid",
+      "step": 5000,
+      "metrics": {
+        "flow_diag": 19.32251962661743,
+        "flow_distill": 0.2628497493267059,
+        "flow_loss": 0.2135749132046476,
+        "eos_loss": 0.025113692292943596,
+        "loss": 0.21608628116548062
+      }
+    }
+  ],
+  "finite_saved_raw_ema_optimizer": true,
+  "embedding_shape": [
+    8001,
+    1024
+  ],
+  "inputs": {
+    "runs/finetune_language_ja_m2a/checkpoint_00005000.pt": "0aa9c549a68011d6b1a7bb8e7b508ecb11c7053fb565af7c0f682116324d672f",
+    "runs/finetune_language_ja_m2a/optim_00005000.pt": "ae8b6a7c1c3ce62964fe4585e7f8f4802944cee35354e902d9e6234622266bde",
+    "runs/finetune_language_ja_m2a/args.yaml": "231e851357fd358df17bf034d2aa5b153ee4099fbabda3224f1281e6b7aee337",
+    "runs/finetune_language_ja_m2a/progress.jsonl": "9c630d424ca0234333c639157cb89e1d8ea3a6483fda0369bc40f9d7911163f5",
+    "runs/m2a-control/final-data-audit.json": "0acf7a4d1b6be4b3054c9e67c2a822939dd204367b8cc9b0870a81c28bcd6ea4"
+  },
+  "human_listening_completed": false,
+  "limits": [
+    "Checkpoint/update evidence does not establish Japanese speech quality.",
+    "Logged metrics cover logged steps; optimizer sidecar establishes final update counter."
+  ]
+}

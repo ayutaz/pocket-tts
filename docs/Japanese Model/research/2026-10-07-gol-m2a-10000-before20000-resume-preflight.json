@@ -1,0 +1,30 @@
+{
+  "checkpoint_step": 10000,
+  "optimizer_steps": [
+    10000
+  ],
+  "files": {
+    "checkpoint_00010000.pt": {
+      "bytes": 2561110827,
+      "sha256": "51f538a3fe5231e4b404f46c47ae49dc4f39a20b6a07ce2bb1cbec03976e17d1",
+      "current_and_preserved_match": true,
+      "off_instance_receipt_matches": true
+    },
+    "optim_00010000.pt": {
+      "bytes": 2561133510,
+      "sha256": "2dfb82fb507467335262897e31c3557d4d38331873f34fc9a1385cee37aecc64",
+      "current_and_preserved_match": true,
+      "off_instance_receipt_matches": true
+    }
+  },
+  "saved_context_and_current_args_verified": true,
+  "protection_receipt_sha256": "1251b7b43bb79ef5daaf9d158faf74f761328479994629255320acaa1d29bfe6",
+  "off_instance_receipt_sha256": "d032de2c540ce4b5c8d5590f9925eeca24f1527f7fb5312357301c5f0afc8dfd",
+  "helper_sha256": "fb2355c3af52dbc2883d8336473d0245ac03cd1e753fbebca7b91bb60b28e73d",
+  "human_listening_completed": false,
+  "teacher_selected": false,
+  "limits": [
+    "Restart identity gate only; full evaluation and continuation decision are separate.",
+    "Off-instance bytes are attested by the earlier transfer-integrity receipt, not reread here."
+  ]
+}

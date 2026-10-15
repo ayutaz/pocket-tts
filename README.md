@@ -1,5 +1,8 @@
 # Pocket TTS
 
+> [!NOTE]
+> **Japanese experiments archived (2026-10-15):** This fork's Japanese adaptation work has ended. All six retained models and evaluation records are saved at [tts-dataset/pocket-tts-ja-experiments](https://huggingface.co/tts-dataset/pocket-tts-ja-experiments) (public, manual access approval). They are unfinished research artifacts. See the [final Japanese project summary](docs/Japanese%20Model/index.md).
+
 <img width="1446" height="622" alt="pocket-tts-logo-v2-transparent" src="https://github.com/user-attachments/assets/637b5ed6-831f-4023-9b4c-741be21ab238" />
 
 A lightweight text-to-speech (TTS) application designed to run efficiently on CPUs.

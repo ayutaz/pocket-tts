@@ -1,0 +1,321 @@
+{
+  "checkpoint_step": 20000,
+  "optimizer_steps": [
+    20000
+  ],
+  "fresh_start_event": {
+    "time": "2026-10-06 20:41:46+0000",
+    "type": "run_start",
+    "step": 0,
+    "config": "runs/m2a-control/m2a-to2000.yaml",
+    "world_size": 1,
+    "max_steps": 2000,
+    "commit": "ce123ec-dirty"
+  },
+  "run_starts": [
+    {
+      "time": "2026-10-06 20:41:46+0000",
+      "type": "run_start",
+      "step": 0,
+      "config": "runs/m2a-control/m2a-to2000.yaml",
+      "world_size": 1,
+      "max_steps": 2000,
+      "commit": "ce123ec-dirty"
+    },
+    {
+      "time": "2026-10-06 20:57:43+0000",
+      "type": "run_start",
+      "step": 2000,
+      "config": "runs/m2a-control/m2a-to3000.yaml",
+      "world_size": 1,
+      "max_steps": 3000,
+      "commit": "ce123ec-dirty"
+    },
+    {
+      "time": "2026-10-06 21:09:12+0000",
+      "type": "run_start",
+      "step": 3000,
+      "config": "runs/m2a-control/m2a-to5000.yaml",
+      "world_size": 1,
+      "max_steps": 5000,
+      "commit": "ce123ec-dirty"
+    },
+    {
+      "time": "2026-10-06 22:25:00+0000",
+      "type": "run_start",
+      "step": 5000,
+      "config": "runs/m2a-control/m2a-to10000.yaml",
+      "world_size": 1,
+      "max_steps": 10000,
+      "commit": "ce123ec-dirty"
+    },
+    {
+      "time": "2026-10-06 23:48:11+0000",
+      "type": "run_start",
+      "step": 10000,
+      "config": "runs/m2a-control/m2a-to20000.yaml",
+      "world_size": 1,
+      "max_steps": 20000,
+      "commit": "ce123ec-dirty"
+    }
+  ],
+  "validation": [
+    {
+      "time": "2026-10-06 20:45:32+0000",
+      "type": "valid",
+      "step": 1000,
+      "metrics": {
+        "flow_diag": 22.01466323852539,
+        "flow_distill": 0.33532342851161956,
+        "flow_loss": 0.47622856199741365,
+        "eos_loss": 0.03245418506674468,
+        "loss": 0.479473979473114
+      }
+    },
+    {
+      "time": "2026-10-06 20:48:37+0000",
+      "type": "valid",
+      "step": 2000,
+      "metrics": {
+        "flow_diag": 20.59938907623291,
+        "flow_distill": 0.28705092817544936,
+        "flow_loss": 0.36413656145334244,
+        "eos_loss": 0.028601026386022566,
+        "loss": 0.36699666261672975
+      }
+    },
+    {
+      "time": "2026-10-06 21:01:04+0000",
+      "type": "valid",
+      "step": 3000,
+      "metrics": {
+        "flow_diag": 19.883290271759034,
+        "flow_distill": 0.286010117828846,
+        "flow_loss": 0.2856139717437327,
+        "eos_loss": 0.026994902268052103,
+        "loss": 0.28831346187740564
+      }
+    },
+    {
+      "time": "2026-10-06 21:12:33+0000",
+      "type": "valid",
+      "step": 4000,
+      "metrics": {
+        "flow_diag": 19.52990526199341,
+        "flow_distill": 0.27763289630413057,
+        "flow_loss": 0.23774244036525488,
+        "eos_loss": 0.024500333666801453,
+        "loss": 0.24019247300922872
+      }
+    },
+    {
+      "time": "2026-10-06 21:15:39+0000",
+      "type": "valid",
+      "step": 5000,
+      "metrics": {
+        "flow_diag": 19.32251962661743,
+        "flow_distill": 0.2628497493267059,
+        "flow_loss": 0.2135749132046476,
+        "eos_loss": 0.025113692292943596,
+        "loss": 0.21608628116548062
+      }
+    },
+    {
+      "time": "2026-10-06 22:28:19+0000",
+      "type": "valid",
+      "step": 6000,
+      "metrics": {
+        "flow_diag": 19.13268253326416,
+        "flow_distill": 0.3072268575429916,
+        "flow_loss": 0.20395064195618035,
+        "eos_loss": 0.025000342172570526,
+        "loss": 0.20645067580044268
+      }
+    },
+    {
+      "time": "2026-10-06 22:31:40+0000",
+      "type": "valid",
+      "step": 7000,
+      "metrics": {
+        "flow_diag": 18.957292079925537,
+        "flow_distill": 0.23423184871673583,
+        "flow_loss": 0.19581918318755925,
+        "eos_loss": 0.025826089894399048,
+        "loss": 0.1984017913416028
+      }
+    },
+    {
+      "time": "2026-10-06 22:34:43+0000",
+      "type": "valid",
+      "step": 8000,
+      "metrics": {
+        "flow_diag": 18.92833055496216,
+        "flow_distill": 0.2534305876493454,
+        "flow_loss": 0.19665194317698478,
+        "eos_loss": 0.026470944564789534,
+        "loss": 0.19929903723299502
+      }
+    },
+    {
+      "time": "2026-10-06 22:37:47+0000",
+      "type": "valid",
+      "step": 9000,
+      "metrics": {
+        "flow_diag": 18.86041967391968,
+        "flow_distill": 0.25707133412361144,
+        "flow_loss": 0.19492817804217338,
+        "eos_loss": 0.025078650936484335,
+        "loss": 0.19743604458868502
+      }
+    },
+    {
+      "time": "2026-10-06 22:40:50+0000",
+      "type": "valid",
+      "step": 10000,
+      "metrics": {
+        "flow_diag": 18.599070072174072,
+        "flow_distill": 0.24697860360145568,
+        "flow_loss": 0.18012422296218575,
+        "eos_loss": 0.025279650771990417,
+        "loss": 0.18265218726359309
+      }
+    },
+    {
+      "time": "2026-10-06 23:51:29+0000",
+      "type": "valid",
+      "step": 11000,
+      "metrics": {
+        "flow_diag": 18.82021286010742,
+        "flow_distill": 0.2559442639350891,
+        "flow_loss": 0.1956100689433515,
+        "eos_loss": 0.026273808190599084,
+        "loss": 0.19823744878172875
+      }
+    },
+    {
+      "time": "2026-10-06 23:54:33+0000",
+      "type": "valid",
+      "step": 12000,
+      "metrics": {
+        "flow_diag": 18.633272304534913,
+        "flow_distill": 0.25427122801542285,
+        "flow_loss": 0.18478613205254077,
+        "eos_loss": 0.024134745243936776,
+        "loss": 0.18719960639253258
+      }
+    },
+    {
+      "time": "2026-10-06 23:57:37+0000",
+      "type": "valid",
+      "step": 13000,
+      "metrics": {
+        "flow_diag": 18.460874824523927,
+        "flow_distill": 0.2557654637098312,
+        "flow_loss": 0.17484238900244237,
+        "eos_loss": 0.026463053924962877,
+        "loss": 0.17748869456350802
+      }
+    },
+    {
+      "time": "2026-10-07 00:00:48+0000",
+      "type": "valid",
+      "step": 14000,
+      "metrics": {
+        "flow_diag": 18.573685188293457,
+        "flow_distill": 0.2512682780623436,
+        "flow_loss": 0.18218625715002418,
+        "eos_loss": 0.023325037574395538,
+        "loss": 0.1845187599118799
+      }
+    },
+    {
+      "time": "2026-10-07 00:03:58+0000",
+      "type": "valid",
+      "step": 15000,
+      "metrics": {
+        "flow_diag": 18.446977005004882,
+        "flow_distill": 0.24878769129514694,
+        "flow_loss": 0.17490941701456905,
+        "eos_loss": 0.02592891616746783,
+        "loss": 0.17750230891630053
+      }
+    },
+    {
+      "time": "2026-10-07 00:07:10+0000",
+      "type": "valid",
+      "step": 16000,
+      "metrics": {
+        "flow_diag": 18.38500061035156,
+        "flow_distill": 0.23148216396570206,
+        "flow_loss": 0.1718365848995745,
+        "eos_loss": 0.02505182589404285,
+        "loss": 0.17434176854789257
+      }
+    },
+    {
+      "time": "2026-10-07 00:10:12+0000",
+      "type": "valid",
+      "step": 17000,
+      "metrics": {
+        "flow_diag": 18.3340189743042,
+        "flow_distill": 0.2296455842256546,
+        "flow_loss": 0.1680949368607253,
+        "eos_loss": 0.025896797962486742,
+        "loss": 0.1706846175622195
+      }
+    },
+    {
+      "time": "2026-10-07 00:13:23+0000",
+      "type": "valid",
+      "step": 18000,
+      "metrics": {
+        "flow_diag": 18.246897354125977,
+        "flow_distill": 0.23593986839056014,
+        "flow_loss": 0.16446499383077026,
+        "eos_loss": 0.02342216202057898,
+        "loss": 0.1668072100961581
+      }
+    },
+    {
+      "time": "2026-10-07 00:16:26+0000",
+      "type": "valid",
+      "step": 19000,
+      "metrics": {
+        "flow_diag": 18.140111808776854,
+        "flow_distill": 0.2351250723004341,
+        "flow_loss": 0.15889111964032054,
+        "eos_loss": 0.024729590825736524,
+        "loss": 0.16136407874524594
+      }
+    },
+    {
+      "time": "2026-10-07 00:19:28+0000",
+      "type": "valid",
+      "step": 20000,
+      "metrics": {
+        "flow_diag": 18.14808048248291,
+        "flow_distill": 0.23167776376008986,
+        "flow_loss": 0.15932051261886954,
+        "eos_loss": 0.027790172225795686,
+        "loss": 0.16209953052923085
+      }
+    }
+  ],
+  "finite_saved_raw_ema_optimizer": true,
+  "embedding_shape": [
+    8001,
+    1024
+  ],
+  "inputs": {
+    "runs/finetune_language_ja_m2a/checkpoint_00020000.pt": "499c037ab2cc63f506592d4203e53d72a68914a4f5eb0025b2efc418c93e417d",
+    "runs/finetune_language_ja_m2a/optim_00020000.pt": "abee657cebac6a22b67616345294b345fd101e2db8b56e06a364e443097883b0",
+    "runs/finetune_language_ja_m2a/args.yaml": "c1062004bf80f2c39246bdb84392e1414ef169ba3750e748929d9fa8ea623d82",
+    "runs/finetune_language_ja_m2a/progress.jsonl": "c8a551728b60f61842ca7b97894ec5b855038e51aa13916ee635c5d823417b18",
+    "runs/m2a-control/final-data-audit.json": "0acf7a4d1b6be4b3054c9e67c2a822939dd204367b8cc9b0870a81c28bcd6ea4"
+  },
+  "human_listening_completed": false,
+  "limits": [
+    "Checkpoint/update evidence does not establish Japanese speech quality.",
+    "Logged metrics cover logged steps; optimizer sidecar establishes final update counter."
+  ]
+}

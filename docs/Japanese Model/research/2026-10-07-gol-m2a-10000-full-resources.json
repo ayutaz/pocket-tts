@@ -1,0 +1,28 @@
+{
+  "instance_id": 54521683,
+  "checkpoint_step": 10000,
+  "checkpoint_sha256": "51f538a3fe5231e4b404f46c47ae49dc4f39a20b6a07ce2bb1cbec03976e17d1",
+  "evaluation_exit": 0,
+  "started_utc": "2026-10-06T22:45:33Z",
+  "finished_utc": "2026-10-06T23:37:49Z",
+  "evaluation_wall_seconds": 3136.0,
+  "observed_nvidia_memory_max_mib": 17918.0,
+  "observed_nvidia_utilization_max_percent": 100.0,
+  "gpu_monitor_samples": 628,
+  "rate_usd_per_hour_gpu_and_storage_at_selection": 2.096296296,
+  "estimated_time_cost_usd": 1.8261069956266665,
+  "inputs_sha256": {
+    "runs/m2a-control/m2a-full10000.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "runs/m2a-control/m2a-full10000.started": "59e255c20672987db7d040ce02074c1740ae9c0914e6b66cb870ce3a82479a35",
+    "runs/m2a-control/m2a-full10000.finished": "4ca7a2a9272244aff21af0d50e10982a528bad3bad743fcf09227080f2ba160f",
+    "runs/m2a-control/m2a-full10000-gpu.csv": "1126610395a2460f3e91740c64f8e92620f056238f39e169c3c3d7ef51bd5b0b",
+    "runs/japanese-m2a-eval-00010000-full/evaluation_context.json": "3527a2b0177d356be13b5c4cef840b0ac8b85894be2f26bb9b9e1906f4d87269",
+    "/workspace/pocket-tts/runs/m2a-control/full_evaluation_resources.py": "e5e97ac9fcaa8f489e1a2903627aa1a6763d32e6862d8f743df4bf486d16be97"
+  },
+  "limits": [
+    "Wall time includes this controller's preflight, generation, ASR, merge and context checks.",
+    "It excludes later independent diagnostics, result compression, transfer and prior training.",
+    "NVIDIA memory is sampled process-wide device use, not PyTorch allocated memory or a minimum requirement.",
+    "Cost is time multiplied by selection-time GPU and storage rate; transfer and actual billing are separate."
+  ]
+}

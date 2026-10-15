@@ -1,0 +1,298 @@
+{
+  "research_date": "2026-10-06",
+  "scope": "Public metadata and bounded searches; no synthesis benchmarks",
+  "upstream_main": {
+    "sha": "41cbc84af539ea78a804ffca5f9c6edc1a22ce44",
+    "committer_date": "2026-10-01T13:03:28Z"
+  },
+  "models": [
+    {
+      "id": "kyutai/pocket-tts",
+      "url": "https://huggingface.co/kyutai/pocket-tts",
+      "sha": "3e82814a68665eec246ff649b14c71331f955c06",
+      "created_at": "2025-12-29T14:06:48.000Z",
+      "last_modified": "2026-10-01T12:37:55.000Z",
+      "gated": "auto",
+      "license_tag": "cc-by-4.0",
+      "license_name": null,
+      "languages": [
+        "en",
+        "fr",
+        "de",
+        "pt",
+        "it",
+        "es"
+      ]
+    },
+    {
+      "id": "ayousanz/pocket-tts-ja-phase1",
+      "url": "https://huggingface.co/ayousanz/pocket-tts-ja-phase1",
+      "sha": "2c3c1a7dab2ff066b5069c30e7951a980ff6e914",
+      "created_at": "2026-08-29T08:01:44.000Z",
+      "last_modified": "2026-08-29T08:07:50.000Z",
+      "gated": "manual",
+      "license_tag": "cc-by-4.0",
+      "license_name": null,
+      "languages": [
+        "ja"
+      ]
+    },
+    {
+      "id": "Supertone/supertonic-3",
+      "url": "https://huggingface.co/Supertone/supertonic-3",
+      "sha": "3cadd1ee6394adea1bd021217a0e650ede09a323",
+      "created_at": "2026-05-06T20:46:20.000Z",
+      "last_modified": "2026-05-18T08:59:01.000Z",
+      "gated": false,
+      "license_tag": "openrail",
+      "license_name": null,
+      "languages": [
+        "en",
+        "ko",
+        "ja",
+        "ar",
+        "bg",
+        "cs",
+        "da",
+        "de",
+        "el",
+        "es",
+        "et",
+        "fi",
+        "fr",
+        "hi",
+        "hr",
+        "hu",
+        "id",
+        "it",
+        "lt",
+        "lv",
+        "nl",
+        "pl",
+        "pt",
+        "ro",
+        "ru",
+        "sk",
+        "sl",
+        "sv",
+        "tr",
+        "uk",
+        "vi"
+      ]
+    },
+    {
+      "id": "Aratako/MioTTS-0.1B",
+      "url": "https://huggingface.co/Aratako/MioTTS-0.1B",
+      "sha": "128d692707de5f34133aeaaf5b3fdfa520f10d6d",
+      "created_at": "2026-02-07T03:33:09.000Z",
+      "last_modified": "2026-02-13T14:28:50.000Z",
+      "gated": false,
+      "license_tag": "other",
+      "license_name": "falcon-llm-license",
+      "languages": [
+        "ja",
+        "en"
+      ]
+    },
+    {
+      "id": "OpenMOSS-Team/MOSS-TTS-Nano-100M",
+      "url": "https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Nano-100M",
+      "sha": "44502f80dbf9743528fa921cc544d662c685ebec",
+      "created_at": "2026-04-02T15:13:08.000Z",
+      "last_modified": "2026-04-13T09:32:58.000Z",
+      "gated": false,
+      "license_tag": "apache-2.0",
+      "license_name": null,
+      "languages": [
+        "zh",
+        "en",
+        "de",
+        "es",
+        "fr",
+        "ja",
+        "it",
+        "he",
+        "ko",
+        "ru",
+        "fa",
+        "ar",
+        "pl",
+        "pt",
+        "cs",
+        "da",
+        "sv",
+        "hu",
+        "el",
+        "tr"
+      ]
+    },
+    {
+      "id": "Aratako/Irodori-TTS-v4.1-Small",
+      "url": "https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small",
+      "sha": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+      "created_at": "2026-08-11T01:36:55.000Z",
+      "last_modified": "2026-08-11T02:21:55.000Z",
+      "gated": false,
+      "license_tag": "mit",
+      "license_name": null,
+      "languages": [
+        "ja"
+      ]
+    },
+    {
+      "id": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+      "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+      "sha": "5d83992436eae1d760afd27aff78a71d676296fc",
+      "created_at": "2026-01-21T08:58:06.000Z",
+      "last_modified": "2026-01-29T08:01:19.000Z",
+      "gated": false,
+      "license_tag": "apache-2.0",
+      "license_name": null,
+      "languages": [
+        "zh",
+        "en",
+        "ja",
+        "ko",
+        "de",
+        "fr",
+        "ru",
+        "pt",
+        "es",
+        "it"
+      ]
+    },
+    {
+      "id": "OPPOer/CuteTTS",
+      "url": "https://huggingface.co/OPPOer/CuteTTS",
+      "sha": "1527d1674a8903d43cd92bb8fed7cc11f773f4d5",
+      "created_at": "2026-08-24T12:19:40.000Z",
+      "last_modified": "2026-08-24T12:22:51.000Z",
+      "gated": false,
+      "license_tag": "apache-2.0",
+      "license_name": null,
+      "languages": [
+        "en",
+        "zh",
+        "fr",
+        "de",
+        "es"
+      ]
+    },
+    {
+      "id": "OPPOer/CuteTTS-distill",
+      "url": "https://huggingface.co/OPPOer/CuteTTS-distill",
+      "sha": "6f84092f441295c415019193424033c93c6aee68",
+      "created_at": "2026-08-24T12:25:01.000Z",
+      "last_modified": "2026-08-24T12:27:51.000Z",
+      "gated": false,
+      "license_tag": "apache-2.0",
+      "license_name": null,
+      "languages": [
+        "en",
+        "zh",
+        "fr",
+        "de",
+        "es"
+      ]
+    },
+    {
+      "id": "neuphonic/neutts-nano",
+      "url": "https://huggingface.co/neuphonic/neutts-nano",
+      "sha": "ca2ba957804f0d80dd38ee819bdbd07311f95d15",
+      "created_at": "2025-11-18T17:31:03.000Z",
+      "last_modified": "2026-08-26T15:26:52.000Z",
+      "gated": "auto",
+      "license_tag": "other",
+      "license_name": null,
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "id": "seastar105/pocket-tts-korean-300m",
+      "url": "https://huggingface.co/seastar105/pocket-tts-korean-300m",
+      "sha": "f353349dbae42ff173d1e8421a1af3d1370f7841",
+      "created_at": "2026-08-27T16:37:18.000Z",
+      "last_modified": "2026-08-28T07:04:22.000Z",
+      "gated": false,
+      "license_tag": "cc-by-4.0",
+      "license_name": null,
+      "languages": [
+        "ko"
+      ]
+    }
+  ],
+  "hf_searches": [
+    {
+      "url": "https://huggingface.co/api/models?search=pocket-tts&limit=1000&full=true",
+      "returned_count": 156,
+      "japanese_tag_or_name_candidates": [
+        "ayousanz/pocket-tts-ja-phase1"
+      ]
+    },
+    {
+      "url": "https://huggingface.co/api/models?filter=pocket-tts&limit=1000&full=true",
+      "returned_count": 99,
+      "japanese_tag_or_name_candidates": [
+        "zwaiwng/maneko",
+        "ayousanz/pocket-tts-ja-phase1"
+      ]
+    }
+  ],
+  "github_issue_search": {
+    "url": "https://api.github.com/search/issues?q=repo%3Akyutai-labs/pocket-tts%20Japanese&per_page=100",
+    "count": 2,
+    "matches": [
+      {
+        "number": 118,
+        "title": "Official announcement: More languages for Pocket-TTS",
+        "state": "closed",
+        "updated_at": "2026-08-25T13:24:01Z",
+        "html_url": "https://github.com/kyutai-labs/pocket-tts/issues/118"
+      },
+      {
+        "number": 50,
+        "title": "[Features] Languages + Emotions",
+        "state": "closed",
+        "updated_at": "2026-02-10T09:50:17Z",
+        "html_url": "https://github.com/kyutai-labs/pocket-tts/issues/50"
+      }
+    ]
+  },
+  "official_readme_community_model_ids": [
+    "vvolhejn/pocket-tts-czech",
+    "saryps-labs/pocket-tts-hindi",
+    "seastar105/pocket-tts-korean-300m",
+    "mehdi-hf/pocket-tts-farsi",
+    "anak10thn/pocket-tts-indonesian",
+    "cbentes/pocket-tts-estonian",
+    "EryriLabs/pocket-tts-cymraeg",
+    "shefowl/pocket-tts-polish-6l",
+    "myned-ai/pocket-tts-greek"
+  ],
+  "local_parameter_count": {
+    "method": "torch meta modules with April 2026 architecture and Japanese 8000 SentencePiece; no weight downloads",
+    "teacher_24l": {
+      "flow_lm": 320076865,
+      "mimi": 20054337,
+      "total": 340131202,
+      "fp32_weight_mib": 1297.5
+    },
+    "proposed_student_6l": {
+      "flow_lm": 93510721,
+      "mimi": 20054337,
+      "total": 113565058,
+      "fp32_weight_mib": 433.22
+    }
+  },
+  "local_training_config_smoke": {
+    "configs": [
+      "finetune_language_ja.yaml",
+      "finetune_language_ja_phase1.yaml",
+      "finetune_language_ja_m2a.yaml"
+    ],
+    "result": "All fail tokenizer construction: inherited tokenizer=tokenizers attempts to parse Japanese SentencePiece binary as UTF-8 JSON",
+    "error": "stream did not contain valid UTF-8",
+    "after_fix": "Explicit sentencepiece backend in all three configs; full test_config_invariants.py: 57 passed in 9.01s"
+  }
+}

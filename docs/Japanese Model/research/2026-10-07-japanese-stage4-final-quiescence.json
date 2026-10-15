@@ -1,0 +1,10 @@
+{
+  "checked_utc": "2026-10-07T05:26:16.530266+00:00",
+  "instance_id": 54521683,
+  "live_owned_ml_and_controller_jobs": [],
+  "gpu_compute_users": [],
+  "no_owned_ml_or_controller_jobs": true,
+  "gpu_has_no_compute_users": true,
+  "human_listening_completed": false,
+  "publication_performed": false
+}

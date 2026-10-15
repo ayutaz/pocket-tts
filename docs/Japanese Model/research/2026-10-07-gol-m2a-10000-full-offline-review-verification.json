@@ -1,0 +1,269 @@
+{
+  "checkpoint_step": 10000,
+  "checkpoint_sha256": "51f538a3fe5231e4b404f46c47ae49dc4f39a20b6a07ce2bb1cbec03976e17d1",
+  "matrix_rows": 3024,
+  "tested_uri_scheme": "file",
+  "real_generated_audio": true,
+  "selected_voice_audio_playback_verified": [
+    {
+      "voice": "held_00",
+      "case": "daily",
+      "file": "trainer_ema_cfg2_eos-4_held_00_daily.wav",
+      "sha256": "7184e82aeb96205772709bfd5add4faa6eb1a1626cb72198f27e8e898a60e027",
+      "decoded_seconds": 3.68
+    },
+    {
+      "voice": "held_00",
+      "case": "date",
+      "file": "trainer_ema_cfg2_eos-4_held_00_date.wav",
+      "sha256": "101867995bc95d0a6e2a4b896a7d740597df1286189e11b6a1ad76cc9abe5b0f",
+      "decoded_seconds": 3.04
+    },
+    {
+      "voice": "held_00",
+      "case": "place",
+      "file": "trainer_ema_cfg2_eos-4_held_00_place.wav",
+      "sha256": "ea288bf493ab91681f5cfe48989f10e86dc560771454265ac31e2da2f955f6ba",
+      "decoded_seconds": 4.16
+    },
+    {
+      "voice": "held_00",
+      "case": "number",
+      "file": "trainer_ema_cfg2_eos-4_held_00_number.wav",
+      "sha256": "2fb603226b4f4823aff1c9c0371aeda73f8f37332d035693880378e06c81721f",
+      "decoded_seconds": 6.56
+    },
+    {
+      "voice": "held_00",
+      "case": "request",
+      "file": "trainer_ema_cfg2_eos-4_held_00_request.wav",
+      "sha256": "8a367daaed8a14026e8fd7d3ea738aa00a46d1acf4373f6c30b6e3375775f07a",
+      "decoded_seconds": 3.44
+    },
+    {
+      "voice": "held_00",
+      "case": "long",
+      "file": "trainer_ema_cfg2_eos-4_held_00_long.wav",
+      "sha256": "529fc459143831221e268f4b77f9f0aee3b90070d960382caa3c3a4f593b86a0",
+      "decoded_seconds": 12.64
+    },
+    {
+      "voice": "held_00",
+      "case": "proper_name",
+      "file": "trainer_ema_cfg2_eos-4_held_00_proper_name.wav",
+      "sha256": "62146753991afd604a1bb4e78ac9771bb9c48265e281a2c32cda2ca68ce9c54f",
+      "decoded_seconds": 4.96
+    },
+    {
+      "voice": "held_00",
+      "case": "digits",
+      "file": "trainer_ema_cfg2_eos-4_held_00_digits.wav",
+      "sha256": "f7a8351891fae39080f8e2c789ded5e234d6e9a5cdcbf2a55d9b9846f35b9adf",
+      "decoded_seconds": 5.84
+    },
+    {
+      "voice": "held_00",
+      "case": "units",
+      "file": "trainer_ema_cfg2_eos-4_held_00_units.wav",
+      "sha256": "55f7ff883c81afc507428f925377a56c2035692bb0da310339cb5f7fe5dec258",
+      "decoded_seconds": 6.72
+    },
+    {
+      "voice": "held_00",
+      "case": "loanwords",
+      "file": "trainer_ema_cfg2_eos-4_held_00_loanwords.wav",
+      "sha256": "4a0e7abde5b9f6e4b62ca995be7d0c305b3a99b3e8bd48d3418b7b30b32fcc36",
+      "decoded_seconds": 5.52
+    },
+    {
+      "voice": "held_00",
+      "case": "short_question",
+      "file": "trainer_ema_cfg2_eos-4_held_00_short_question.wav",
+      "sha256": "64e4966868026d3a623481a52fc52c44223d1f49a0ecb0b89c0921cebc3a17f8",
+      "decoded_seconds": 1.28
+    },
+    {
+      "voice": "held_00",
+      "case": "long_sequence",
+      "file": "trainer_ema_cfg2_eos-4_held_00_long_sequence.wav",
+      "sha256": "5abc67a52bdfe6aef321573045efb315fbeebd4e7e6e246e072e1e085b25f5bc",
+      "decoded_seconds": 17.84
+    },
+    {
+      "voice": "held_01",
+      "case": "daily",
+      "file": "trainer_ema_cfg2_eos-4_held_01_daily.wav",
+      "sha256": "cf2b84e45983ce850ba01e9d8af6c3bb324efb8239e1af870483e68eab756530",
+      "decoded_seconds": 1.84
+    },
+    {
+      "voice": "held_01",
+      "case": "date",
+      "file": "trainer_ema_cfg2_eos-4_held_01_date.wav",
+      "sha256": "c7089f19e3dd08c065d70789a0da2ab3dfb43e94efe75170d5797a92401e9036",
+      "decoded_seconds": 2.72
+    },
+    {
+      "voice": "held_01",
+      "case": "place",
+      "file": "trainer_ema_cfg2_eos-4_held_01_place.wav",
+      "sha256": "8bd31787259c460d941921ba295a8b0dd09ffefbd5f3d18240a3bb07019c2b5b",
+      "decoded_seconds": 2.88
+    },
+    {
+      "voice": "held_01",
+      "case": "number",
+      "file": "trainer_ema_cfg2_eos-4_held_01_number.wav",
+      "sha256": "0db3c17ae0a405924c9b50911332b8df414132e60aae49e54828a14585f1dacb",
+      "decoded_seconds": 5.44
+    },
+    {
+      "voice": "held_01",
+      "case": "request",
+      "file": "trainer_ema_cfg2_eos-4_held_01_request.wav",
+      "sha256": "f7cc929e97c287265fbdbee81a3836bb0a3b894b67ebae091ffde144abfcc6b5",
+      "decoded_seconds": 2.56
+    },
+    {
+      "voice": "held_01",
+      "case": "long",
+      "file": "trainer_ema_cfg2_eos-4_held_01_long.wav",
+      "sha256": "60f5e5ab06a696e67072606b954bebbf97ee0f394c0b61e23f6f7c0524ba9fcc",
+      "decoded_seconds": 11.6
+    },
+    {
+      "voice": "held_01",
+      "case": "proper_name",
+      "file": "trainer_ema_cfg2_eos-4_held_01_proper_name.wav",
+      "sha256": "2002cd7d073451916a6ff220eeb6d34b702df60f54472995ee2e86e47fd95e95",
+      "decoded_seconds": 4.48
+    },
+    {
+      "voice": "held_01",
+      "case": "digits",
+      "file": "trainer_ema_cfg2_eos-4_held_01_digits.wav",
+      "sha256": "31168099eb53e3780d93cfce1abfb58e489da612d89ccb5b24585dbe838e0469",
+      "decoded_seconds": 4.72
+    },
+    {
+      "voice": "held_01",
+      "case": "units",
+      "file": "trainer_ema_cfg2_eos-4_held_01_units.wav",
+      "sha256": "a91e44100346197c3a259b399353df25fc35c01c057ab67d2ba12ca910595264",
+      "decoded_seconds": 5.28
+    },
+    {
+      "voice": "held_01",
+      "case": "loanwords",
+      "file": "trainer_ema_cfg2_eos-4_held_01_loanwords.wav",
+      "sha256": "6f6128a99a0963b7cc4abdf8813799b6cbc898200a691bb7996b2fecbbe99586",
+      "decoded_seconds": 4.08
+    },
+    {
+      "voice": "held_01",
+      "case": "short_question",
+      "file": "trainer_ema_cfg2_eos-4_held_01_short_question.wav",
+      "sha256": "a0d0ce3b0dae080ff14526b3f63f941e6b2ec13626ac93e1584b62d611ecf7e7",
+      "decoded_seconds": 0.8
+    },
+    {
+      "voice": "held_01",
+      "case": "long_sequence",
+      "file": "trainer_ema_cfg2_eos-4_held_01_long_sequence.wav",
+      "sha256": "4e46c2f825fd2342d0e979a82db960cada4e5b8af1bd147a23a741df08ea9560",
+      "decoded_seconds": 15.6
+    },
+    {
+      "voice": "seen",
+      "case": "daily",
+      "file": "trainer_ema_cfg2_eos-4_seen_daily.wav",
+      "sha256": "47429d1ce51d3f716288b90fa398205e270ddc7e98b67687f7dae0b79c29520e",
+      "decoded_seconds": 3.12
+    },
+    {
+      "voice": "seen",
+      "case": "date",
+      "file": "trainer_ema_cfg2_eos-4_seen_date.wav",
+      "sha256": "fdceeb6ab3472a573a0cf8156b3b0fb64e1f71ab252eb7f5393f686541147726",
+      "decoded_seconds": 3.2
+    },
+    {
+      "voice": "seen",
+      "case": "place",
+      "file": "trainer_ema_cfg2_eos-4_seen_place.wav",
+      "sha256": "710ab56458760f5d21507736663c85dae34d5c57013cfd3e7b4710391d35f57e",
+      "decoded_seconds": 3.84
+    },
+    {
+      "voice": "seen",
+      "case": "number",
+      "file": "trainer_ema_cfg2_eos-4_seen_number.wav",
+      "sha256": "1d4e84b2a566eeac899257135b047e99a0b74e93e899a852c4920040fa909757",
+      "decoded_seconds": 5.36
+    },
+    {
+      "voice": "seen",
+      "case": "request",
+      "file": "trainer_ema_cfg2_eos-4_seen_request.wav",
+      "sha256": "72bc7570867364ed9b4021b93c0b5dbe36b3f4ba0305f9e1fe29ac1a9e05f2e9",
+      "decoded_seconds": 3.44
+    },
+    {
+      "voice": "seen",
+      "case": "long",
+      "file": "trainer_ema_cfg2_eos-4_seen_long.wav",
+      "sha256": "538e6dd94a7d6afab57d029e9cf380022936322bfb817929aeaa4b093dba09d9",
+      "decoded_seconds": 12.4
+    },
+    {
+      "voice": "seen",
+      "case": "proper_name",
+      "file": "trainer_ema_cfg2_eos-4_seen_proper_name.wav",
+      "sha256": "a0fc79c6d102e33a26d0d4538befa5934635fda3671384325018bcaf006bc7dc",
+      "decoded_seconds": 4.8
+    },
+    {
+      "voice": "seen",
+      "case": "digits",
+      "file": "trainer_ema_cfg2_eos-4_seen_digits.wav",
+      "sha256": "f61cb88e021c0db3b720f0254e281e65c72a00e8b23c015410dd4735959a6153",
+      "decoded_seconds": 5.52
+    },
+    {
+      "voice": "seen",
+      "case": "units",
+      "file": "trainer_ema_cfg2_eos-4_seen_units.wav",
+      "sha256": "53b87b91f0d0c7a2c21e584b918fac1c350f891c236f07b4de7b0535f7e02bef",
+      "decoded_seconds": 5.84
+    },
+    {
+      "voice": "seen",
+      "case": "loanwords",
+      "file": "trainer_ema_cfg2_eos-4_seen_loanwords.wav",
+      "sha256": "73bd32b516b9eef45082a2cd95cc80288cb9bc921c2b2836b042014a26d32586",
+      "decoded_seconds": 4.48
+    },
+    {
+      "voice": "seen",
+      "case": "short_question",
+      "file": "trainer_ema_cfg2_eos-4_seen_short_question.wav",
+      "sha256": "35c80fffe142e99bf47a25477040601b217202c948c2649761a8e021c3339834",
+      "decoded_seconds": 1.28
+    },
+    {
+      "voice": "seen",
+      "case": "long_sequence",
+      "file": "trainer_ema_cfg2_eos-4_seen_long_sequence.wav",
+      "sha256": "9a5dd5f5855e1318fd97bbab579f0b541c0764ed0bc66aeb9b4e2b6712d20c95",
+      "decoded_seconds": 16.4
+    }
+  ],
+  "real_page_checkpoint_and_export_hashes_verified": true,
+  "helper_sha256": "34fadd772b2fb69876563ab28f32bbc1e5d1cad6ef361d49f64de53d63579fd4",
+  "human_listening_completed": false,
+  "teacher_selected": false,
+  "limits": [
+    "Muted headless playback proves selected audio decoding/UI behavior, not human perception or Japanese quality.",
+    "This ran on Vast.ai Linux Chromium, not native Windows."
+  ]
+}

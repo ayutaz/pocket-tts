@@ -1,0 +1,271 @@
+{
+  "checkpoint_step": 10000,
+  "matrix_rows": 216,
+  "archived_context_verified": true,
+  "per_condition": {
+    "public_api_ema_cfg1_eos-1": {
+      "items": 18,
+      "reference_characters": 480,
+      "cer": 0.23958333333333334,
+      "substitutions": 44,
+      "deletions": 63,
+      "insertions": 8,
+      "under_one_second": 0,
+      "median_seconds": 4.76,
+      "termination": {
+        "eos": 16,
+        "max_length_without_eos": 2
+      }
+    },
+    "public_api_ema_cfg1_eos-4": {
+      "items": 18,
+      "reference_characters": 480,
+      "cer": 0.23958333333333334,
+      "substitutions": 44,
+      "deletions": 63,
+      "insertions": 8,
+      "under_one_second": 0,
+      "median_seconds": 4.76,
+      "termination": {
+        "eos": 16,
+        "max_length_without_eos": 2
+      }
+    },
+    "public_api_raw_cfg1_eos-1": {
+      "items": 18,
+      "reference_characters": 480,
+      "cer": 0.4083333333333333,
+      "substitutions": 87,
+      "deletions": 88,
+      "insertions": 21,
+      "under_one_second": 0,
+      "median_seconds": 5.04,
+      "termination": {
+        "max_length_after_eos": 1,
+        "max_length_without_eos": 7,
+        "eos": 10
+      }
+    },
+    "public_api_raw_cfg1_eos-4": {
+      "items": 18,
+      "reference_characters": 480,
+      "cer": 0.41458333333333336,
+      "substitutions": 86,
+      "deletions": 92,
+      "insertions": 21,
+      "under_one_second": 0,
+      "median_seconds": 4.640000000000001,
+      "termination": {
+        "max_length_after_eos": 1,
+        "max_length_without_eos": 4,
+        "eos": 13
+      }
+    },
+    "trainer_ema_cfg1_eos-1": {
+      "items": 18,
+      "reference_characters": 480,
+      "cer": 0.16458333333333333,
+      "substitutions": 43,
+      "deletions": 12,
+      "insertions": 24,
+      "under_one_second": 0,
+      "median_seconds": 4.56,
+      "termination": {
+        "eos": 18
+      }
+    },
+    "trainer_ema_cfg1_eos-4": {
+      "items": 18,
+      "reference_characters": 480,
+      "cer": 0.15208333333333332,
+      "substitutions": 43,
+      "deletions": 12,
+      "insertions": 18,
+      "under_one_second": 0,
+      "median_seconds": 4.52,
+      "termination": {
+        "eos": 18
+      }
+    },
+    "trainer_ema_cfg2_eos-1": {
+      "items": 18,
+      "reference_characters": 480,
+      "cer": 0.19166666666666668,
+      "substitutions": 28,
+      "deletions": 4,
+      "insertions": 60,
+      "under_one_second": 0,
+      "median_seconds": 3.64,
+      "termination": {
+        "eos": 18
+      }
+    },
+    "trainer_ema_cfg2_eos-4": {
+      "items": 18,
+      "reference_characters": 480,
+      "cer": 0.08333333333333333,
+      "substitutions": 28,
+      "deletions": 4,
+      "insertions": 8,
+      "under_one_second": 0,
+      "median_seconds": 3.56,
+      "termination": {
+        "eos": 18
+      }
+    },
+    "trainer_raw_cfg1_eos-1": {
+      "items": 18,
+      "reference_characters": 480,
+      "cer": 0.41041666666666665,
+      "substitutions": 100,
+      "deletions": 25,
+      "insertions": 72,
+      "under_one_second": 0,
+      "median_seconds": 5.08,
+      "termination": {
+        "eos": 14,
+        "max_length_without_eos": 4
+      }
+    },
+    "trainer_raw_cfg1_eos-4": {
+      "items": 18,
+      "reference_characters": 480,
+      "cer": 0.32083333333333336,
+      "substitutions": 93,
+      "deletions": 33,
+      "insertions": 28,
+      "under_one_second": 0,
+      "median_seconds": 4.76,
+      "termination": {
+        "eos": 18
+      }
+    },
+    "trainer_raw_cfg2_eos-1": {
+      "items": 18,
+      "reference_characters": 480,
+      "cer": 0.28541666666666665,
+      "substitutions": 55,
+      "deletions": 6,
+      "insertions": 76,
+      "under_one_second": 0,
+      "median_seconds": 4.5600000000000005,
+      "termination": {
+        "eos": 18
+      }
+    },
+    "trainer_raw_cfg2_eos-4": {
+      "items": 18,
+      "reference_characters": 480,
+      "cer": 0.21041666666666667,
+      "substitutions": 53,
+      "deletions": 6,
+      "insertions": 42,
+      "under_one_second": 0,
+      "median_seconds": 3.24,
+      "termination": {
+        "eos": 18
+      }
+    }
+  },
+  "per_case_all_profiles": {
+    "daily": {
+      "items": 36,
+      "reference_characters": 540,
+      "cer": 0.011111111111111112,
+      "substitutions": 4,
+      "deletions": 2,
+      "insertions": 0,
+      "under_one_second": 0,
+      "median_seconds": 3.2,
+      "termination": {
+        "eos": 34,
+        "max_length_after_eos": 2
+      }
+    },
+    "date": {
+      "items": 36,
+      "reference_characters": 468,
+      "cer": 0.4722222222222222,
+      "substitutions": 141,
+      "deletions": 7,
+      "insertions": 73,
+      "under_one_second": 0,
+      "median_seconds": 4.2,
+      "termination": {
+        "eos": 31,
+        "max_length_without_eos": 5
+      }
+    },
+    "long": {
+      "items": 36,
+      "reference_characters": 2520,
+      "cer": 0.2904761904761905,
+      "substitutions": 215,
+      "deletions": 344,
+      "insertions": 173,
+      "under_one_second": 0,
+      "median_seconds": 17.04,
+      "termination": {
+        "eos": 25,
+        "max_length_without_eos": 11
+      }
+    },
+    "number": {
+      "items": 36,
+      "reference_characters": 864,
+      "cer": 0.5266203703703703,
+      "substitutions": 286,
+      "deletions": 51,
+      "insertions": 118,
+      "under_one_second": 0,
+      "median_seconds": 7.28,
+      "termination": {
+        "eos": 33,
+        "max_length_without_eos": 3
+      }
+    },
+    "place": {
+      "items": 36,
+      "reference_characters": 648,
+      "cer": 0.12345679012345678,
+      "substitutions": 56,
+      "deletions": 2,
+      "insertions": 22,
+      "under_one_second": 0,
+      "median_seconds": 4.12,
+      "termination": {
+        "eos": 36
+      }
+    },
+    "request": {
+      "items": 36,
+      "reference_characters": 720,
+      "cer": 0.005555555555555556,
+      "substitutions": 2,
+      "deletions": 2,
+      "insertions": 0,
+      "under_one_second": 0,
+      "median_seconds": 3.6799999999999997,
+      "termination": {
+        "eos": 36
+      }
+    }
+  },
+  "real_audio_asr": {
+    "items": 6,
+    "reference_characters": 120,
+    "substitutions": 12,
+    "deletions": 4,
+    "insertions": 1,
+    "cer": 0.14166666666666666
+  },
+  "human_listening_completed": false,
+  "teacher_selected": false,
+  "limits": [
+    "Aggregate profiles do not replace per-voice diagnostics or listening.",
+    "CER includes orthography/ASR errors; deletions do not prove acoustic omissions.",
+    "This first checkpoint is a baseline, not evidence of improvement over a different matrix."
+  ],
+  "full_diagnosis_path": "runs/japanese-m2a-eval-00010000-early/diagnosis.json",
+  "full_diagnosis_sha256": "9adc9dc7ccd1441d6ae4c06837163e95af4ce0d27b55d890bd1ee0fcc7e08de3"
+}

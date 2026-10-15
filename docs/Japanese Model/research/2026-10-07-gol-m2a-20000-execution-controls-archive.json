@@ -1,0 +1,10 @@
+{
+  "archive": "runs/m2a-control/m2a-20000-execution-controls.tar",
+  "bytes": 92160,
+  "sha256": "f98b5fe3ebfc5ca4e267bb4b14c092370858703ed5a41a825573a22429d142bf",
+  "payload_files": 20,
+  "archive_contents_and_manifest_verified": true,
+  "scope": "20k stage source, fixed inputs, resume decision and restart recovery receipts",
+  "human_listening_completed": false,
+  "teacher_selected": false
+}

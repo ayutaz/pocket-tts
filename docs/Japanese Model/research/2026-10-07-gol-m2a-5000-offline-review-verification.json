@@ -1,0 +1,143 @@
+{
+  "checkpoint_step": 5000,
+  "checkpoint_sha256": "0aa9c549a68011d6b1a7bb8e7b508ecb11c7053fb565af7c0f682116324d672f",
+  "matrix_rows": 216,
+  "tested_uri_scheme": "file",
+  "real_generated_audio": true,
+  "selected_voice_audio_playback_verified": [
+    {
+      "voice": "held_00",
+      "case": "daily",
+      "file": "trainer_ema_cfg2_eos-4_held_00_daily.wav",
+      "sha256": "5874f1c7866148ef5cf9a5d7484a23dc13af76bc4f578a59cd40d20378d1854a",
+      "decoded_seconds": 3.6
+    },
+    {
+      "voice": "held_00",
+      "case": "date",
+      "file": "trainer_ema_cfg2_eos-4_held_00_date.wav",
+      "sha256": "3e236b4e9821aa62d3fce490300e872cf094310077d3ca41bf2336889b7f43c7",
+      "decoded_seconds": 2.72
+    },
+    {
+      "voice": "held_00",
+      "case": "place",
+      "file": "trainer_ema_cfg2_eos-4_held_00_place.wav",
+      "sha256": "8a70f634f967a07f7bbbf7500f200dfa7ad154b8030940b0e081690536a9c93c",
+      "decoded_seconds": 3.76
+    },
+    {
+      "voice": "held_00",
+      "case": "number",
+      "file": "trainer_ema_cfg2_eos-4_held_00_number.wav",
+      "sha256": "79277c9e0c5063eff202b2abe5dfccd7c0fe90328a49476a948418a75b9c8941",
+      "decoded_seconds": 6.4
+    },
+    {
+      "voice": "held_00",
+      "case": "request",
+      "file": "trainer_ema_cfg2_eos-4_held_00_request.wav",
+      "sha256": "03390325076a9efe5fa594de446fe04f418f82a94d1bfbae81f64dc5e3482855",
+      "decoded_seconds": 3.92
+    },
+    {
+      "voice": "held_00",
+      "case": "long",
+      "file": "trainer_ema_cfg2_eos-4_held_00_long.wav",
+      "sha256": "4978c7f7c1af28169b9dedc06e8b39bf4e948afcd6e516ec0ba480bfdbeb44dd",
+      "decoded_seconds": 18.88
+    },
+    {
+      "voice": "held_01",
+      "case": "daily",
+      "file": "trainer_ema_cfg2_eos-4_held_01_daily.wav",
+      "sha256": "33116cf7624aa27539e97e39ba88267e00d9dd867270d26ee7e1f709fb889f0a",
+      "decoded_seconds": 1.92
+    },
+    {
+      "voice": "held_01",
+      "case": "date",
+      "file": "trainer_ema_cfg2_eos-4_held_01_date.wav",
+      "sha256": "7f3a607a2dedd5afd322bae60cd4d0d7e09210f21d815575417ed10e8f9be32f",
+      "decoded_seconds": 2.88
+    },
+    {
+      "voice": "held_01",
+      "case": "place",
+      "file": "trainer_ema_cfg2_eos-4_held_01_place.wav",
+      "sha256": "a88f7d215038241697851ae5d60b7f095c7d41a3c267ee209b3fd15d4c938a31",
+      "decoded_seconds": 3.2
+    },
+    {
+      "voice": "held_01",
+      "case": "number",
+      "file": "trainer_ema_cfg2_eos-4_held_01_number.wav",
+      "sha256": "b89ffb3cbd77eb2f7c5dc11874d6b912f449f022dc21e9438481d3a2db63a855",
+      "decoded_seconds": 5.92
+    },
+    {
+      "voice": "held_01",
+      "case": "request",
+      "file": "trainer_ema_cfg2_eos-4_held_01_request.wav",
+      "sha256": "fa958b1aa9cd63724ff3e0f2b8ce91982b0e470caf3e6af7f420d7f6a34b1c8f",
+      "decoded_seconds": 2.56
+    },
+    {
+      "voice": "held_01",
+      "case": "long",
+      "file": "trainer_ema_cfg2_eos-4_held_01_long.wav",
+      "sha256": "d9758b11a3ab13250f58f8d25b70f5e422f85fc0073a0ab2844a0fa5da0e56b4",
+      "decoded_seconds": 11.92
+    },
+    {
+      "voice": "seen",
+      "case": "daily",
+      "file": "trainer_ema_cfg2_eos-4_seen_daily.wav",
+      "sha256": "efb74e6d612199cf0b024c547099a517d2a8c09032f95748a75005b150cbf168",
+      "decoded_seconds": 2.4
+    },
+    {
+      "voice": "seen",
+      "case": "date",
+      "file": "trainer_ema_cfg2_eos-4_seen_date.wav",
+      "sha256": "dc990fe1ce4ae5a2347bb870573157fddaee9050dba800e87ec361a3782712f5",
+      "decoded_seconds": 3.2
+    },
+    {
+      "voice": "seen",
+      "case": "place",
+      "file": "trainer_ema_cfg2_eos-4_seen_place.wav",
+      "sha256": "8b93d8dbca3f02922eee4b5dbf06ff23fe1d6c5ffd2f207c7f8a3030b441b716",
+      "decoded_seconds": 3.76
+    },
+    {
+      "voice": "seen",
+      "case": "number",
+      "file": "trainer_ema_cfg2_eos-4_seen_number.wav",
+      "sha256": "c35211989f70209b46a19968d2cb45e27db03741c374fba427a3f2164c921734",
+      "decoded_seconds": 5.92
+    },
+    {
+      "voice": "seen",
+      "case": "request",
+      "file": "trainer_ema_cfg2_eos-4_seen_request.wav",
+      "sha256": "e7d68ecda70f63618b2d97715546ba448ab97eacd1d9e4126e3dd57c88054918",
+      "decoded_seconds": 3.84
+    },
+    {
+      "voice": "seen",
+      "case": "long",
+      "file": "trainer_ema_cfg2_eos-4_seen_long.wav",
+      "sha256": "8b4a8e5d28599b8d4852f837ec1ea7f92e564e89570092d5626a6059f7640b63",
+      "decoded_seconds": 12.8
+    }
+  ],
+  "real_page_checkpoint_and_export_hashes_verified": true,
+  "helper_sha256": "34fadd772b2fb69876563ab28f32bbc1e5d1cad6ef361d49f64de53d63579fd4",
+  "human_listening_completed": false,
+  "teacher_selected": false,
+  "limits": [
+    "Muted headless playback proves selected audio decoding/UI behavior, not human perception or Japanese quality.",
+    "This ran on Vast.ai Linux Chromium, not native Windows."
+  ]
+}

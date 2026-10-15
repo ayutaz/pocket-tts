@@ -1,0 +1,21 @@
+{
+  "standalone_export_loaded_without_checkpoint": true,
+  "all_flowlm_tensors_exactly_match_checkpoint_ema": true,
+  "export_daily_pcm_matches_checkpoint_with_rtol_1e_minus5_atol_1e_minus6": true,
+  "weights_sha256": "a1b27310b7daf6a09f3a5289f0477ec2f20217d53d6438b5bea9c0bdd5ba01ae",
+  "config_sha256": "5705d72300e098210cd54c20ab0084b6cd093d232cd065e1fae999fb958aac8d",
+  "wave_sha256": "aae82e8f6ac091f21e676a6ba16fe9f14948857c4fcbbf05c4379ac41b9ac783",
+  "device": "cpu",
+  "threads": 1,
+  "metrics": {
+    "generation_seconds": 0.8431744920089841,
+    "audio_seconds": 5.36,
+    "rtf": 0.15730867388227315,
+    "first_chunk_seconds": 0.05494980979710817,
+    "first_non_silent_chunk_seconds": 0.05494980979710817,
+    "chunks": 67
+  },
+  "human_listening_completed": false,
+  "quality_approved": false,
+  "publication_performed": false
+}

@@ -1,0 +1,19 @@
+{
+  "scope": "Verified full 3024-condition matrix, listening artifacts and archived inputs",
+  "instance_id": 54521683,
+  "checkpoint_step": 5000,
+  "checkpoint_sha256": "0aa9c549a68011d6b1a7bb8e7b508ecb11c7053fb565af7c0f682116324d672f",
+  "scores_sha256": "c697bf404e1402350574ed2ef4c956a1520d5fe45b1aac379b035312ca5f96c3",
+  "matrix_rows": 3024,
+  "human_listening_completed": false,
+  "teacher_selected": false,
+  "limits": [
+    "Duplicate shard directories are excluded; verified merged files are preserved.",
+    "Teacher weights, optimizer states, source archives and data are separate artifacts."
+  ],
+  "archive": "runs/m2a-control/m2a-5000-full-recovery.tar.gz",
+  "bytes": 2038507722,
+  "sha256": "8f17b057fbd9b3946de4df030aa06e1364470de4e439b911a00776cbd561ec0b",
+  "files": 3069,
+  "archive_contents_verified": true
+}

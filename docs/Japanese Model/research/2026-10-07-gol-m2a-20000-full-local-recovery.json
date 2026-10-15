@@ -1,0 +1,13 @@
+{
+  "checkpoint_step": 20000,
+  "archive": "runs/vast-m2a-control/m2a-20000-full-recovery.tar.gz",
+  "bytes": 1923740800,
+  "sha256": "0c69b1b649783bf021399822ca60a733f6587d8b3f30eaccebe249d568031958",
+  "matrix_rows": 3024,
+  "payload_files": 3069,
+  "recovered_sha256_matches_remote_receipt": true,
+  "observed_utc": "2026-10-07T01:25:42.9088070Z",
+  "verification_scope": "Transferred archive identity only; evaluation and tar content checks ran on Vast.ai",
+  "human_listening_completed": false,
+  "teacher_selected": false
+}

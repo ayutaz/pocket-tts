@@ -1,0 +1,19 @@
+{
+  "checkpoint_step": 20000,
+  "checkpoint_sha256": "499c037ab2cc63f506592d4203e53d72a68914a4f5eb0025b2efc418c93e417d",
+  "matrix_rows": 216,
+  "files_verified": 240,
+  "bytes": 147022362,
+  "review_page": "/workspace/pocket-tts/runs/m2a-control/parallel-transfer-proof/japanese-m2a-eval-00020000-early/review.html",
+  "all_transferred_files_sha256_verified": true,
+  "transfer_workers": 8,
+  "elapsed_seconds": 0.15777825191617012,
+  "helper_sha256": "9840dd8046b20170480a3779ab6b02921e93b7a29aad44e1aff008cb41ddaf86",
+  "human_listening_completed": false,
+  "local_actions": "result transfer and sequential integrity verification only",
+  "execution_location": "Vast.ai Linux loopback pilot",
+  "limits": [
+    "Desktop-to-Vast transfer throughput and native Windows playback were not measured in this pilot.",
+    "The full 3024-condition desktop transfer will be verified when executed."
+  ]
+}

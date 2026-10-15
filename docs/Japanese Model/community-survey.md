@@ -1,8 +1,20 @@
 # コミュニティ調査
 
+## 2026-10-15の確認と開発終了
+
+日本語モデル[takuma104/pocket-tts-ja](https://huggingface.co/takuma104/pocket-tts-ja)の6層版・24層版、設定・tokenizer・重みの配布を確認しました。これを受け、本プロジェクトの日本語開発はユーザー指定で終了し、[tts-dataset/pocket-tts-ja-experiments](https://huggingface.co/tts-dataset/pocket-tts-ja-experiments)へ全6モデルをpublic/manual gateで保存公開しました。[先行モデルの確認範囲](research/2026-10-15-project-end-and-released-model-check.md)と[現在の状態](index.md)を参照してください。
+
+以下は2026-08-27と10月6日時点の調査履歴です。「日本語モデルを確認できなかった」は当時の検索結果で、現在の配布状況を指しません。先行モデルの品質値は作者の報告であり、こちらの独立した生成・試聴による検証ではありません。
+
 調査日: 2026-08-27
 
-**結論: pocket-tts（CALM/Mimi 系）の日本語モデルは、公式にもコミュニティにも存在せず、学習に着手した形跡もありません。** 記事レベルの検討はありますが実装は0件で、完全な空白地帯です。
+!!! info "2026-10-06 の再評価"
+    最新の優位性判断は [日本語版の優位性とインパクトの再評価](research/2026-10-06-japanese-tts-value.md) を参照してください。
+    本ページは8月の調査記録です。2026-10-06の調査では公式にオランダ語が追加され、コミュニティ一覧も9件へ増えていました。
+    日本語Pocket TTSの空白と、日本語CPU TTS全体の競争力は別です。MOSS-TTS-Nanoは日本語・CPU・声の複製・ストリーミングに対応しており、直接比較が必要です。
+    日本語の公式公開予定は今回確認できませんでしたが、「内部計画もない」とは断言できません。
+
+**2026-08-27の調査結果:** 公開検索の範囲では、公式・コミュニティの日本語Pocket TTSモデルと学習実装を確認できませんでした。非公開・未タグ付けの取り組みの不在を証明するものではありません。最新のプロジェクト進捗と実行方針は[2026-10-07の計画](plans/2026-10-07-next-training-and-release.md)を参照してください。今回の更新で市場検索を再実行したわけではありません。
 
 （2026-08-29 追記: 本プロジェクトが検証用の1件を公開しました。実用モデルではありません — 本ページ末尾の「この空白に1件入りました」を参照。）
 
@@ -11,9 +23,9 @@
 | 項目 | 状況 |
 |---|---|
 | 対応言語 | en / fr / de / es / it / pt のみ（`pocket_tts/config/` にも日本語なし） |
-| 公式ロードマップ | [Issue #118](https://github.com/kyutai-labs/pocket-tts/issues/118)（2026-02-10, closed, 65コメント）で Spanish/French/German/Portuguese/Italian のみを announce。**日本語は計画外** |
+| 公式ロードマップ | [Issue #118](https://github.com/kyutai-labs/pocket-tts/issues/118)（2026-02-10, closed, 65コメント）で Spanish/French/German/Portuguese/Italian のみを announce。**当時の告知では日本語対応の公開予定を確認できず** |
 | 日本語の要望 | @agavrel が「韓国語・日本語を手伝えないか」と質問（👍7）→ 公式回答なし。他に中国語・ヒンディー語・トルコ語・ビルマ語の要望あり |
-| 現在の open issue | 日本語の要望 issue は**存在しない**（トルコ語 #215、ビルマ語 #227 のみ）。issue/PR 全文＋コメント検索で "Japanese" のヒットは #118 と #50 の2件のみ |
+| 調査当時の open issue | 日本語の要望 issue は**存在しない**（トルコ語 #215、ビルマ語 #227 のみ）。issue/PR 全文＋コメント検索で "Japanese" のヒットは #118 と #50 の2件のみ |
 | 転換点 | 2026-08-25 @manukyutai:「Training code released! You can now train in any language you like :)」→ **言語追加は事実上コミュニティに委譲された** |
 | コミュニティモデル一覧 | **チェコ語（vvolhejn）の1件のみ** |
 
@@ -53,7 +65,7 @@ Issue #30（Training/fine-tuning code）での公式の立場は、当初は否�
     既存の手順書・シェル履歴・CI が `lsd_scratch.yaml` を参照していると、存在しないパスを指して静かに壊れます。
 
 !!! note "lr を下げてはいけない"
-    PR の説明によれば、lr 2e-5 は全区間で遅く、プラトーでも改善しません。「text embedding がランダムから始まるので、backbone がそれに合わせて動く必要がある」ためで、**scratch と同じ 2e-4 を維持するのが正解**です。
+    PRのチェコ語実験によれば、lr 2e-5は全区間で遅く、プラトーでも改善しませんでした。text embeddingを初期化し直す日本語でも、**同じ2e-4を出発点に採用**しています。日本語の最適値を確認した結果ではありません。
 
 ## フォークと GitHub 全体
 

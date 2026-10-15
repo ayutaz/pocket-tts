@@ -1,5 +1,7 @@
 # Tokenizers shipped with this repo
 
+> Japanese development ended on 2026-10-15. The SP8000 file is retained here and in the [public/manual-gated experiment archive](https://huggingface.co/tts-dataset/pocket-tts-ja-experiments). GOL-only describes the October training audio; this tokenizer's earlier text corpus includes GOL and MoeSpeech. See the [final status](../../docs/Japanese%20Model/index.md).
+
 A tokenizer is small enough to commit and load-bearing enough that it has to be.
 `data/` is gitignored, so a tokenizer that lives only there exists on the machine
 that trained it and nowhere else — and the run that needs it reads it at startup,

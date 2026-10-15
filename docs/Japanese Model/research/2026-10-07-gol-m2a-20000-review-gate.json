@@ -1,0 +1,147 @@
+{
+  "observed_utc": "2026-10-07T01:32:54.949213+00:00",
+  "instance_id": 54521683,
+  "decision": "do_not_start_30000_before_human_comparison",
+  "machine_preferred_candidate_step": 10000,
+  "comparison_candidate_step": 20000,
+  "primary_condition": "trainer_ema_cfg2_eos-4",
+  "held_primary": {
+    "10000": {
+      "condition": "trainer_ema_cfg2_eos-4",
+      "reference_group": "held_out",
+      "items": 240,
+      "reference_characters": 7220,
+      "cer": 0.12243767313019391,
+      "substitutions": 515,
+      "deletions": 183,
+      "insertions": 186,
+      "under_one_second": 13,
+      "median_seconds": 4.56,
+      "termination": {
+        "eos": 240
+      },
+      "under_one_second_non_short_question": 0,
+      "under_one_second_short_question": 13
+    },
+    "20000": {
+      "condition": "trainer_ema_cfg2_eos-4",
+      "reference_group": "held_out",
+      "items": 240,
+      "reference_characters": 7220,
+      "cer": 0.15013850415512464,
+      "substitutions": 507,
+      "deletions": 243,
+      "insertions": 334,
+      "under_one_second": 15,
+      "median_seconds": 4.4,
+      "termination": {
+        "eos": 240
+      },
+      "under_one_second_non_short_question": 0,
+      "under_one_second_short_question": 15
+    }
+  },
+  "held_primary_long_cases": {
+    "10000": {
+      "long": {
+        "condition": "trainer_ema_cfg2_eos-4",
+        "reference_group": "held_out",
+        "case": "long",
+        "items": 20,
+        "reference_characters": 1400,
+        "cer": 0.04285714285714286,
+        "substitutions": 36,
+        "deletions": 0,
+        "insertions": 24,
+        "under_one_second": 0,
+        "median_seconds": 12.24,
+        "termination": {
+          "eos": 20
+        },
+        "under_one_second_non_short_question": 0,
+        "under_one_second_short_question": 0
+      },
+      "long_sequence": {
+        "condition": "trainer_ema_cfg2_eos-4",
+        "reference_group": "held_out",
+        "case": "long_sequence",
+        "items": 20,
+        "reference_characters": 1760,
+        "cer": 0.07556818181818181,
+        "substitutions": 49,
+        "deletions": 48,
+        "insertions": 36,
+        "under_one_second": 0,
+        "median_seconds": 15.559999999999999,
+        "termination": {
+          "eos": 20
+        },
+        "under_one_second_non_short_question": 0,
+        "under_one_second_short_question": 0
+      }
+    },
+    "20000": {
+      "long": {
+        "condition": "trainer_ema_cfg2_eos-4",
+        "reference_group": "held_out",
+        "case": "long",
+        "items": 20,
+        "reference_characters": 1400,
+        "cer": 0.125,
+        "substitutions": 37,
+        "deletions": 6,
+        "insertions": 132,
+        "under_one_second": 0,
+        "median_seconds": 12.48,
+        "termination": {
+          "eos": 20
+        },
+        "under_one_second_non_short_question": 0,
+        "under_one_second_short_question": 0
+      },
+      "long_sequence": {
+        "condition": "trainer_ema_cfg2_eos-4",
+        "reference_group": "held_out",
+        "case": "long_sequence",
+        "items": 20,
+        "reference_characters": 1760,
+        "cer": 0.14602272727272728,
+        "substitutions": 99,
+        "deletions": 98,
+        "insertions": 60,
+        "under_one_second": 0,
+        "median_seconds": 15.079999999999998,
+        "termination": {
+          "eos": 20
+        },
+        "under_one_second_non_short_question": 0,
+        "under_one_second_short_question": 0
+      }
+    }
+  },
+  "held_profiles_improved": 10,
+  "held_profiles_total": 12,
+  "reason": "Primary held-out CER and both long cases regressed despite ten other profiles improving; validation loss or EOS alone is insufficient to justify an automatic next interval.",
+  "next_required_evidence": "Human comparison across held-out voices: full text, repeats, omissions, pronunciation, naturalness and endings. Retain both states; reconsider a bounded interval only from this evidence.",
+  "human_listening_completed": false,
+  "teacher_selected": false,
+  "stage3_complete": false,
+  "training_30000_started": false,
+  "instance_action": "stop_compute_preserve_disk_while_listening_pending",
+  "stop_is_not_destroy": true,
+  "storage_billing_continues": true,
+  "restart_subject_to_gpu_availability": true,
+  "evidence_sha256": {
+    "runs/m2a-control/m2a-10000-vs-20000-full.json": "72bfbdad34e04b2a17d2bae9d147c2d1ca8850899f6898c3d52663f2b414909f",
+    "runs/japanese-m2a-eval-00010000-full/full_diagnostics.json": "cdb7358ca6135ad16d00e4702cb332002a3552286241c2b7e2aa8833ba9f3254",
+    "runs/m2a-control/m2a-10000-off-instance-recovery.json": "d032de2c540ce4b5c8d5590f9925eeca24f1527f7fb5312357301c5f0afc8dfd",
+    "runs/m2a-control/m2a-10000-full-off-instance-recovery.json": "0dd76ef0b870fbc41171c14f1302735144ddca3a5b9af97cc87afde34efed173",
+    "runs/m2a-control/m2a-10000-full-recovery-archive.json": "9e00304b5b6b08c032e8ee0e3d70e20d6edc0a5d7611b8d738c4afd808f36c9a",
+    "runs/japanese-m2a-eval-00020000-full/full_diagnostics.json": "e58f235b989df31d825a056c1cb8f12adcc431328b7863ddf99155a6dbf315b4",
+    "runs/m2a-control/m2a-20000-off-instance-recovery.json": "4bc0dc46d01150fe93e332a74476621d1b90c6d24d5765c2bbe1538f8a6fe648",
+    "runs/m2a-control/m2a-20000-full-off-instance-recovery.json": "3517a4d5d28e3cf14c628cfd41e5d55250ea7a7360b4b2b4a883e91a9b9b9d61",
+    "runs/m2a-control/m2a-20000-full-recovery-archive.json": "fa744935439289e8712d4f0e038eae59f6d28a83c3ffb855d5b5f1cb5ab03c72",
+    "runs/m2a-control/m2a-20000-full-offline-off-instance-recovery.json": "ac4f4d8baba51f6fb9c9488023a922e15edfead3dc2a56c4a1ae99ec06bb6497"
+  },
+  "controller_sha256": "f37b7399ac69d02c525debfffb8d26a641dcad947afb1e4fd105f140da902df1"
+}

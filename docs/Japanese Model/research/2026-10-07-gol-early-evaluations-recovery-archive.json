@@ -1,0 +1,30 @@
+{
+  "archive": "runs/m2a-control/m2a-early-evaluations-recovery.tar.gz",
+  "bytes": 450872381,
+  "sha256": "f504d55de3e5f3e896e149a7ecdb3b8a80493f44cdd3a7c57bc859f567783600",
+  "files": 721,
+  "evaluations": [
+    {
+      "checkpoint_step": 2000,
+      "matrix_rows": 216,
+      "checkpoint_sha256": "296f388855a63bdc20b0a59d9b10fd0161b57d1c06208cabf0bab0b435951432",
+      "scores_sha256": "6bc0cf22e4335ad3bebfd617b6114857922518d321760136f1063be43d4b6b11"
+    },
+    {
+      "checkpoint_step": 3000,
+      "matrix_rows": 216,
+      "checkpoint_sha256": "1512fb6f108741e97990270219ff47418748b35fc9a54eb06875fb9a20eb49c2",
+      "scores_sha256": "155837ef6b1991e1959f32653f120fc96cca3b84ac1d14d6c7fa8ccbdabae678"
+    },
+    {
+      "checkpoint_step": 5000,
+      "matrix_rows": 216,
+      "checkpoint_sha256": "0aa9c549a68011d6b1a7bb8e7b508ecb11c7053fb565af7c0f682116324d672f",
+      "scores_sha256": "aad2fb251ffb8f3d2618b68afc20d2e1c240c1f11c5d5d6fd2d57979edcd18b2"
+    }
+  ],
+  "archive_contents_verified": true,
+  "all_fixed_conditions_match": true,
+  "human_listening_completed": false,
+  "teacher_selected": false
+}

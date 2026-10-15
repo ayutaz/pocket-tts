@@ -1,0 +1,23 @@
+{
+  "actual_update_intervals": [
+    [
+      0,
+      30
+    ],
+    [
+      30,
+      35
+    ]
+  ],
+  "optimizer_steps": [
+    35
+  ],
+  "finite_metrics_and_gradients": true,
+  "steady_median_steps_per_second": 5.817722413950497,
+  "training_only_hours_for_40k": 1.909873025991655,
+  "training_only_usd_for_40k": 4.003659750782507,
+  "limits": [
+    "35-step full-data resource/restart benchmark, not Japanese quality evidence.",
+    "Estimate excludes compilation, validation, sample/evaluation generation, storage/network charges and waiting."
+  ]
+}

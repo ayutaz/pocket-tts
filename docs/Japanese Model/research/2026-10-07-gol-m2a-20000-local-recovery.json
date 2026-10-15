@@ -1,0 +1,25 @@
+{
+  "checkpoint_step": 20000,
+  "optimizer_steps": [
+    20000
+  ],
+  "files": {
+    "checkpoint_00020000.pt": {
+      "file": "runs/vast-m2a-control/checkpoint_00020000.pt",
+      "bytes": 2561110827,
+      "sha256": "499c037ab2cc63f506592d4203e53d72a68914a4f5eb0025b2efc418c93e417d",
+      "matches_vast_verified_restart_state": true
+    },
+    "optim_00020000.pt": {
+      "file": "runs/vast-m2a-control/optim_00020000.pt",
+      "bytes": 2561133510,
+      "sha256": "abee657cebac6a22b67616345294b345fd101e2db8b56e06a364e443097883b0",
+      "matches_vast_verified_restart_state": true
+    }
+  },
+  "recovered_off_instance": true,
+  "observed_utc": "2026-10-07T00:29:32.9373382Z",
+  "verification_scope": "Transfer identity only; state/update/context verification ran on Vast.ai",
+  "human_listening_completed": false,
+  "teacher_selected": false
+}

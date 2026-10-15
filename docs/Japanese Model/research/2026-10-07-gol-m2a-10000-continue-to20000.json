@@ -1,0 +1,25 @@
+{
+  "previous_step": 10000,
+  "next_stop_step": 20000,
+  "planned_ceiling": 40000,
+  "decision": "continue_authorized_M2a_training_to_20000",
+  "best_profile_held_cer_before": 0.26371191135734073,
+  "best_profile_held_cer_after": 0.12243767313019391,
+  "all_12_held_profile_cer_improved": true,
+  "best_profile_held_eos": 240,
+  "best_profile_held_caps": 0,
+  "remaining_diagnostics": [
+    "Date, digits, numbers, proper names and units still have errors.",
+    "Place CER worsened slightly; public API raw CFG1 EOS-4 caps increased.",
+    "Pronunciation, repetition, endings and naturalness need human listening."
+  ],
+  "files_sha256": {
+    "runs/japanese-m2a-eval-00010000-full/full_diagnostics.json": "cdb7358ca6135ad16d00e4702cb332002a3552286241c2b7e2aa8833ba9f3254",
+    "runs/m2a-control/m2a-5000-vs-10000-full.json": "0d276f0862b243ba319082503681ff4234a5897a9dca915833e0f845ddf3d633",
+    "runs/m2a-control/m2a-10000-early-vs-full-common.json": "5c2bd2e9098ecf1623dbac4d8ef37f86caac8b8d2d53e8e8df1b7bc87e3f671f",
+    "runs/m2a-control/m2a-10000-full-off-instance-recovery.json": "0dd76ef0b870fbc41171c14f1302735144ddca3a5b9af97cc87afde34efed173",
+    "runs/m2a-control/m2a-10000-before20000-resume-preflight.json": "b8f8bdfb99310362cbf974254d375395c1c9b59bf3a79df2082c29525af15082"
+  },
+  "human_listening_completed": false,
+  "teacher_selected": false
+}

@@ -1,0 +1,366 @@
+{
+  "checkpoint_step": 10000,
+  "matrix_rows": 3024,
+  "archived_context_verified": true,
+  "per_condition": {
+    "public_api_ema_cfg1_eos-1": {
+      "items": 252,
+      "reference_characters": 7581,
+      "cer": 0.1783405883128875,
+      "substitutions": 710,
+      "deletions": 431,
+      "insertions": 211,
+      "under_one_second": 0,
+      "median_seconds": 6.0,
+      "termination": {
+        "eos": 230,
+        "max_length_without_eos": 19,
+        "max_length_after_eos": 3
+      }
+    },
+    "public_api_ema_cfg1_eos-4": {
+      "items": 252,
+      "reference_characters": 7581,
+      "cer": 0.17649386624455876,
+      "substitutions": 717,
+      "deletions": 431,
+      "insertions": 190,
+      "under_one_second": 0,
+      "median_seconds": 5.88,
+      "termination": {
+        "eos": 232,
+        "max_length_without_eos": 18,
+        "max_length_after_eos": 2
+      }
+    },
+    "public_api_raw_cfg1_eos-1": {
+      "items": 252,
+      "reference_characters": 7581,
+      "cer": 0.3771270280965572,
+      "substitutions": 1629,
+      "deletions": 767,
+      "insertions": 463,
+      "under_one_second": 0,
+      "median_seconds": 7.04,
+      "termination": {
+        "max_length_after_eos": 7,
+        "eos": 163,
+        "max_length_without_eos": 82
+      }
+    },
+    "public_api_raw_cfg1_eos-4": {
+      "items": 252,
+      "reference_characters": 7581,
+      "cer": 0.37805038913072153,
+      "substitutions": 1569,
+      "deletions": 911,
+      "insertions": 386,
+      "under_one_second": 0,
+      "median_seconds": 6.68,
+      "termination": {
+        "max_length_after_eos": 7,
+        "eos": 204,
+        "max_length_without_eos": 41
+      }
+    },
+    "trainer_ema_cfg1_eos-1": {
+      "items": 252,
+      "reference_characters": 7581,
+      "cer": 0.22332146154860835,
+      "substitutions": 875,
+      "deletions": 363,
+      "insertions": 455,
+      "under_one_second": 2,
+      "median_seconds": 5.68,
+      "termination": {
+        "eos": 250,
+        "max_length_without_eos": 2
+      }
+    },
+    "trainer_ema_cfg1_eos-4": {
+      "items": 252,
+      "reference_characters": 7581,
+      "cer": 0.1952249043661786,
+      "substitutions": 841,
+      "deletions": 447,
+      "insertions": 192,
+      "under_one_second": 2,
+      "median_seconds": 5.6,
+      "termination": {
+        "eos": 252
+      }
+    },
+    "trainer_ema_cfg2_eos-1": {
+      "items": 252,
+      "reference_characters": 7581,
+      "cer": 0.1784724970320538,
+      "substitutions": 578,
+      "deletions": 185,
+      "insertions": 590,
+      "under_one_second": 13,
+      "median_seconds": 5.12,
+      "termination": {
+        "eos": 252
+      }
+    },
+    "trainer_ema_cfg2_eos-4": {
+      "items": 252,
+      "reference_characters": 7581,
+      "cer": 0.12412610473552302,
+      "substitutions": 551,
+      "deletions": 197,
+      "insertions": 193,
+      "under_one_second": 13,
+      "median_seconds": 4.56,
+      "termination": {
+        "eos": 252
+      }
+    },
+    "trainer_raw_cfg1_eos-1": {
+      "items": 252,
+      "reference_characters": 7581,
+      "cer": 0.46365914786967416,
+      "substitutions": 1927,
+      "deletions": 549,
+      "insertions": 1039,
+      "under_one_second": 2,
+      "median_seconds": 7.24,
+      "termination": {
+        "eos": 224,
+        "max_length_without_eos": 28
+      }
+    },
+    "trainer_raw_cfg1_eos-4": {
+      "items": 252,
+      "reference_characters": 7581,
+      "cer": 0.4011344149848305,
+      "substitutions": 1758,
+      "deletions": 781,
+      "insertions": 502,
+      "under_one_second": 2,
+      "median_seconds": 6.0,
+      "termination": {
+        "eos": 252
+      }
+    },
+    "trainer_raw_cfg2_eos-1": {
+      "items": 252,
+      "reference_characters": 7581,
+      "cer": 0.3024666930484105,
+      "substitutions": 997,
+      "deletions": 151,
+      "insertions": 1145,
+      "under_one_second": 12,
+      "median_seconds": 5.68,
+      "termination": {
+        "eos": 251,
+        "max_length_without_eos": 1
+      }
+    },
+    "trainer_raw_cfg2_eos-4": {
+      "items": 252,
+      "reference_characters": 7581,
+      "cer": 0.2313678934177549,
+      "substitutions": 978,
+      "deletions": 156,
+      "insertions": 620,
+      "under_one_second": 13,
+      "median_seconds": 5.04,
+      "termination": {
+        "eos": 252
+      }
+    }
+  },
+  "per_case_all_profiles": {
+    "daily": {
+      "items": 252,
+      "reference_characters": 3780,
+      "cer": 0.012433862433862434,
+      "substitutions": 25,
+      "deletions": 22,
+      "insertions": 0,
+      "under_one_second": 0,
+      "median_seconds": 2.84,
+      "termination": {
+        "eos": 250,
+        "max_length_after_eos": 2
+      }
+    },
+    "date": {
+      "items": 252,
+      "reference_characters": 3276,
+      "cer": 0.4942002442002442,
+      "substitutions": 1100,
+      "deletions": 70,
+      "insertions": 449,
+      "under_one_second": 0,
+      "median_seconds": 3.84,
+      "termination": {
+        "eos": 234,
+        "max_length_without_eos": 17,
+        "max_length_after_eos": 1
+      }
+    },
+    "digits": {
+      "items": 252,
+      "reference_characters": 6552,
+      "cer": 0.6057692307692307,
+      "substitutions": 2722,
+      "deletions": 404,
+      "insertions": 843,
+      "under_one_second": 0,
+      "median_seconds": 6.8,
+      "termination": {
+        "eos": 225,
+        "max_length_after_eos": 2,
+        "max_length_without_eos": 25
+      }
+    },
+    "loanwords": {
+      "items": 252,
+      "reference_characters": 7056,
+      "cer": 0.0792233560090703,
+      "substitutions": 348,
+      "deletions": 100,
+      "insertions": 111,
+      "under_one_second": 0,
+      "median_seconds": 5.68,
+      "termination": {
+        "eos": 243,
+        "max_length_without_eos": 9
+      }
+    },
+    "long": {
+      "items": 252,
+      "reference_characters": 17640,
+      "cer": 0.2621315192743764,
+      "substitutions": 1714,
+      "deletions": 1690,
+      "insertions": 1220,
+      "under_one_second": 0,
+      "median_seconds": 16.8,
+      "termination": {
+        "eos": 189,
+        "max_length_without_eos": 63
+      }
+    },
+    "long_sequence": {
+      "items": 252,
+      "reference_characters": 22176,
+      "cer": 0.1653138528138528,
+      "substitutions": 1449,
+      "deletions": 1747,
+      "insertions": 470,
+      "under_one_second": 0,
+      "median_seconds": 19.36,
+      "termination": {
+        "eos": 208,
+        "max_length_without_eos": 37,
+        "max_length_after_eos": 7
+      }
+    },
+    "number": {
+      "items": 252,
+      "reference_characters": 6048,
+      "cer": 0.53125,
+      "substitutions": 1866,
+      "deletions": 332,
+      "insertions": 1015,
+      "under_one_second": 0,
+      "median_seconds": 7.52,
+      "termination": {
+        "eos": 227,
+        "max_length_without_eos": 20,
+        "max_length_after_eos": 5
+      }
+    },
+    "place": {
+      "items": 252,
+      "reference_characters": 4536,
+      "cer": 0.17085537918871252,
+      "substitutions": 513,
+      "deletions": 32,
+      "insertions": 230,
+      "under_one_second": 0,
+      "median_seconds": 4.16,
+      "termination": {
+        "eos": 249,
+        "max_length_without_eos": 3
+      }
+    },
+    "proper_name": {
+      "items": 252,
+      "reference_characters": 6300,
+      "cer": 0.48698412698412696,
+      "substitutions": 2047,
+      "deletions": 216,
+      "insertions": 805,
+      "under_one_second": 0,
+      "median_seconds": 6.08,
+      "termination": {
+        "eos": 241,
+        "max_length_without_eos": 10,
+        "max_length_after_eos": 1
+      }
+    },
+    "request": {
+      "items": 252,
+      "reference_characters": 5040,
+      "cer": 0.032341269841269844,
+      "substitutions": 41,
+      "deletions": 32,
+      "insertions": 90,
+      "under_one_second": 0,
+      "median_seconds": 3.44,
+      "termination": {
+        "eos": 251,
+        "max_length_without_eos": 1
+      }
+    },
+    "short_question": {
+      "items": 252,
+      "reference_characters": 1260,
+      "cer": 0.0015873015873015873,
+      "substitutions": 0,
+      "deletions": 0,
+      "insertions": 2,
+      "under_one_second": 59,
+      "median_seconds": 1.28,
+      "termination": {
+        "eos": 252
+      }
+    },
+    "units": {
+      "items": 252,
+      "reference_characters": 7308,
+      "cer": 0.38040503557744937,
+      "substitutions": 1305,
+      "deletions": 724,
+      "insertions": 751,
+      "under_one_second": 0,
+      "median_seconds": 7.36,
+      "termination": {
+        "eos": 245,
+        "max_length_without_eos": 6,
+        "max_length_after_eos": 1
+      }
+    }
+  },
+  "real_audio_asr": {
+    "items": 6,
+    "reference_characters": 120,
+    "substitutions": 12,
+    "deletions": 4,
+    "insertions": 1,
+    "cer": 0.14166666666666666
+  },
+  "human_listening_completed": false,
+  "teacher_selected": false,
+  "limits": [
+    "Aggregate profiles do not replace per-voice diagnostics or listening.",
+    "CER includes orthography/ASR errors; deletions do not prove acoustic omissions.",
+    "This first checkpoint is a baseline, not evidence of improvement over a different matrix."
+  ],
+  "full_diagnosis_path": "runs/japanese-m2a-eval-00010000-full/diagnosis.json",
+  "full_diagnosis_sha256": "f4bf7957dc023e9c447aab766ae4fb80b736114929850fb8dc18ab86ba77b117"
+}

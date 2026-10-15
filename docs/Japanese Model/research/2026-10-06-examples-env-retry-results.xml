@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="10" skipped="0" tests="10" time="5.282" timestamp="2026-10-06T18:22:03.854686+09:00" hostname="DESKTOP-7PPH62N"><testcase classname="tests.test_documentation_examples" name="test_readme_example" time="2.347"><failure message="AttributeError: module 'torch' has no attribute 'Tensor'">..\..\..\..\Desktop\Private\pocket-tts\tests\test_documentation_examples.py:10: in test_readme_example
+    from pocket_tts import TTSModel
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\__init__.py:1: in &lt;module&gt;
+    from pocket_tts.models.model_state import export_model_state
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\models\model_state.py:11: in &lt;module&gt;
+    import safetensors.torch
+..\..\..\..\Desktop\Private\pocket-tts\.venv\lib\site-packages\safetensors\torch.py:16: in &lt;module&gt;
+    def storage_ptr(tensor: torch.Tensor) -&gt; int:
+E   AttributeError: module 'torch' has no attribute 'Tensor'</failure></testcase><testcase classname="tests.test_documentation_examples" name="test_quick_start" time="0.007"><failure message="AttributeError: module 'torch' has no attribute 'Tensor'">..\..\..\..\Desktop\Private\pocket-tts\tests\test_documentation_examples.py:22: in test_quick_start
+    from pocket_tts import TTSModel
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\__init__.py:1: in &lt;module&gt;
+    from pocket_tts.models.model_state import export_model_state
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\models\model_state.py:11: in &lt;module&gt;
+    import safetensors.torch
+..\..\..\..\Desktop\Private\pocket-tts\.venv\lib\site-packages\safetensors\torch.py:16: in &lt;module&gt;
+    def storage_ptr(tensor: torch.Tensor) -&gt; int:
+E   AttributeError: module 'torch' has no attribute 'Tensor'</failure></testcase><testcase classname="tests.test_documentation_examples" name="test_load_model" time="0.007"><failure message="AttributeError: module 'torch' has no attribute 'Tensor'">..\..\..\..\Desktop\Private\pocket-tts\tests\test_documentation_examples.py:38: in test_load_model
+    from pocket_tts import TTSModel
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\__init__.py:1: in &lt;module&gt;
+    from pocket_tts.models.model_state import export_model_state
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\models\model_state.py:11: in &lt;module&gt;
+    import safetensors.torch
+..\..\..\..\Desktop\Private\pocket-tts\.venv\lib\site-packages\safetensors\torch.py:16: in &lt;module&gt;
+    def storage_ptr(tensor: torch.Tensor) -&gt; int:
+E   AttributeError: module 'torch' has no attribute 'Tensor'</failure></testcase><testcase classname="tests.test_documentation_examples" name="test_device" time="0.006"><failure message="AttributeError: module 'torch' has no attribute 'Tensor'">..\..\..\..\Desktop\Private\pocket-tts\tests\test_documentation_examples.py:50: in test_device
+    from pocket_tts import TTSModel
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\__init__.py:1: in &lt;module&gt;
+    from pocket_tts.models.model_state import export_model_state
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\models\model_state.py:11: in &lt;module&gt;
+    import safetensors.torch
+..\..\..\..\Desktop\Private\pocket-tts\.venv\lib\site-packages\safetensors\torch.py:16: in &lt;module&gt;
+    def storage_ptr(tensor: torch.Tensor) -&gt; int:
+E   AttributeError: module 'torch' has no attribute 'Tensor'</failure></testcase><testcase classname="tests.test_documentation_examples" name="test_sample_rate" time="0.004"><failure message="AttributeError: module 'torch' has no attribute 'Tensor'">..\..\..\..\Desktop\Private\pocket-tts\tests\test_documentation_examples.py:57: in test_sample_rate
+    from pocket_tts import TTSModel
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\__init__.py:1: in &lt;module&gt;
+    from pocket_tts.models.model_state import export_model_state
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\models\model_state.py:11: in &lt;module&gt;
+    import safetensors.torch
+..\..\..\..\Desktop\Private\pocket-tts\.venv\lib\site-packages\safetensors\torch.py:16: in &lt;module&gt;
+    def storage_ptr(tensor: torch.Tensor) -&gt; int:
+E   AttributeError: module 'torch' has no attribute 'Tensor'</failure></testcase><testcase classname="tests.test_documentation_examples" name="test_get_state_for_audio_prompt" time="2.109"><failure message="AttributeError: module 'torch' has no attribute 'Tensor'">..\..\..\..\Desktop\Private\pocket-tts\tests\test_documentation_examples.py:75: in test_get_state_for_audio_prompt
+    from pocket_tts import TTSModel
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\__init__.py:1: in &lt;module&gt;
+    from pocket_tts.models.model_state import export_model_state
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\models\model_state.py:11: in &lt;module&gt;
+    import safetensors.torch
+..\..\..\..\Desktop\Private\pocket-tts\.venv\lib\site-packages\safetensors\torch.py:16: in &lt;module&gt;
+    def storage_ptr(tensor: torch.Tensor) -&gt; int:
+E   AttributeError: module 'torch' has no attribute 'Tensor'</failure></testcase><testcase classname="tests.test_documentation_examples" name="test_generate_audio" time="0.006"><failure message="AttributeError: module 'torch' has no attribute 'Tensor'">..\..\..\..\Desktop\Private\pocket-tts\tests\test_documentation_examples.py:97: in test_generate_audio
+    from pocket_tts import TTSModel
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\__init__.py:1: in &lt;module&gt;
+    from pocket_tts.models.model_state import export_model_state
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\models\model_state.py:11: in &lt;module&gt;
+    import safetensors.torch
+..\..\..\..\Desktop\Private\pocket-tts\.venv\lib\site-packages\safetensors\torch.py:16: in &lt;module&gt;
+    def storage_ptr(tensor: torch.Tensor) -&gt; int:
+E   AttributeError: module 'torch' has no attribute 'Tensor'</failure></testcase><testcase classname="tests.test_documentation_examples" name="test_generate_audio_stream" time="0.007"><failure message="AttributeError: module 'torch' has no attribute 'Tensor'">..\..\..\..\Desktop\Private\pocket-tts\tests\test_documentation_examples.py:111: in test_generate_audio_stream
+    from pocket_tts import TTSModel
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\__init__.py:1: in &lt;module&gt;
+    from pocket_tts.models.model_state import export_model_state
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\models\model_state.py:11: in &lt;module&gt;
+    import safetensors.torch
+..\..\..\..\Desktop\Private\pocket-tts\.venv\lib\site-packages\safetensors\torch.py:16: in &lt;module&gt;
+    def storage_ptr(tensor: torch.Tensor) -&gt; int:
+E   AttributeError: module 'torch' has no attribute 'Tensor'</failure></testcase><testcase classname="tests.test_documentation_examples" name="test_voice_management" time="0.005"><failure message="AttributeError: module 'torch' has no attribute 'Tensor'">..\..\..\..\Desktop\Private\pocket-tts\tests\test_documentation_examples.py:124: in test_voice_management
+    from pocket_tts import TTSModel
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\__init__.py:1: in &lt;module&gt;
+    from pocket_tts.models.model_state import export_model_state
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\models\model_state.py:11: in &lt;module&gt;
+    import safetensors.torch
+..\..\..\..\Desktop\Private\pocket-tts\.venv\lib\site-packages\safetensors\torch.py:16: in &lt;module&gt;
+    def storage_ptr(tensor: torch.Tensor) -&gt; int:
+E   AttributeError: module 'torch' has no attribute 'Tensor'</failure></testcase><testcase classname="tests.test_documentation_examples" name="test_batch_processing" time="0.005"><failure message="AttributeError: module 'torch' has no attribute 'Tensor'">..\..\..\..\Desktop\Private\pocket-tts\tests\test_documentation_examples.py:142: in test_batch_processing
+    from pocket_tts import TTSModel
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\__init__.py:1: in &lt;module&gt;
+    from pocket_tts.models.model_state import export_model_state
+..\..\..\..\Desktop\Private\pocket-tts\pocket_tts\models\model_state.py:11: in &lt;module&gt;
+    import safetensors.torch
+..\..\..\..\Desktop\Private\pocket-tts\.venv\lib\site-packages\safetensors\torch.py:16: in &lt;module&gt;
+    def storage_ptr(tensor: torch.Tensor) -&gt; int:
+E   AttributeError: module 'torch' has no attribute 'Tensor'</failure></testcase></testsuite></testsuites>

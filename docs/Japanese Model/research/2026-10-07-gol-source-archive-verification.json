@@ -1,0 +1,60 @@
+{
+  "instance_id": 54521683,
+  "archives": [
+    {
+      "prefix": "stage4",
+      "git_head": "ce123ec119f56cfb4b01b3cb92c269c5d57fd133",
+      "frozen_files_verified": 135,
+      "archive_regular_files": 139,
+      "additional_files_outside_frozen_manifest": [
+        "pocket_tts/static/index.html",
+        "training/README.md",
+        "training/scripts/run_ja_smoke.sh",
+        "training/tokenizers/README.md"
+      ],
+      "no_extraction_performed": true,
+      "files": {
+        "runs/m2a-control/stage4-source.tar": {
+          "sha256": "7ae41c0a2b474b622e0386a1b00d6953f8428b81183f04abb82f7370e3d6d229",
+          "bytes": 2508800
+        },
+        "runs/m2a-control/stage4-source-manifest.json": {
+          "sha256": "548e6a590516d5ab39e352bdd944b9ed6bdf903ce312e51b9bd6c4bdd2b94d19",
+          "bytes": 14572
+        },
+        "runs/m2a-control/stage4-packages.json": {
+          "sha256": "babc01abaa4454504e83af51db21c69e20c818deb6b2b12ba7d065ed49b66d01",
+          "bytes": 3136
+        }
+      }
+    },
+    {
+      "prefix": "stage7-evaluation",
+      "git_head": "ce123ec119f56cfb4b01b3cb92c269c5d57fd133",
+      "frozen_files_verified": 136,
+      "archive_regular_files": 140,
+      "additional_files_outside_frozen_manifest": [
+        "pocket_tts/static/index.html",
+        "training/README.md",
+        "training/scripts/run_ja_smoke.sh",
+        "training/tokenizers/README.md"
+      ],
+      "no_extraction_performed": true,
+      "files": {
+        "runs/m2a-control/stage7-evaluation-source.tar": {
+          "sha256": "edbb7ca41a7aa58de139f25975e64dda4e022866376f44d98cc608b0afed6b1c",
+          "bytes": 2508800
+        },
+        "runs/m2a-control/stage7-evaluation-source-manifest.json": {
+          "sha256": "61a1ef0ac6fab3e00781b627df5568d81d3904280470c7a4158b121da3dfddf5",
+          "bytes": 14686
+        },
+        "runs/m2a-control/stage7-evaluation-packages.json": {
+          "sha256": "babc01abaa4454504e83af51db21c69e20c818deb6b2b12ba7d065ed49b66d01",
+          "bytes": 3136
+        }
+      }
+    }
+  ],
+  "verifier_sha256": "628e05f697d322f43f695e455610338ccc0ac0ba89b50b6b5c55a8429f0d49d9"
+}
